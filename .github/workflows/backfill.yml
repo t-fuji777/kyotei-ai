@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
     inputs:
       start:
-        description: "開始日 YYYYMMDD"
+        description: "start YYYYMMDD"
         required: true
       end:
-        description: "終了日 YYYYMMDD"
+        description: "end YYYYMMDD"
         required: true
 concurrency:
   group: data
@@ -14,19 +14,56 @@ concurrency:
 permissions:
   contents: write
 jobs:
-  backfill:
+  chunk:
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        year: [2021, 2022, 2023, 2024, 2025, 2026]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install lhafile pandas
+      - run: pip install lhafile pandas requests
+      - name: build year
+        run: |
+          python - << 'PY'
+          import subprocess
+          y = int("${{ matrix.year }}")
+          s = "${{ github.event.inputs.start }}"
+          e = "${{ github.event.inputs.end }}"
+          cs = max(int(s), int(f"{y}0101"))
+          ce = min(int(e), int(f"{y}1231"))
+          if cs > ce:
+              print(f"{y}: out of range, skip")
+              raise SystemExit(0)
+          subprocess.run(["python", "scripts/build_dataset.py", "--start", str(cs),
+                          "--end", str(ce), "--sleep", "0.25"], check=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: entries-${{ matrix.year }}
+          path: data/races/
+          if-no-files-found: ignore
+  assemble:
+    needs: chunk
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install lhafile pandas requests
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: entries-*
+          path: data/races/
+          merge-multiple: true
       - name: fetch fan data
         run: python scripts/fetch_fan.py --start ${{ github.event.inputs.start }}
-      - name: build dataset
-        run: python scripts/build_dataset.py --start ${{ github.event.inputs.start }} --end ${{ github.event.inputs.end }}
       - name: commit
         run: |
           git config user.name github-actions
