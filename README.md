@@ -31,7 +31,7 @@
 - `scripts/common.py` 取得・LZH解凍・B/Kパーサ
 - `scripts/parse_fan.py` / `scripts/fetch_fan.py` ファン手帳(期別成績)の解析・取得
 - `scripts/build_dataset.py` 日次データセット構築
-- `scripts/features.py` 特徴量(選手成績365/180/90日窳、会場×枠など27項目)
+- `scripts/features.py` 特徴量(選手成績365/180/90日窓、会場×枠など27項目)
 - `scripts/train.py` 学習・λ最適化・バックテスト
 - `scripts/predict_today.py` 当日予測JSON生成
 - `scripts/update_results.py` 結果反映・的中実績更新
