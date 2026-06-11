@@ -1,0 +1,48 @@
+name: sample-raw
+on:
+  workflow_dispatch:
+    inputs:
+      dates:
+        description: "取得日(カンマ区切り YYYYMMDD)"
+        required: true
+        default: "20260601"
+concurrency:
+  group: data
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install lhafile
+      - name: fetch raw files
+        run: |
+          mkdir -p sample_raw
+          python - << 'PY'
+          import sys, time
+          sys.path.insert(0, "scripts")
+          from common import download_day
+          dates = "${{ github.event.inputs.dates }}".split(",")
+          for ymd in dates:
+              ymd = ymd.strip()
+              for kind in ("B", "K"):
+                  t = download_day(kind, ymd)
+                  if t is None:
+                      print(f"{kind} {ymd}: 404")
+                      continue
+                  open(f"sample_raw/{kind.lower()}{ymd}.txt", "w", encoding="utf-8").write(t)
+                  print(f"{kind} {ymd}: {len(t)} chars")
+                  time.sleep(1)
+          PY
+      - name: commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add sample_raw
+          git diff --cached --quiet || git commit -m "sample raw files"
+          git push
