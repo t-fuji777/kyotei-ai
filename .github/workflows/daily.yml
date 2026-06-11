@@ -1,0 +1,49 @@
+name: daily
+on:
+  schedule:
+    - cron: "30 21 * * *"
+    - cron: "55 23 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "予測対象日 YYYYMMDD (省略=本日JST)"
+        required: false
+concurrency:
+  group: data
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install lhafile pandas numpy lightgbm pillow
+      - name: ensure icons
+        run: python scripts/make_icons.py
+        continue-on-error: true
+      - name: fetch latest fan data
+        run: python scripts/fetch_fan.py --latest
+        continue-on-error: true
+      - name: update yesterday results
+        run: python scripts/update_results.py
+        continue-on-error: true
+      - name: predict today
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            python scripts/predict_today.py --date ${{ github.event.inputs.date }}
+          else
+            python scripts/predict_today.py
+          fi
+      - name: commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git pull --rebase
+          git add data/races data/fan docs
+          git diff --cached --quiet || git commit -m "daily update $(TZ=Asia/Tokyo date +%Y%m%d)"
+          git push
