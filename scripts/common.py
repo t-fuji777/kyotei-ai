@@ -33,10 +33,24 @@ def zen2han(s: str) -> str:
     return "".join(out)
 
 
+try:
+    import requests as _rq
+    _SESS = _rq.Session()
+    _SESS.headers["User-Agent"] = UA
+except Exception:
+    _SESS = None
+
+
 def http_get(url: str, timeout=30, retries=3, sleep=2.0) -> bytes:
     last = None
     for i in range(retries):
         try:
+            if _SESS is not None:
+                r = _SESS.get(url, timeout=timeout)
+                if r.status_code == 404:
+                    raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+                r.raise_for_status()
+                return r.content
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return r.read()
