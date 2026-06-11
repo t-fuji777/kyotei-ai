@@ -189,7 +189,7 @@ function renderSengen(){
   }).join("");
   m.innerHTML=`<div class="note" style="margin-bottom:10px">本命艇が2着以内に入る確率が高いレースだけを抽出(目標的中率90%超)。<br>件数は日により変動します(0件の日もあります)。</div>
     <div class="racelist">${cards}</div>
-    <div class="warn">本予測は統計的な推定であり、的中や利益を保証するものではありません。</div>`;
+    <div class="warn">本予測は統計的推定であり、的中や利益を保証するものではありません。</div>`;
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
 }
 
