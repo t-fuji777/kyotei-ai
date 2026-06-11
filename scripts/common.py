@@ -172,11 +172,11 @@ RE_K_HEAD = re.compile(r"^\s*(\d{1,2})R\s+(\S+)")
 RE_K_ROW = re.compile(
     r"^\s*(0[1-6]|F|L[01]?|K[01]|S[0-2])\s+"   # 着順/異常コード
     r"([1-6])\s+(\d{4})\s+"                      # 艇番 登番
-    r"(\S+(?:\s\S+)*?)\s+"                       # 選手名(空白含む可能性, 非貪欲)
+    r"(\S+(?:\s{1,4}\S+)*?)\s+"                       # 選手名(空白含む可能性, 非貪欲)
     r"(\d{1,3})\s+(\d{1,3})\s+"                  # モーター ボート
     r"(\d\.\d\d|\.)\s+"                          # 展示タイム
     r"([1-6])\s+"                                 # 進入コース
-    r"(F?\s*\.?\d{2}|F\.\d{2}|L\.\d{2}|\d\.\d{2}|\.)\s*"  # ST
+    r"(F?\d\.\d{2}|[FL]\s*\.\d{2}|L\d?|K\d?|\d\.\d{2}|\.)\s*"  # ST
     r"(\d\.\d\d\.\d|\.)?"                         # レースタイム
 )
 RE_PAY_3T = re.compile(r"3連単\s+(\d)-(\d)-(\d)\s+([\d,]+)")
@@ -190,9 +190,11 @@ def _st_to_float(s: str):
     if s in (".", ""):
         return None
     if s.startswith("F"):
-        v = s[1:].lstrip(".")
+        m = re.search(r"(\d*)\.(\d+)", s)
+        if not m:
+            return None
         try:
-            return -float("0." + v)
+            return -float("0." + m.group(2))
         except ValueError:
             return None
     if s.startswith("L"):
