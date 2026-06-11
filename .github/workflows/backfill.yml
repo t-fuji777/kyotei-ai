@@ -1,0 +1,37 @@
+name: backfill
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "開始日 YYYYMMDD"
+        required: true
+      end:
+        description: "終了日 YYYYMMDD"
+        required: true
+concurrency:
+  group: data
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install lhafile pandas
+      - name: fetch fan data
+        run: python scripts/fetch_fan.py --start ${{ github.event.inputs.start }}
+      - name: build dataset
+        run: python scripts/build_dataset.py --start ${{ github.event.inputs.start }} --end ${{ github.event.inputs.end }}
+      - name: commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git pull --rebase
+          git add data/races data/fan
+          git diff --cached --quiet || git commit -m "backfill ${{ github.event.inputs.start }}-${{ github.event.inputs.end }}"
+          git push
