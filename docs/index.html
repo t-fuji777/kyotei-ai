@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B1B2B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>艇AI - 競艇予測</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#0B1B2B; --surface:#122638; --surface2:#1A3349; --line:#23425C;
+  --text:#E8EEF4; --dim:#8FA6BA; --accent:#2FA8FF;
+  --confA:#F5B82E; --confB:#5BC0DE; --confC:#5B6B7A;
+  --b1:#F2F4F6; --b2:#15181C; --b3:#E5333C; --b4:#1F6FEB; --b5:#F5C518; --b6:#19A974;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  font-size:15px;line-height:1.5}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+#app{max-width:480px;margin:0 auto;min-height:100vh;
+  padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:20;background:rgba(11,27,43,.92);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px}
+header h1{font-size:18px;font-weight:800;letter-spacing:.04em}
+header h1 span{color:var(--accent)}
+#hdrDate{color:var(--dim);font-size:12px;margin-top:2px}
+#hdrMeta{color:var(--dim);font-size:11px;margin-top:2px}
+
+nav{position:fixed;bottom:0;left:0;right:0;z-index:30;
+  background:rgba(11,27,43,.95);backdrop-filter:blur(8px);
+  border-top:1px solid var(--line);display:flex;
+  padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:none;color:var(--dim);
+  padding:10px 0 8px;font-size:11px;font-weight:600;cursor:pointer}
+nav button.on{color:var(--accent)}
+nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
+  stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+.chips{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;background:var(--surface);border:1px solid var(--line);
+  color:var(--text);border-radius:999px;padding:7px 14px;font-size:13px;
+  font-weight:600;cursor:pointer}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#06121E}
+
+.racelist{padding:0 16px}
+.race{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  margin-bottom:10px;overflow:hidden}
+.racehead{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}
+.rno{font-size:16px;font-weight:800;min-width:34px}
+.rmeta{flex:1;min-width:0}
+.rtype{font-size:12px;color:var(--dim)}
+.rdl{font-size:11px;color:var(--dim)}
+.honmei{display:flex;gap:3px;align-items:center}
+.conf{font-size:11px;font-weight:800;border-radius:6px;padding:3px 7px;min-width:24px;text-align:center}
+.confA{background:var(--confA);color:#1A1200}
+.confB{background:var(--confB);color:#04222C}
+.senp{font-size:12px;font-weight:800;border-radius:6px;padding:3px 8px;background:#1FB97A;color:#04150C}
+.vlabel{font-size:11px;color:var(--mut,#8FA3B8);display:block}
+.confC{background:var(--confC);color:#0B1B2B}
+.lane{display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:5px;font-size:13px;font-weight:800;
+  font-variant-numeric:tabular-nums}
+.lane.s{width:18px;height:18px;font-size:11px;border-radius:4px}
+.l1{background:var(--b1);color:#10141A}
+.l2{background:var(--b2);color:#F2F4F6;box-shadow:inset 0 0 0 1px #3A4654}
+.l3{background:var(--b3);color:#fff}
+.l4{background:var(--b4);color:#fff}
+.l5{background:var(--b5);color:#231A00}
+.l6{background:var(--b6);color:#04231A}
+.racebody{display:none;border-top:1px solid var(--line);padding:12px 14px}
+.race.open .racebody{display:block}
+.sec{font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.08em;margin:8px 0 6px}
+.boatrow{display:flex;align-items:center;gap:8px;padding:4px 0}
+.bname{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bcls{font-size:10px;color:var(--dim);min-width:20px}
+.bar{flex:0 0 96px;height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.bp{min-width:42px;text-align:right;font-size:12px;font-weight:700}
+.pickrow{display:flex;align-items:center;gap:8px;padding:5px 0}
+.prank{min-width:18px;color:var(--dim);font-size:11px;text-align:right}
+.pickrow .bar{flex:1}
+.pickrow .bar i{background:#3D7FB8}
+.pickrow:first-of-type .bar i{background:var(--accent)}
+
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.card .v{font-size:22px;font-weight:800}
+.card .k{font-size:11px;color:var(--dim);margin-top:2px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:600;font-size:11px}
+th:first-child,td:first-child{text-align:left}
+.pad{padding:0 16px}
+.note{color:var(--dim);font-size:13px;padding:32px 24px;text-align:center;line-height:1.8}
+.kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.kv span:first-child{color:var(--dim)}
+.warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+  color:var(--dim);font-size:11px;line-height:1.7}
+.spin{width:28px;height:28px;border:3px solid var(--surface2);border-top-color:var(--accent);
+  border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>艇<span>AI</span> 競艇予測</h1>
+    <div id="hdrDate" class="num"></div>
+    <div id="hdrMeta" class="num"></div>
+  </header>
+  <main id="main"><div class="spin"></div></main>
+</div>
+<nav>
+  <button id="tabSen">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+    厳選</button>
+  <button id="tabToday" class="on">
+    <svg viewBox="0 0 24 24"><path d="M3 14c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M3 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M6 11l5-7 7 5-2 3"/></svg>
+    本日の予測</button>
+  <button id="tabAcc">
+    <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>
+    的中実績</button>
+  <button id="tabModel">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
+    モデル</button>
+</nav>
+<script>
+const $=s=>document.querySelector(s);
+const VIEW={today:null,acc:null,model:null};
+let cur="today", pred=null, selVenue=null;
+
+const laneChip=(n,s)=>`<span class="lane ${s?'s':''} l${n}">${n}</span>`;
+const comboChips=(c,s)=>c.split("-").map(n=>laneChip(n,s)).join("");
+const pct=p=>(p*100).toFixed(1)+"%";
+
+async function fetchJSON(url){
+  const r=await fetch(url+"?t="+Date.now());
+  if(!r.ok) throw new Error(url+" "+r.status);
+  return r.json();
+}
+
+function setHeader(){
+  if(!pred) return;
+  const d=pred.date;
+  $("#hdrDate").textContent=`${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)} の予測`;
+  $("#hdrMeta").textContent=`予測生成 ${pred.generated_at||"-"} / 学習 ${pred.model_trained_at||"-"}`;
+}
+
+function renderSengen(){
+  const m=$("#main");
+  if(!pred){m.innerHTML='<div class="spin"></div>';return}
+  setHeader();
+  const cfg=pred.sengen_cfg||{};
+  const list=[];
+  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(r.sengen)list.push({v,r})}));
+  list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
+  if(!list.length){
+    m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(本命の2着内予測${cfg.p2_min?Math.round(cfg.p2_min*100)+"%以上":""}・対象場)を満たすレースのみ表示します。</div>`;
+    return;
+  }
+  const cards=list.map(({v,r})=>{
+    const fav=r.fuku||{};
+    const fb=r.boats.find(b=>b.lane===fav.lane)||{};
+    const top=r.picks[0]||{c:"-",p:0};
+    const picks=r.picks.slice(0,5).map((p,i)=>
+      `<div class="pickrow"><span class="prank num">${i+1}</span>
+        <span class="honmei">${comboChips(p.c,true)}</span>
+        <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
+        <span class="bp num">${pct(p.p)}</span></div>`).join("");
+    return `<div class="race">
+      <div class="racehead">
+        <span class="rno num">${r.no}R</span>
+        <span class="rmeta"><span class="vlabel">${v.name}</span>
+          <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
+        <span class="honmei">${laneChip(fav.lane,true)}<span class="bname" style="margin-left:6px">${fb.name||""}</span></span>
+        <span class="senp num">${fav.p?Math.round(fav.p*100)+"%":"-"}</span>
+      </div>
+      <div class="racebody">
+        <div class="sec">買い方: ${laneChip(fav.lane)} の複勝(2着以内) が軸。参考: 3連単 TOP5</div>${picks}
+      </div></div>`;
+  }).join("");
+  m.innerHTML=`<div class="note" style="margin-bottom:10px">本命艇が2着以内に入る確率が高いレースだけを抽出(目標的中率90%超)。<br>件数は日により変動します(0件の日もあります)。</div>
+    <div class="racelist">${cards}</div>
+    <div class="warn">本予測は統計的な推定であり、的中や利益を保証するものではありません。</div>`;
+  m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
+}
+
+function renderToday(){
+  const m=$("#main");
+  if(!pred){m.innerHTML='<div class="spin"></div>';return}
+  setHeader();
+  if(!pred.venues||!pred.venues.length){
+    m.innerHTML=`<div class="note">${pred.note||"本日の開催データがありません。"}</div>`;
+    return;
+  }
+  if(selVenue===null||!pred.venues.some(v=>v.code===selVenue)) selVenue=pred.venues[0].code;
+  const chips=pred.venues.map(v=>
+    `<button class="chip ${v.code===selVenue?'on':''}" data-v="${v.code}">${v.name}</button>`).join("");
+  const venue=pred.venues.find(v=>v.code===selVenue);
+  const races=venue.races.map(r=>{
+    const top=r.picks[0]||{c:"-",p:0};
+    const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>
+      `<div class="boatrow">${laneChip(b.lane)}
+        <span class="bname">${b.name}</span><span class="bcls">${b.cls||""}</span>
+        <span class="bar"><i style="width:${Math.min(100,b.wp*140)}%"></i></span>
+        <span class="bp num">${pct(b.wp)}</span></div>`).join("");
+    const picks=r.picks.map((p,i)=>
+      `<div class="pickrow"><span class="prank num">${i+1}</span>
+        <span class="honmei">${comboChips(p.c,true)}</span>
+        <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
+        <span class="bp num">${pct(p.p)}</span></div>`).join("");
+    return `<div class="race" data-r="${r.no}">
+      <div class="racehead">
+        <span class="rno num">${r.no}R</span>
+        <span class="rmeta"><span class="rtype">${r.type||""}</span><br>
+          <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
+        <span class="honmei">${comboChips(top.c,true)}</span>
+        <span class="conf conf${r.conf}">${r.conf}</span>
+      </div>
+      <div class="racebody">
+        <div class="sec">勝率予測</div>${boats}
+        <div class="sec">3連単 推奨買い目 TOP10</div>${picks}
+      </div></div>`;
+  }).join("");
+  m.innerHTML=`<div class="chips">${chips}</div>
+    <div class="racelist">${races}</div>
+    <div class="warn">本予測は過去データに基づく統計的推定であり、的中や利益を保証するものではありません。舟券の購入は自己責任で行ってください。</div>`;
+  m.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{selVenue=+c.dataset.v;renderToday()});
+  m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
+}
+
+function renderAcc(acc){
+  const m=$("#main");
+  if(!acc||!acc.days||!acc.days.length){
+    m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;
+  }
+  const t=acc.total, n=t.races||1;
+  const roi=t.stake6?Math.round(t.return6/t.stake6*1000)/10:0;
+  const rows=acc.days.slice().reverse().slice(0,60).map(d=>{
+    const r=d.stake6?Math.round(d.return6/d.stake6*100):0;
+    const sen=d.sen_n?Math.round(d.sen_hit/d.sen_n*100)+"%("+d.sen_n+")":"-";
+    return `<tr><td class="num">${d.date.slice(4,6)}/${d.date.slice(6,8)}</td>
+      <td class="num">${d.races}</td>
+      <td class="num">${Math.round(d.win_hit/Math.max(d.races,1)*100)}%</td>
+      <td class="num">${Math.round(d.top6_hit/Math.max(d.races,1)*100)}%</td>
+      <td class="num">${sen}</td>
+      <td class="num">${r}%</td></tr>`}).join("");
+  m.innerHTML=`<div class="cards">
+      <div class="card"><div class="v num">${(t.win_hit/n*100).toFixed(1)}%</div><div class="k">1着的中率(本命艇)</div></div>
+      <div class="card"><div class="v num">${(t.top1_hit/n*100).toFixed(1)}%</div><div class="k">3連単 本線的中率</div></div>
+      <div class="card"><div class="v num">${(t.top6_hit/n*100).toFixed(1)}%</div><div class="k">3連単 TOP6内的中率</div></div>
+      <div class="card"><div class="v num">${roi}%</div><div class="k">回収率(TOP6均等買い)</div></div>
+      <div class="card"><div class="v num">${t.sen_n?(t.sen_hit/t.sen_n*100).toFixed(1):"-"}%</div><div class="k">厳選 複勝的中率 (${t.sen_hit||0}/${t.sen_n||0})</div></div>
+    </div>
+    <div class="pad"><table>
+      <tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${rows}
+    </table></div>
+    <div class="warn">回収率はTOP6買い目に各100円を投じた場合の仮想値です。実際のオッズ変動・購入行動とは異なります。</div>`;
+}
+
+function renderModel(rep){
+  const m=$("#main");
+  if(!rep){m.innerHTML='<div class="note">モデル情報がありません。<br>学習完了後に表示されます。</div>';return}
+  const tm=rep.test_metrics||{}, bm=rep.baseline_metrics||{};
+  const fi=Object.entries(rep.feature_importance||{}).slice(0,10)
+    .map(([k,v])=>`<div class="kv"><span>${k}</span><span class="num">${Math.round(v)}</span></div>`).join("");
+  m.innerHTML=`<div class="pad">
+    <div class="kv"><span>学習日時</span><span class="num">${rep.trained_at||"-"}</span></div>
+    <div class="kv"><span>学習期間</span><span class="num">${(rep.period||[]).join(" - ")}</span></div>
+    <div class="kv"><span>学習行数</span><span class="num">${(rep.rows_train||0).toLocaleString()}</span></div>
+    <div class="kv"><span>厳選条件</span><span class="num">複勝予測${rep.sengen?Math.round(rep.sengen.p2_min*100):"-"}%以上 / ${rep.sengen?rep.sengen.venues.length:"-"}場</span></div>
+    <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
+    <div class="kv"><span>1着的中率</span><span class="num">${pct(tm.win_hit_rate||0)} (基準 ${pct(bm.win_hit_rate||0)})</span></div>
+    <div class="kv"><span>3連単 本線</span><span class="num">${pct(tm.top1_hit_rate||0)} (基準 ${pct(bm.top1_hit_rate||0)})</span></div>
+    <div class="kv"><span>3連単 TOP6内</span><span class="num">${pct(tm.top6_hit_rate||0)} (基準 ${pct(bm.top6_hit_rate||0)})</span></div>
+    <div class="kv"><span>3連単 TOP10内</span><span class="num">${pct(tm.top10_hit_rate||0)} (基準 ${pct(bm.top10_hit_rate||0)})</span></div>
+    <div class="kv"><span>複勝的中率(本命2着内)</span><span class="num">${pct(tm.fuku_hit_rate||0)}</span></div>
+    <div class="kv"><span>厳選 複勝的中率</span><span class="num">${tm.sengen&&tm.sengen.fuku_hit_rate!=null?pct(tm.sengen.fuku_hit_rate)+" ("+tm.sengen.races_per_day+"R/日)":"-"}</span></div>
+    <div class="kv"><span>回収率(TOP6均等買い)</span><span class="num">${pct(tm.top6_roi||0)}</span></div>
+    <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}
+  </div>`;
+}
+
+async function show(tab){
+  cur=tab;
+  const map={sen:"Sen",today:"Today",acc:"Acc",model:"Model"};
+  ["Sen","Today","Acc","Model"].forEach(t=>$("#tab"+t).classList.toggle("on",map[tab]===t));
+  const m=$("#main");m.innerHTML='<div class="spin"></div>';
+  try{
+    if(tab==="sen"){
+      if(!pred) pred=await fetchJSON("predictions/latest.json");
+      renderSengen();
+    }else if(tab==="today"){
+      if(!pred) pred=await fetchJSON("predictions/latest.json");
+      renderToday();
+    }else if(tab==="acc"){
+      if(!VIEW.acc) VIEW.acc=await fetchJSON("accuracy.json").catch(()=>null);
+      renderAcc(VIEW.acc);
+    }else{
+      if(!VIEW.model) VIEW.model=await fetchJSON("model_report.json").catch(()=>null);
+      renderModel(VIEW.model);
+    }
+  }catch(e){
+    m.innerHTML=`<div class="note">データの取得に失敗しました。<br>${e.message}</div>`;
+  }
+}
+$("#tabSen").onclick=()=>show("sen");
+$("#tabToday").onclick=()=>show("today");
+$("#tabAcc").onclick=()=>show("acc");
+$("#tabModel").onclick=()=>show("model");
+show("today");
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+</script>
+</body>
+</html>
