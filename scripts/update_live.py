@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""直前更新: 締切が近いレースのbeforeinfo(展示タイム・風波)を取得し、
-該当レースのみ再予測して latest.json / YYYYMMDD.json を差し替える。15分毎にActionsで実行。"""
+"""Live updater: (1) fetch beforeinfo (exhibition/wind/wave) + odds for races near
+deadline and re-predict them; (2) fetch results of finished races and attach hit
+flags. Runs every 15 min via GitHub Actions."""
 import json
 import sys
 import time
@@ -13,64 +14,59 @@ sys.path.insert(0, str(Path(__file__).parent))
 from common import download_day, parse_b
 from features import load_fan
 from fetch_beforeinfo import fetch_beforeinfo
+from fetch_odds import fetch_odds
+from fetch_result import fetch_result
 from predict_today import load_hist, load_models, races_to_rows, predict_races, write
 
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
-WINDOW_MIN = (-3, 45)  # 締切まで -3分(直後) 〜 45分前 を対象
+WINDOW_MIN = (-3, 45)
+RESULT_MIN = (4, 120)
 
 
-def main():
-    now = datetime.now(JST)
-    ymd = now.strftime("%Y%m%d")
-    path = ROOT / "docs" / "predictions" / f"{ymd}.json"
-    if not path.exists():
-        print("no prediction file for today; run predict_today first")
-        return
-    pred = json.loads(path.read_text())
-    if not pred.get("venues"):
-        print("no venues today")
-        return
+def _mins_to_deadline(now, dl):
+    if not dl or ":" not in dl:
+        return None
+    h, m = map(int, dl.split(":"))
+    t = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    return (t - now).total_seconds() / 60
 
+
+def update_exhibits(pred, now, ymd) -> int:
     targets = []
     for v in pred["venues"]:
         for r in v["races"]:
             if r.get("live"):
                 continue
-            dl = r.get("deadline")
-            if not dl or ":" not in dl:
-                continue
-            h, m = map(int, dl.split(":"))
-            t = now.replace(hour=h, minute=m, second=0, microsecond=0)
-            mins = (t - now).total_seconds() / 60
-            if WINDOW_MIN[0] <= mins <= WINDOW_MIN[1]:
+            mins = _mins_to_deadline(now, r.get("deadline"))
+            if mins is not None and WINDOW_MIN[0] <= mins <= WINDOW_MIN[1]:
                 targets.append((v["code"], r["no"]))
     if not targets:
         print("no races in deadline window")
-        return
+        return 0
     print(f"window targets: {targets}", flush=True)
 
     live = {}
     for jcd, rno in targets:
         info = fetch_beforeinfo(ymd, jcd, rno)
         if info and any(x is not None for x in info["ex"].values()):
+            odds = fetch_odds(ymd, jcd, rno) or {"fuku": {}, "t3": {}}
+            info["odds"] = odds
             live[(jcd, rno)] = info
-            print(f"  {jcd}-{rno}R: ex ok, wind={info['wind']} wave={info['wave']}")
+            print(f"  {jcd}-{rno}R: ex ok, wind={info['wind']} wave={info['wave']} odds3t={len(odds['t3'])}")
         else:
             print(f"  {jcd}-{rno}R: not published yet")
         time.sleep(0.5)
     if not live:
-        print("no beforeinfo available; skip")
-        return
+        return 0
 
     btxt = download_day("B", ymd)
     if btxt is None:
         print("B file unavailable")
-        return
+        return 0
     races = [r for r in parse_b(btxt, ymd) if (r["venue"], r["race_no"]) in live]
     if not races:
-        print("no matching races in B")
-        return
+        return 0
 
     tgt = pd.DataFrame(races_to_rows(races, live=live))
     meta, models, sengen = load_models()
@@ -92,11 +88,73 @@ def main():
                     nr["course_ex"] = {str(k): val for k, val in inf["course"].items()}
                     nr["wind"] = inf["wind"]
                     nr["wave"] = inf["wave"]
+                    odds = inf.get("odds", {})
+                    fav_lane = nr.get("fuku", {}).get("lane")
+                    combos = [p["c"] for p in nr.get("picks", [])]
+                    nr["odds"] = {
+                        "fuku": odds.get("fuku", {}).get(fav_lane),
+                        "t3": {c: odds.get("t3", {}).get(c) for c in combos
+                               if odds.get("t3", {}).get(c) is not None},
+                    }
+                    if r.get("result"):
+                        nr["result"] = r["result"]
                     v["races"][i] = nr
                     n_upd += 1
+    return n_upd
+
+
+def update_results(pred, now, ymd) -> int:
+    n_res = 0
+    for v in pred["venues"]:
+        for r in v["races"]:
+            if r.get("result"):
+                continue
+            mins = _mins_to_deadline(now, r.get("deadline"))
+            if mins is None or not (-RESULT_MIN[1] <= mins <= -RESULT_MIN[0]):
+                continue
+            res = fetch_result(ymd, v["code"], r["no"])
+            time.sleep(0.5)
+            if not res:
+                print(f"  result {v['code']}-{r['no']}R: not fixed yet")
+                continue
+            order = res["order"]
+            top2 = set(map(int, order.split("-")[:2]))
+            fuku_lane = r.get("fuku", {}).get("lane")
+            picks = [p["c"] for p in r.get("picks", [])]
+            boats = r.get("boats", [])
+            top_boat = max(boats, key=lambda b: b["wp"])["lane"] if boats else None
+            res["hit_win"] = top_boat == int(order.split("-")[0])
+            res["hit_fuku"] = fuku_lane in top2
+            res["hit_t1"] = bool(picks) and picks[0] == order
+            res["hit_t6"] = order in picks[:6]
+            res["hit_t10"] = order in picks[:10]
+            r["result"] = res
+            n_res += 1
+            print(f"  result {v['code']}-{r['no']}R: {order} fuku={'HIT' if res['hit_fuku'] else 'MISS'}"
+                  f"{' sengen' if r.get('sengen') else ''}")
+    return n_res
+
+
+def main():
+    now = datetime.now(JST)
+    ymd = now.strftime("%Y%m%d")
+    path = ROOT / "docs" / "predictions" / f"{ymd}.json"
+    if not path.exists():
+        print("no prediction file for today; run predict_today first")
+        return
+    pred = json.loads(path.read_text())
+    if not pred.get("venues"):
+        print("no venues today")
+        return
+
+    n_upd = update_exhibits(pred, now, ymd)
+    n_res = update_results(pred, now, ymd)
+    if n_upd == 0 and n_res == 0:
+        print("nothing to update")
+        return
     pred["live_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
     write(pred, ymd)
-    print(f"live updated: {n_upd} races")
+    print(f"live updated: exhibits={n_upd} results={n_res}")
 
 
 if __name__ == "__main__":
