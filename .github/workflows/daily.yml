@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install lhafile pandas numpy lightgbm pillow
+      - run: pip install lhafile pandas numpy lightgbm pillow requests
       - name: ensure icons
         run: python scripts/make_icons.py
         continue-on-error: true
@@ -31,6 +31,9 @@ jobs:
         continue-on-error: true
       - name: update yesterday results
         run: python scripts/update_results.py
+        continue-on-error: true
+      - name: retrain model (daily)
+        run: python scripts/train.py
         continue-on-error: true
       - name: predict today
         run: |
@@ -43,7 +46,7 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add data/races data/fan docs
+          git add data/races data/fan data/model docs
           git diff --cached --quiet || git commit -m "daily update $(TZ=Asia/Tokyo date +%Y%m%d)"
           git pull --rebase --autostash
           git push
