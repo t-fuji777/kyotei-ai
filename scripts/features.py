@@ -17,6 +17,7 @@ FEATURES = [
     "v_lane_win365", "v_lane_top2_365", "v_lane_top3_365",
     "v_makuri365", "v_water", "v_tide",
     "f_noryoku", "f_win", "f_lane_in2", "f_lane_strank",
+    "ex_time", "ex_rank", "ex_diff", "wind", "wave",
 ]
 CLASS_MAP = {"A1": 4, "A2": 3, "B1": 2, "B2": 1}
 MAKURI = ("まくり", "まくり差し", "捲り", "捲り差し")
@@ -209,4 +210,13 @@ def add_features(hist: pd.DataFrame, target: pd.DataFrame, fan=None) -> pd.DataF
     else:
         for k in ("f_noryoku", "f_win", "f_lane_in2", "f_lane_strank"):
             target[k] = np.nan
+
+    # ---- 直前情報(展示タイム・気象): 学習はK票確定値, 推論はbeforeinfo由来。未取得はNaN ----
+    for c in ("ex_time", "wind", "wave"):
+        if c not in target.columns:
+            target[c] = np.nan
+        target[c] = pd.to_numeric(target[c], errors="coerce")
+    g = target.groupby(["date", "venue", "race_no"])["ex_time"]
+    target["ex_rank"] = g.rank(method="min")
+    target["ex_diff"] = target["ex_time"] - g.transform("min")
     return target
