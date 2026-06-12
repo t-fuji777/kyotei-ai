@@ -103,21 +103,21 @@ def race_eval_rows(part: pd.DataFrame):
 def pick_sengen(valid_r: pd.DataFrame):
     """validで複勝的中率>=90%となる(閾値, 会場リスト)を選ぶ。カバレッジ最大化。"""
     best = None
-    for thr in (0.83, 0.84, 0.85, 0.86, 0.87, 0.88, 0.89, 0.90):
+    for thr in (0.85, 0.86, 0.87, 0.88, 0.89, 0.90, 0.91, 0.92):
         s = valid_r[valid_r["fav_p2"] >= thr]
         if len(s) < 50:
             continue
         bv = s.groupby("venue")["hit_fuku"].agg(["mean", "size"])
-        venues = sorted(bv[(bv["mean"] >= 0.90) & (bv["size"] >= 10)].index.tolist())
+        venues = sorted(bv[(bv["mean"] >= 0.92) & (bv["size"] >= 10)].index.tolist())
         if not venues:
             continue
         ss = s[s["venue"].isin(venues)]
         rate = ss["hit_fuku"].mean()
-        if rate >= 0.91 and (best is None or len(ss) > best["n"]):
+        if rate >= 0.93 and (best is None or len(ss) > best["n"]):
             best = {"p2_min": thr, "venues": venues,
                     "n": int(len(ss)), "valid_rate": round(float(rate), 4)}
     if best is None:
-        best = {"p2_min": 0.88, "venues": list(range(1, 25)), "n": 0, "valid_rate": None}
+        best = {"p2_min": 0.90, "venues": list(range(1, 25)), "n": 0, "valid_rate": None}
     return best
 
 
