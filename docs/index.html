@@ -184,10 +184,11 @@ function renderSengen(){
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
         <span class="honmei">${laneChip(fav.lane,true)}<span class="bname" style="margin-left:6px">${fb.name||""}</span></span>
         ${r.live?'<span class="livechip">展示反映</span>':""}
-        <span class="senp num">${fav.p?Math.round(fav.p*100)+"%":"-"}</span>
+        <span class="senp num">複勝${fav.p?Math.round(fav.p*100)+"%":"-"}</span>
       </div>
       <div class="racebody">
-        <div class="sec">買い方: ${laneChip(fav.lane)} の複勝(2着以内) が軸。参考: 3連単 TOP5</div>${picks}
+        <div class="sec">おすすめの買い方: ${laneChip(fav.lane)} の複勝 ── 2着以内に入る予測が ${fav.p?Math.round(fav.p*100)+"%":"-"}</div>
+        <div class="sec">参考: 3連単で買う場合の組み合わせ候補(右の%は その並びで決まる予測確率)</div>${picks}
       </div></div>`;
   }).join("");
   m.innerHTML=`<div class="note" style="margin-bottom:10px">本命艇が2着以内に入る確率が高いレースだけを抽出(目標的中率90%超)。<br>件数は日により変動します(0件の日もあります)。</div>
