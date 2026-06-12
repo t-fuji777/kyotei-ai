@@ -160,6 +160,13 @@ function setHeader(){
   $("#hdrMeta").textContent=`予測生成 ${pred.generated_at||"-"} / 学習 ${pred.model_trained_at||"-"}`;
 }
 
+function axisTable(r){
+  const ax=r.odds&&r.odds.axis;if(!ax)return"";
+  const cb=r.odds.axis_combo||{};
+  const L=[["複勝","fuku"],["拡連複","k"],["2連複","f2"],["2連単","t2"],["3連複","f3"],["3連単","t3"]];
+  const rows=L.map(([nm,k])=>ax[k]!=null?`<div class="pickrow"><span class="bname" style="min-width:52px">${nm}</span><span class="honmei num">${cb[k]||""}</span><span class="bar"></span><span class="oddv num">${ax[k]}倍</span></div>`:"").join("");
+  return rows?`<div class="sec">買い方比較 ─ 予測1位の組み合わせを各券種で買う場合の直前オッズ</div>${rows}`:"";
+}
 function renderSengen(){
   const m=$("#main");
   if(!pred){m.innerHTML='<div class="spin"></div>';return}
@@ -191,7 +198,7 @@ function renderSengen(){
         <span class="senp num">複勝${fav.p?Math.round(fav.p*100)+"%":"-"}</span>${r.odds&&r.odds.fuku?`<span class="oddv num">${r.odds.fuku}倍</span>`:""}
       </div>
       <div class="racebody">
-        <div class="sec">おすすめの買い方: ${laneChip(fav.lane)} の複勝 ── 2着以内に入る予測が ${fav.p?Math.round(fav.p*100)+"%":"-"}</div>
+        <div class="sec">おすすめの買い方: ${laneChip(fav.lane)} の複勝 ── 2着以内に入る予測が ${fav.p?Math.round(fav.p*100)+"%":"-"}</div>${axisTable(r)}
         <div class="sec">参考: 3連単で買う場合の組み合わせ候補(右の%は その並びで決まる予測確率)</div>${picks}
       </div></div>`;
   }).join("");
@@ -238,6 +245,7 @@ function renderToday(){
       <div class="racebody">
         ${r.result?`<div class="sec">結果: ${r.result.order}(${r.result.kimarite||"-"}) 3連単 ¥${(r.result.pay3t||0).toLocaleString()}${r.result.hit_t10?" ── TOP10内 的中":""}</div>`:""}
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
+        ${axisTable(r)}
         <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
         <div class="sec">3連単 推奨買い目 TOP10</div>${picks}
       </div></div>`;
