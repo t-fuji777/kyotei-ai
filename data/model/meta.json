@@ -1,5 +1,5 @@
 {
- "trained_at": "2026-06-12 12:16 JST",
+ "trained_at": "2026-06-12 13:14 JST",
  "rows_train": 1258920,
  "rows_valid": 154812,
  "rows_test": 161178,
@@ -13,18 +13,16 @@
   "top3": 236
  },
  "sengen": {
-  "p2_min": 0.87,
+  "p2_min": 0.88,
   "venues": [
-   6,
+   5,
+   7,
    8,
-   9,
-   16,
-   17,
    19,
    21,
    24
   ],
-  "valid_rate": 0.9189
+  "valid_rate": 0.9339
  },
  "test_metrics": {
   "races": 26422,
@@ -36,9 +34,9 @@
   "top18_hit_rate": 0.6425,
   "top6_roi": 0.7684,
   "sengen": {
-   "races": 611,
-   "races_per_day": 3.3,
-   "fuku_hit_rate": 0.8871
+   "races": 248,
+   "races_per_day": 1.4,
+   "fuku_hit_rate": 0.8831
   }
  },
  "baseline_metrics": {
