@@ -64,6 +64,10 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .senp{font-size:12px;font-weight:800;border-radius:6px;padding:3px 8px;background:#1FB97A;color:#04150C}
 .livechip{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px;background:#7C4DFF;color:#fff;margin-left:4px}
 .exv{min-width:34px;text-align:right;font-size:11px;color:var(--dim)}
+.oddv{font-size:11px;color:#FFC53D;margin-left:6px}
+.hitchip{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px;background:#1FB97A;color:#04150C;margin-left:4px}
+.misschip{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px;background:#E5484D;color:#fff;margin-left:4px}
+.resv{font-size:11px;color:var(--dim)}
 .vlabel{font-size:11px;color:var(--mut,#8FA3B8);display:block}
 .confC{background:var(--confC);color:#0B1B2B}
 .lane{display:inline-flex;align-items:center;justify-content:center;
@@ -176,15 +180,15 @@ function renderSengen(){
       `<div class="pickrow"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
-        <span class="bp num">${pct(p.p)}</span></div>`).join("");
+        <span class="bp num">${pct(p.p)}</span>${(r.odds&&r.odds.t3&&r.odds.t3[p.c]!=null)?`<span class="oddv num">${r.odds.t3[p.c]}倍</span>`:""}</div>`).join("");
     return `<div class="race">
       <div class="racehead">
         <span class="rno num">${r.no}R</span>
         <span class="rmeta"><span class="vlabel">${v.name}</span>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
         <span class="honmei">${laneChip(fav.lane,true)}<span class="bname" style="margin-left:6px">${fb.name||""}</span></span>
-        ${r.live?'<span class="livechip">展示反映</span>':""}
-        <span class="senp num">複勝${fav.p?Math.round(fav.p*100)+"%":"-"}</span>
+        ${r.result?`<span class="${r.result.hit_fuku?"hitchip":"misschip"}">${r.result.hit_fuku?"的中":"不的中"} ${r.result.order}</span>`:(r.live?'<span class="livechip">展示反映</span>':"")}
+        <span class="senp num">複勝${fav.p?Math.round(fav.p*100)+"%":"-"}</span>${r.odds&&r.odds.fuku?`<span class="oddv num">${r.odds.fuku}倍</span>`:""}
       </div>
       <div class="racebody">
         <div class="sec">おすすめの買い方: ${laneChip(fav.lane)} の複勝 ── 2着以内に入る予測が ${fav.p?Math.round(fav.p*100)+"%":"-"}</div>
@@ -221,17 +225,18 @@ function renderToday(){
       `<div class="pickrow"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
-        <span class="bp num">${pct(p.p)}</span></div>`).join("");
+        <span class="bp num">${pct(p.p)}</span>${(r.odds&&r.odds.t3&&r.odds.t3[p.c]!=null)?`<span class="oddv num">${r.odds.t3[p.c]}倍</span>`:""}</div>`).join("");
     return `<div class="race" data-r="${r.no}">
       <div class="racehead">
         <span class="rno num">${r.no}R</span>
         <span class="rmeta"><span class="rtype">${r.type||""}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
         <span class="honmei">${comboChips(top.c,true)}</span>
-        ${r.live?'<span class="livechip">展示反映</span>':""}
+        ${r.result?`<span class="resv num">結果 ${r.result.order}</span>`:(r.live?'<span class="livechip">展示反映</span>':"")}
         <span class="conf conf${r.conf}">${r.conf}</span>
       </div>
       <div class="racebody">
+        ${r.result?`<div class="sec">結果: ${r.result.order}(${r.result.kimarite||"-"}) 3連単 ¥${(r.result.pay3t||0).toLocaleString()}${r.result.hit_t10?" ── TOP10内 的中":""}</div>`:""}
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
         <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
         <div class="sec">3連単 推奨買い目 TOP10</div>${picks}
@@ -244,10 +249,24 @@ function renderToday(){
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
 }
 
+function todayStats(){
+  if(!pred||!pred.venues) return null;
+  let n=0,w=0,t6=0,sn=0,sh=0,st=0,rt=0;
+  for(const v of pred.venues)for(const r of v.races){const x=r.result;if(!x)continue;
+    n++;if(x.hit_win)w++;if(x.hit_t6){t6++;rt+=(x.pay3t||0)}st+=600;
+    if(r.sengen){sn++;if(x.hit_fuku)sh++}}
+  if(!n) return null;
+  const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
+  return `<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
+    <td class="num">${n}</td><td class="num">${Math.round(w/n*100)}%</td>
+    <td class="num">${Math.round(t6/n*100)}%</td><td class="num">${sen}</td>
+    <td class="num">${st?Math.round(rt/st*100):0}%</td></tr>`;
+}
 function renderAcc(acc){
   const m=$("#main");
+  const tdrow=todayStats();
   if(!acc||!acc.days||!acc.days.length){
-    m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;
+    m.innerHTML=tdrow?`<div class="pad"><table><tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${tdrow}</table></div><div class="note">本日分の速報です。確定実績は翌朝から記録されます。</div>`:'<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;
   }
   const t=acc.total, n=t.races||1;
   const roi=t.stake6?Math.round(t.return6/t.stake6*1000)/10:0;
@@ -268,7 +287,7 @@ function renderAcc(acc){
       <div class="card"><div class="v num">${t.sen_n?(t.sen_hit/t.sen_n*100).toFixed(1):"-"}%</div><div class="k">厳選 複勝的中率 (${t.sen_hit||0}/${t.sen_n||0})</div></div>
     </div>
     <div class="pad"><table>
-      <tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${rows}
+      <tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${tdrow||""}${rows}
     </table></div>
     <div class="warn">回収率はTOP6買い目に各100円を投じた場合の仮想値です。実際のオッズ変動・購入行動とは異なります。</div>`;
 }
