@@ -37,7 +37,7 @@ def parse_result(html: str) -> dict | None:
     p3 = re.search(r"3連単([\s\S]{0,1200}?)</tbody>", h)
     if p3:
         nums = re.findall(r"numberSet1_number[^>]*>(\d)<", p3.group(1))
-        pay = re.search(r"¥([\d,]+)", p3.group(1))
+        pay = re.search(r"(?:¥|&yen;|￥)\s*([\d,]+)", p3.group(1))
         if len(nums) >= 3 and pay:
             res["pay3t"] = int(pay.group(1).replace(",", ""))
             res["pay3t_combo"] = "-".join(nums[:3])
@@ -45,7 +45,7 @@ def parse_result(html: str) -> dict | None:
     fk = re.search(r"複勝([\s\S]{0,1500}?)</tbody>", h)
     if fk:
         res["fuku_pay"] = {int(a): int(b.replace(",", ""))
-                           for a, b in re.findall(r"numberSet1_number[^>]*>(\d)<[\s\S]{0,300}?¥([\d,]+)", fk.group(1))}
+                           for a, b in re.findall(r"numberSet1_number[^>]*>(\d)<[\s\S]{0,300}?(?:¥|&yen;|￥)\s*([\d,]+)", fk.group(1))}
     return res
 
 
