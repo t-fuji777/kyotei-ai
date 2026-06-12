@@ -62,6 +62,8 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .confA{background:var(--confA);color:#1A1200}
 .confB{background:var(--confB);color:#04222C}
 .senp{font-size:12px;font-weight:800;border-radius:6px;padding:3px 8px;background:#1FB97A;color:#04150C}
+.livechip{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px;background:#7C4DFF;color:#fff;margin-left:4px}
+.exv{min-width:34px;text-align:right;font-size:11px;color:var(--dim)}
 .vlabel{font-size:11px;color:var(--mut,#8FA3B8);display:block}
 .confC{background:var(--confC);color:#0B1B2B}
 .lane{display:inline-flex;align-items:center;justify-content:center;
@@ -181,6 +183,7 @@ function renderSengen(){
         <span class="rmeta"><span class="vlabel">${v.name}</span>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
         <span class="honmei">${laneChip(fav.lane,true)}<span class="bname" style="margin-left:6px">${fb.name||""}</span></span>
+        ${r.live?'<span class="livechip">展示反映</span>':""}
         <span class="senp num">${fav.p?Math.round(fav.p*100)+"%":"-"}</span>
       </div>
       <div class="racebody">
@@ -210,6 +213,7 @@ function renderToday(){
     const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>
       `<div class="boatrow">${laneChip(b.lane)}
         <span class="bname">${b.name}</span><span class="bcls">${b.cls||""}</span>
+        ${r.ex?`<span class="exv num">${r.ex[b.lane]??"-"}</span>`:""}
         <span class="bar"><i style="width:${Math.min(100,b.wp*140)}%"></i></span>
         <span class="bp num">${pct(b.wp)}</span></div>`).join("");
     const picks=r.picks.map((p,i)=>
@@ -223,10 +227,12 @@ function renderToday(){
         <span class="rmeta"><span class="rtype">${r.type||""}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
         <span class="honmei">${comboChips(top.c,true)}</span>
+        ${r.live?'<span class="livechip">展示反映</span>':""}
         <span class="conf conf${r.conf}">${r.conf}</span>
       </div>
       <div class="racebody">
-        <div class="sec">勝率予測</div>${boats}
+        ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
+        <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
         <div class="sec">3連単 推奨買い目 TOP10</div>${picks}
       </div></div>`;
   }).join("");
