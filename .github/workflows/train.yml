@@ -22,7 +22,7 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git pull --rebase
           git add data/model docs/model_report.json
           git diff --cached --quiet || git commit -m "train model"
+          git pull --rebase --autostash
           git push
