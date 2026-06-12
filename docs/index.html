@@ -255,6 +255,8 @@ function renderToday(){
     <div class="warn">本予測は過去データに基づく統計的推定であり、的中や利益を保証するものではありません。舟券の購入は自己責任で行ってください。</div>`;
   m.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{selVenue=+c.dataset.v;renderToday()});
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
+  const bar=m.querySelector(".chips"),oc=m.querySelector(".chip.on");
+  if(bar&&oc)bar.scrollLeft=oc.offsetLeft-(bar.clientWidth-oc.offsetWidth)/2;
 }
 
 function todayStats(){
@@ -350,7 +352,7 @@ $("#tabSen").onclick=()=>show("sen");
 $("#tabToday").onclick=()=>show("today");
 $("#tabAcc").onclick=()=>show("acc");
 $("#tabModel").onclick=()=>show("model");
-show("today");
+show("sen");
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 </script>
 </body>
