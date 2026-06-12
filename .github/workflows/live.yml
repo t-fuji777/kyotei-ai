@@ -1,0 +1,30 @@
+name: live-update
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 1-12 * * *"
+concurrency:
+  group: data
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pandas numpy lightgbm lhafile requests
+      - name: live update
+        run: python scripts/update_live.py
+      - name: commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add docs/predictions
+          git diff --cached --quiet || git commit -m "live update"
+          git pull --rebase --autostash
+          git push
