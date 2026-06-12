@@ -28,7 +28,7 @@ def _walk_rows(tbl: str):
 
 def parse_fuku(html: str) -> dict:
     out = {}
-    m = re.search(FUKU_HEAD.encode().decode("unicode_escape") + r"([\s\S]*?)</table>", html)
+    m = re.search(FUKU_HEAD + r"([\s\S]*?)</table>", html)
     if not m:
         return out
     for bm in re.finditer(r'is-boatColor(\d)[^>]*>\s*\d\s*<[\s\S]{0,300}?oddsPoint[^>]*>\s*([\d.\-~\u301c]+)\s*<', m.group(1)):
