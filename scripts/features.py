@@ -18,6 +18,7 @@ FEATURES = [
     "v_makuri365", "v_water", "v_tide",
     "f_noryoku", "f_win", "f_lane_in2", "f_lane_strank",
     "ex_time", "ex_rank", "ex_diff", "wind", "wave",
+    "rt_class", "rel_nat_win", "rel_nat_rank", "rel_motor",
 ]
 CLASS_MAP = {"A1": 4, "A2": 3, "B1": 2, "B2": 1}
 MAKURI = ("まくり", "まくり差し", "捲り", "捲り差し")
@@ -210,6 +211,24 @@ def add_features(hist: pd.DataFrame, target: pd.DataFrame, fan=None) -> pd.DataF
     else:
         for k in ("f_noryoku", "f_win", "f_lane_in2", "f_lane_strank"):
             target[k] = np.nan
+
+    # ---- レース種別(優勝戦/準優/特選/予選) + レース内相対強さ ----
+    def _rt_class(s):
+        s = str(s)
+        if "優勝" in s:
+            return 3
+        if "準優" in s:
+            return 2
+        if "特選" in s or "特賞" in s:
+            return 1
+        if "予選" in s or "一般" in s:
+            return 0
+        return 4
+    target["rt_class"] = target["race_type"].map(_rt_class) if "race_type" in target.columns else 0
+    _gg = target.groupby(["date", "venue", "race_no"])
+    target["rel_nat_win"] = target["nat_win"] - _gg["nat_win"].transform("mean")
+    target["rel_nat_rank"] = _gg["nat_win"].rank(ascending=False, method="min")
+    target["rel_motor"] = target["motor_in2"] - _gg["motor_in2"].transform("mean")
 
     # ---- 直前情報(展示タイム・気象): 学習はK票確定値, 推論はbeforeinfo由来。未取得はNaN ----
     for c in ("ex_time", "wind", "wave"):
