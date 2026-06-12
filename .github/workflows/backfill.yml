@@ -45,7 +45,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: entries-${{ matrix.year }}
-          path: data/races/
+          path: data/races/entries_${{ matrix.year }}.csv.gz
           if-no-files-found: ignore
   assemble:
     needs: chunk
