@@ -43,7 +43,7 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git pull --rebase
           git add data/races data/fan docs
           git diff --cached --quiet || git commit -m "daily update $(TZ=Asia/Tokyo date +%Y%m%d)"
+          git pull --rebase --autostash
           git push
