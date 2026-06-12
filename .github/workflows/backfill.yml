@@ -68,7 +68,7 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git pull --rebase
           git add data/races data/fan
           git diff --cached --quiet || git commit -m "backfill ${{ github.event.inputs.start }}-${{ github.event.inputs.end }}"
+          git pull --rebase
           git push
