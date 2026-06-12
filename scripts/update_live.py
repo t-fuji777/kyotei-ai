@@ -91,10 +91,24 @@ def update_exhibits(pred, now, ymd) -> int:
                     odds = inf.get("odds", {})
                     fav_lane = nr.get("fuku", {}).get("lane")
                     combos = [p["c"] for p in nr.get("picks", [])]
+                    axis, axis_combo = {}, {}
+                    if combos:
+                        a, b, c = combos[0].split("-")
+                        s2 = "=".join(sorted([a, b]))
+                        s3 = "=".join(sorted([a, b, c]))
+                        axis = {"fuku": odds.get("fuku", {}).get(fav_lane),
+                                "k": odds.get("k", {}).get(s2),
+                                "f2": odds.get("f2", {}).get(s2),
+                                "t2": odds.get("t2", {}).get(f"{a}-{b}"),
+                                "f3": odds.get("f3", {}).get(s3),
+                                "t3": odds.get("t3", {}).get(combos[0])}
+                        axis_combo = {"fuku": str(fav_lane), "k": s2, "f2": s2,
+                                      "t2": f"{a}-{b}", "f3": s3, "t3": combos[0]}
                     nr["odds"] = {
                         "fuku": odds.get("fuku", {}).get(fav_lane),
-                        "t3": {c: odds.get("t3", {}).get(c) for c in combos
-                               if odds.get("t3", {}).get(c) is not None},
+                        "t3": {c2: odds.get("t3", {}).get(c2) for c2 in combos
+                               if odds.get("t3", {}).get(c2) is not None},
+                        "axis": axis, "axis_combo": axis_combo,
                     }
                     if r.get("result"):
                         nr["result"] = r["result"]
