@@ -151,6 +151,16 @@ def main():
     te = df[df["date"] >= d_va].copy()
     print(f"split: train<{d_tr} ({len(tr)}), valid<{d_va} ({len(va)}), test ({len(te)})")
 
+    # Pre-live robustness: mask ex features to NaN on 50% of training races
+    # so the model stays calibrated for morning predictions without beforeinfo.
+    EX_COLS = ["ex_time", "ex_rank", "ex_diff", "wind", "wave"]
+    _rng = np.random.default_rng(42)
+    _rid = tr.groupby(["date", "venue", "race_no"]).ngroup()
+    _sel = _rng.random(int(_rid.max()) + 1)[_rid.values] < 0.5
+    tr = tr.copy()
+    tr.loc[_sel, EX_COLS] = np.nan
+    print(f"ex-mask: {int(_sel.sum())}/{len(tr)} rows masked", flush=True)
+
     cat = ["venue", "lane", "class_i", "v_water"]
     models, iters = {}, {}
     for tgt in TARGETS:
