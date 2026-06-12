@@ -1,8 +1,8 @@
 name: daily
 on:
   schedule:
-    - cron: "30 21 * * *"
-    - cron: "55 23 * * *"
+    - cron: "37 21 * * *"
+    - cron: "23 23 * * *"
   workflow_dispatch:
     inputs:
       date:
