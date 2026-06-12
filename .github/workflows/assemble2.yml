@@ -3,36 +3,44 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "artifact source run id"
+        description: "backfill run id"
         required: true
         default: "27384380405"
       start:
-        description: "fan start YYYYMMDD"
+        description: "start YYYYMMDD"
         required: true
         default: "20210611"
-concurrency:
-  group: data
-  cancel-in-progress: false
-permissions:
-  contents: write
-  actions: read
 jobs:
   assemble:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install lhafile
+      - run: pip install lhafile pandas requests
       - uses: actions/download-artifact@v4
         with:
           pattern: entries-*
-          path: data/races/
-          merge-multiple: true
+          path: art/
           run-id: ${{ github.event.inputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: pick own-year files
+        run: |
+          mkdir -p data/races
+          for y in 2021 2022 2023 2024 2025 2026; do
+            f="art/entries-$y/entries_$y.csv.gz"
+            if [ -f "$f" ]; then
+              cp "$f" data/races/
+              echo "picked $f ($(stat -c%s $f) bytes)"
+            else
+              echo "missing $f"
+            fi
+          done
       - name: fetch fan data
         run: python scripts/fetch_fan.py --start ${{ github.event.inputs.start }}
       - name: commit
@@ -40,6 +48,6 @@ jobs:
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add data/races data/fan
-          git diff --cached --quiet || git commit -m "assemble from run ${{ github.event.inputs.run_id }}"
+          git diff --cached --quiet || git commit -m "backfill data (run ${{ github.event.inputs.run_id }}, per-year pick)"
           git pull --rebase
           git push
