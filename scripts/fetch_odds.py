@@ -18,7 +18,7 @@ def _strip(s: str) -> str:
 
 
 def _get(page, ymd, jcd, rno):
-    raw = http_get(BASE.format(page=page, rno=rno, jcd=jcd, ymd=ymd), timeout=20, retries=2)
+    raw = http_get(BASE.format(page=page, rno=rno, jcd=jcd, ymd=ymd), timeout=8, retries=1)
     return re.sub(r"\s+", " ", raw.decode("utf-8", errors="replace"))
 
 
@@ -129,16 +129,26 @@ def _floatify(d: dict) -> dict:
 
 
 def fetch_odds(ymd: str, jcd: int, rno: int) -> dict | None:
+    # fetch the win/place page first; if it fails or odds are not published yet,
+    # bail immediately so we do not waste time on the other four pages.
     try:
         tf = _get("oddstf", ymd, jcd, rno)
+    except Exception as e:
+        print(f"odds {jcd}-{rno}R: not available ({e})")
+        return None
+    fuku = parse_fuku(tf)
+    if not fuku:
+        print(f"odds {jcd}-{rno}R: not published yet")
+        return None
+    try:
         t3 = _get("odds3t", ymd, jcd, rno)
         f3 = _get("odds3f", ymd, jcd, rno)
         tf2 = _get("odds2tf", ymd, jcd, rno)
         kw = _get("oddsk", ymd, jcd, rno)
     except Exception as e:
-        print(f"odds {jcd}-{rno}R: fetch failed ({e})")
+        print(f"odds {jcd}-{rno}R: partial fetch failed ({e})")
         return None
-    res = {"fuku": parse_fuku(tf),
+    res = {"fuku": fuku,
            "t3": _parse_tri(t3, 100, 130, "-"),
            "f3": _parse_tri(f3, 16, 40, "=")}
     two = [t for t in _tables(tf2) if 12 <= t.count("oddsPoint") <= 40]
