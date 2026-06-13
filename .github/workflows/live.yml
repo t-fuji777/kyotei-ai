@@ -2,7 +2,8 @@ name: live-update
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 1-12 * * *"
+    - cron: "7,22,37,52 23 * * *"
+    - cron: "7,22,37,52 0-12 * * *"
 concurrency:
   group: data
   cancel-in-progress: false
