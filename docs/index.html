@@ -41,7 +41,7 @@ nav button.on{color:var(--accent)}
 nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
   stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
-.hdrtop{display:flex;align-items:center;gap:10px}.hdrtop h1{flex:0 0 auto;margin:0}#hdrChips{flex:1 1 auto;min-width:0;display:flex;gap:8px;overflow-x:auto;justify-content:flex-end;scrollbar-width:none;-webkit-overflow-scrolling:touch}#hdrChips::-webkit-scrollbar{display:none}#hdrChips:empty{display:none}
+.hdrtop{display:flex;align-items:center;gap:10px}.hdrtop h1{flex:0 0 auto;margin:0}#hdrChips{flex:1 1 auto;min-width:0;display:flex;justify-content:flex-end;position:relative}#hdrChips:empty{display:none}#venSel{display:inline-flex;align-items:center;gap:6px;max-width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 12px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}#venSel .car{color:var(--dim);font-size:11px}#venMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;min-width:120px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}#venMenu[hidden]{display:none}.venopt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:14px;border-radius:6px;cursor:pointer;white-space:nowrap}.venopt:hover{background:var(--surface)}.venopt.on{background:var(--accent);color:#06121E;font-weight:700}
   .chips{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;
   scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .chips::-webkit-scrollbar{display:none}
@@ -219,7 +219,7 @@ function renderToday(){
   }
   if(selVenue===null||!pred.venues.some(v=>v.code===selVenue)) selVenue=pred.venues[0].code;
   const chips=pred.venues.map(v=>
-    `<button class="chip ${v.code===selVenue?'on':''}" data-v="${v.code}">${v.name}</button>`).join("");
+    `<button class="venopt ${v.code===selVenue?'on':''}" data-v="${v.code}">${v.name}</button>`).join("");
   const venue=pred.venues.find(v=>v.code===selVenue);
   const races=venue.races.map(r=>{
     const top=r.picks[0]||{c:"-",p:0};
@@ -251,13 +251,12 @@ function renderToday(){
         <div class="sec">3連単 推奨買い目 TOP10</div>${picks}
       </div></div>`;
   }).join("");
-  document.getElementById("hdrChips").innerHTML=chips;
+  document.getElementById("hdrChips").innerHTML=`<button id="venSel">${venue?venue.name:""}<span class="car">▾</span></button><div id="venMenu" hidden>${chips}</div>`;
   m.innerHTML=`<div class="racelist">${races}</div>
     <div class="warn">本予測は過去データに基づく統計的推定であり、的中や利益を保証するものではありません。舟券の購入は自己責任で行ってください。</div>`;
-  document.querySelectorAll("#hdrChips .chip").forEach(c=>c.onclick=()=>{selVenue=+c.dataset.v;renderToday()});
+  {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});document.addEventListener("click",function _c(ev){if(!document.getElementById("venMenu"))return document.removeEventListener("click",_c);if(!ev.target.closest("#hdrChips")){const mm=document.getElementById("venMenu");if(mm)mm.hidden=true;}});}}
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
-  const bar=document.getElementById("hdrChips"),oc=document.querySelector("#hdrChips .chip.on");
-  if(bar&&oc)bar.scrollLeft=oc.offsetLeft-(bar.clientWidth-oc.offsetWidth)/2;
+  /* venue selector dropdown */
 }
 
 function todayStats(){
