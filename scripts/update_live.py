@@ -27,6 +27,8 @@ EXHIBIT_MIN = (-3, 45)
 # odds window: published during sale; start fetching this many min before deadline
 ODDS_BEFORE_MAX = 120   # begin odds polling up to 120 min before deadline
 ODDS_AFTER = 3          # stop a few min after deadline (no more odds changes)
+ODDS_MAX_PER_RUN = 30   # cap odds fetches per cycle (rest handled next run)
+RESULT_MAX_PER_RUN = 25 # cap result fetches per cycle (backlog drains over runs)
 
 
 def _mins_to_deadline(now, dl):
@@ -82,10 +84,15 @@ def update_odds(pred, now, ymd) -> int:
     print(f"odds targets: {targets}", flush=True)
 
     n_odds = 0
+    fetched = 0
     for v in pred["venues"]:
         for i, r in enumerate(v["races"]):
             if (v["code"], r["no"]) not in targets:
                 continue
+            if fetched >= ODDS_MAX_PER_RUN:
+                print(f"odds cap {ODDS_MAX_PER_RUN} reached; rest next run")
+                return n_odds
+            fetched += 1
             odds = fetch_odds(ymd, v["code"], r["no"])
             time.sleep(0.4)
             if not odds or not (odds.get("t3") or odds.get("fuku")):
@@ -169,6 +176,7 @@ def update_results(pred, now, ymd) -> int:
     yet stored. No upper time bound -- finished races keep getting retried until
     their result is fixed and recorded."""
     n_res = 0
+    tried = 0
     for v in pred["venues"]:
         for r in v["races"]:
             if r.get("result"):
@@ -177,6 +185,10 @@ def update_results(pred, now, ymd) -> int:
             # any race past its deadline (with small grace) and not yet recorded
             if mins is None or mins > -ODDS_AFTER:
                 continue
+            if tried >= RESULT_MAX_PER_RUN:
+                print(f"result cap {RESULT_MAX_PER_RUN} reached; rest next run")
+                return n_res
+            tried += 1
             res = fetch_result(ymd, v["code"], r["no"])
             time.sleep(0.5)
             if not res:
