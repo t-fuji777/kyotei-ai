@@ -2,30 +2,39 @@ name: live-update
 on:
   workflow_dispatch:
   schedule:
-    - cron: "7,22,37,52 23 * * *"
-    - cron: "7,22,37,52 0-12 * * *"
+    - cron: "7 23 * * *"
+    - cron: "7,37 0-12 * * *"
 concurrency:
-  group: data
+  group: live-loop
   cancel-in-progress: false
 permissions:
   contents: write
 jobs:
   live:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install pandas numpy lightgbm lhafile requests
-      - name: live update
-        run: python scripts/update_live.py
-      - name: commit
+      - name: live loop
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add docs/predictions
-          git diff --cached --quiet || git commit -m "live update"
-          git pull --rebase --autostash
-          git push
+          START=$(date +%s)
+          while true; do
+            python scripts/update_live.py || true
+            git add docs/predictions
+            git diff --cached --quiet || git commit -m "live update"
+            git pull --rebase --autostash || (git rebase --abort || true; git pull --rebase --autostash) || true
+            git push || true
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then exit 0; fi
+            H=$(TZ=Asia/Tokyo date +%H)
+            if [ "$H" -ge 22 ]; then exit 0; fi
+            if [ "$H" -lt 8 ]; then exit 0; fi
+            E=$(( $(date +%s) - START ))
+            if [ "$E" -ge 19500 ]; then exit 0; fi
+            sleep 870
+          done
