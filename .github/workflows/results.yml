@@ -1,0 +1,31 @@
+name: results-update
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "4,9,14,19,24,29,34,39,44,49,54,59 23 * * *"
+    - cron: "4,9,14,19,24,29,34,39,44,49,54,59 0-12 * * *"
+concurrency:
+  group: results
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  results:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: results update
+        run: python scripts/update_results.py
+      - name: commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add docs/predictions
+          git diff --cached --quiet || git commit -m "results update"
+          git pull --rebase --autostash
+          git push
