@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Live updater: (1) fetch beforeinfo (exhibition/wind/wave) + odds for races near
-deadline and re-predict them; (2) fetch results of finished races and attach hit
-flags. Runs every 15 min via GitHub Actions."""
+"""Live updater: (1) fetch public odds for ALL pre-deadline races and attach to
+picks/axis (odds are published throughout the sale window, independent of
+exhibition data); (2) fetch exhibition (beforeinfo) + re-predict for races near
+deadline; (3) fetch results of ANY finished race whose result is not yet stored
+(no upper time limit). Runs every few minutes via GitHub Actions."""
 import json
 import sys
 import time
@@ -20,8 +22,11 @@ from predict_today import load_hist, load_models, races_to_rows, predict_races, 
 
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
-WINDOW_MIN = (-3, 45)
-RESULT_MIN = (4, 120)
+# exhibition window (re-predict): from this many min before deadline, until N min after
+EXHIBIT_MIN = (-3, 45)
+# odds window: published during sale; start fetching this many min before deadline
+ODDS_BEFORE_MAX = 120   # begin odds polling up to 120 min before deadline
+ODDS_AFTER = 3          # stop a few min after deadline (no more odds changes)
 
 
 def _mins_to_deadline(now, dl):
@@ -32,6 +37,69 @@ def _mins_to_deadline(now, dl):
     return (t - now).total_seconds() / 60
 
 
+def _axis_from_odds(nr, odds):
+    """Compute axis (best single combo per ticket type) + combo labels + per-pick t3."""
+    fav_lane = nr.get("fuku", {}).get("lane")
+    combos = [p["c"] for p in nr.get("picks", [])]
+    axis, axis_combo = {}, {}
+    if combos:
+        a, b, c = combos[0].split("-")
+        s2 = "=".join(sorted([a, b]))
+        s3 = "=".join(sorted([a, b, c]))
+        axis = {"fuku": odds.get("fuku", {}).get(fav_lane),
+                "k": odds.get("k", {}).get(s2),
+                "f2": odds.get("f2", {}).get(s2),
+                "t2": odds.get("t2", {}).get(f"{a}-{b}"),
+                "f3": odds.get("f3", {}).get(s3),
+                "t3": odds.get("t3", {}).get(combos[0])}
+        axis_combo = {"fuku": str(fav_lane), "k": s2, "f2": s2,
+                      "t2": f"{a}-{b}", "f3": s3, "t3": combos[0]}
+    return {
+        "fuku": odds.get("fuku", {}).get(fav_lane),
+        "t3": {c2: odds.get("t3", {}).get(c2) for c2 in combos
+               if odds.get("t3", {}).get(c2) is not None},
+        "axis": axis, "axis_combo": axis_combo,
+    }
+
+
+def update_odds(pred, now, ymd) -> int:
+    """Fetch public odds for every pre-deadline race (independent of exhibition)
+    and merge into nr['odds'] so picks/axisTable show odds during the sale."""
+    targets = []
+    for v in pred["venues"]:
+        for r in v["races"]:
+            if r.get("result"):
+                continue
+            mins = _mins_to_deadline(now, r.get("deadline"))
+            if mins is None:
+                continue
+            # within sale window: deadline-ODDS_BEFORE_MAX .. deadline+ODDS_AFTER
+            if -ODDS_AFTER <= mins <= ODDS_BEFORE_MAX:
+                targets.append((v["code"], r["no"]))
+    if not targets:
+        print("no races in odds window")
+        return 0
+    print(f"odds targets: {targets}", flush=True)
+
+    n_odds = 0
+    for v in pred["venues"]:
+        for i, r in enumerate(v["races"]):
+            if (v["code"], r["no"]) not in targets:
+                continue
+            odds = fetch_odds(ymd, v["code"], r["no"])
+            time.sleep(0.4)
+            if not odds or not (odds.get("t3") or odds.get("fuku")):
+                continue
+            merged = _axis_from_odds(r, odds)
+            # keep existing live flags/exhibits; only refresh odds-derived fields
+            ex_odds = r.get("odds", {})
+            ex_odds.update(merged)
+            r["odds"] = ex_odds
+            n_odds += 1
+            print(f"  odds {v['code']}-{r['no']}R: t3={len(odds.get('t3',{}))} fuku={len(odds.get('fuku',{}))}")
+    return n_odds
+
+
 def update_exhibits(pred, now, ymd) -> int:
     targets = []
     for v in pred["venues"]:
@@ -39,12 +107,12 @@ def update_exhibits(pred, now, ymd) -> int:
             if r.get("live"):
                 continue
             mins = _mins_to_deadline(now, r.get("deadline"))
-            if mins is not None and WINDOW_MIN[0] <= mins <= WINDOW_MIN[1]:
+            if mins is not None and EXHIBIT_MIN[0] <= mins <= EXHIBIT_MIN[1]:
                 targets.append((v["code"], r["no"]))
     if not targets:
-        print("no races in deadline window")
+        print("no races in exhibit window")
         return 0
-    print(f"window targets: {targets}", flush=True)
+    print(f"exhibit targets: {targets}", flush=True)
 
     live = {}
     for jcd, rno in targets:
@@ -88,28 +156,7 @@ def update_exhibits(pred, now, ymd) -> int:
                     nr["course_ex"] = {str(k): val for k, val in inf["course"].items()}
                     nr["wind"] = inf["wind"]
                     nr["wave"] = inf["wave"]
-                    odds = inf.get("odds", {})
-                    fav_lane = nr.get("fuku", {}).get("lane")
-                    combos = [p["c"] for p in nr.get("picks", [])]
-                    axis, axis_combo = {}, {}
-                    if combos:
-                        a, b, c = combos[0].split("-")
-                        s2 = "=".join(sorted([a, b]))
-                        s3 = "=".join(sorted([a, b, c]))
-                        axis = {"fuku": odds.get("fuku", {}).get(fav_lane),
-                                "k": odds.get("k", {}).get(s2),
-                                "f2": odds.get("f2", {}).get(s2),
-                                "t2": odds.get("t2", {}).get(f"{a}-{b}"),
-                                "f3": odds.get("f3", {}).get(s3),
-                                "t3": odds.get("t3", {}).get(combos[0])}
-                        axis_combo = {"fuku": str(fav_lane), "k": s2, "f2": s2,
-                                      "t2": f"{a}-{b}", "f3": s3, "t3": combos[0]}
-                    nr["odds"] = {
-                        "fuku": odds.get("fuku", {}).get(fav_lane),
-                        "t3": {c2: odds.get("t3", {}).get(c2) for c2 in combos
-                               if odds.get("t3", {}).get(c2) is not None},
-                        "axis": axis, "axis_combo": axis_combo,
-                    }
+                    nr["odds"] = _axis_from_odds(nr, inf.get("odds", {}))
                     if r.get("result"):
                         nr["result"] = r["result"]
                     v["races"][i] = nr
@@ -118,13 +165,17 @@ def update_exhibits(pred, now, ymd) -> int:
 
 
 def update_results(pred, now, ymd) -> int:
+    """Fetch results for ANY finished race (deadline passed) whose result is not
+    yet stored. No upper time bound -- finished races keep getting retried until
+    their result is fixed and recorded."""
     n_res = 0
     for v in pred["venues"]:
         for r in v["races"]:
             if r.get("result"):
                 continue
             mins = _mins_to_deadline(now, r.get("deadline"))
-            if mins is None or not (-RESULT_MIN[1] <= mins <= -RESULT_MIN[0]):
+            # any race past its deadline (with small grace) and not yet recorded
+            if mins is None or mins > -ODDS_AFTER:
                 continue
             res = fetch_result(ymd, v["code"], r["no"])
             time.sleep(0.5)
@@ -161,14 +212,15 @@ def main():
         print("no venues today")
         return
 
+    n_odds = update_odds(pred, now, ymd)
     n_upd = update_exhibits(pred, now, ymd)
     n_res = update_results(pred, now, ymd)
-    if n_upd == 0 and n_res == 0:
+    if n_odds == 0 and n_upd == 0 and n_res == 0:
         print("nothing to update")
         return
     pred["live_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
     write(pred, ymd)
-    print(f"live updated: exhibits={n_upd} results={n_res}")
+    print(f"live updated: odds={n_odds} exhibits={n_upd} results={n_res}")
 
 
 if __name__ == "__main__":
