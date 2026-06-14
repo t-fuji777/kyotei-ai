@@ -68,7 +68,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .oddv{font-size:11px;color:#FFC53D;margin-left:6px}
 .hitchip{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px;background:#1FB97A;color:#04150C;margin-left:4px}
 .misschip{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px;background:#E5484D;color:#fff;margin-left:4px}
-.resv{font-size:11px;color:var(--dim)}
+.resv{font-size:12px;font-weight:600;color:#7dd3fc;background:rgba(56,189,248,.12);padding:1px 7px;border-radius:5px}
 .vlabel{font-size:11px;color:var(--mut,#8FA3B8);display:block}
 .confC{background:var(--confC);color:#0B1B2B}
 .lane{display:inline-flex;align-items:center;justify-content:center;
@@ -83,6 +83,18 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .l6{background:var(--b6);color:#04231A}
 .racebody{display:none;border-top:1px solid var(--line);padding:12px 14px}
 .race.open .racebody{display:block}
+.resbox{background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.35);border-radius:10px;padding:10px 12px;margin:0 0 12px}
+.resttl{font-size:11px;font-weight:700;letter-spacing:.08em;color:#7dd3fc;margin-bottom:6px}
+.resrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.reschips{display:inline-flex;gap:3px}
+.reskime{font-size:13px;color:#cbd5e1}
+.respay{font-size:13px;color:#e2e8f0;margin-left:auto}
+.respay b{color:#fde047;font-size:15px}
+.resbadges{display:flex;gap:6px;flex-wrap:wrap}
+.rbadge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px}
+.rb-hit{background:#16a34a;color:#fff}
+.rb-miss{background:rgba(148,163,184,.18);color:#94a3b8}
+
 .sec{font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.08em;margin:8px 0 6px}
 .boatrow{display:flex;align-items:center;gap:8px;padding:4px 0}
 .bname{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -246,7 +258,7 @@ function renderToday(){
         <span class="conf conf${r.conf}">${r.conf}</span>
       </div>
       <div class="racebody">
-        ${r.result?`<div class="sec">結果: ${r.result.order}(${r.result.kimarite||"-"}) 3連単 ¥${(r.result.pay3t||0).toLocaleString()}${r.result.hit_t10?" ── TOP10内 的中":""}</div>`:""}
+        ${r.result?`<div class="resbox"><div class="resttl">結果</div><div class="resrow"><span class="reschips">${comboChips(r.result.order,false)}</span><span class="reskime">${r.result.kimarite||""}</span><span class="respay">3連単 <b>¥${(r.result.pay3t||0).toLocaleString()}</b></span></div><div class="resbadges"><span class="rbadge ${r.result.hit_fuku?"rb-hit":"rb-miss"}">本命複勝 ${r.result.hit_fuku?"的中":"不的中"}</span><span class="rbadge ${r.result.hit_t1?"rb-hit":"rb-miss"}">本命3連単 ${r.result.hit_t1?"的中":"不的中"}</span>${r.result.hit_t10?`<span class="rbadge rb-hit">買い目TOP10内</span>`:""}</div></div>`:""}
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
         ${axisTable(r)}
         <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
@@ -278,7 +290,7 @@ function renderAcc(acc){
   const m=$("#main");
   const tdrow=todayStats();
   if(!acc||!acc.days||!acc.days.length){
-    m.innerHTML=tdrow?`<div class="pad"><table><tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${tdrow}</table></div><div class="note">本日分の速報です。確定実績は翌朝から記録されます。</div>`:'<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;
+    m.innerHTML=tdrow?`<div class="pad"><table><tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${tdrow}</table></div><div class="note">本日分の速報です。確定実績は翌朝から記録されます。</div>`:'<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>";return;
   }
   const t=acc.total, n=t.races||1;
   const roi=t.stake6?Math.round(t.return6/t.stake6*1000)/10:0;
