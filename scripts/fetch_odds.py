@@ -18,7 +18,7 @@ def _strip(s: str) -> str:
 
 
 def _get(page, ymd, jcd, rno):
-    raw = http_get(BASE.format(page=page, rno=rno, jcd=jcd, ymd=ymd), timeout=8, retries=1)
+    raw = http_get(BASE.format(page=page, rno=rno, jcd=jcd, ymd=ymd), timeout=20, retries=2)
     return re.sub(r"\s+", " ", raw.decode("utf-8", errors="replace"))
 
 
