@@ -20,7 +20,7 @@ UA = "Mozilla/5.0 (compatible; kyotei-ai/1.0; personal research)"
 
 
 def zen2han(s: str) -> str:
-    """全角英数記号を半角化(カナ・漢字は維持)"""
+    """全角英数字を半角化(カナ・漢字は維持)"""
     out = []
     for ch in s:
         code = ord(ch)
@@ -141,11 +141,21 @@ def parse_b_racer_line(raw_line: str):
     }
 
 
+RE_B_DAY = re.compile(r"\u7b2c\s*(\d+)\s*\u65e5")  # 第 N 日 (Nth day of the meeting)
+
+
 def parse_b(text: str, ymd: str):
     """番組表ファイル全体 -> race dictのリスト"""
     races = []
     for vcode, lines in split_venues(text, "B"):
         norm = [zen2han(l) for l in lines]
+        # day-of-meeting marker appears in the venue header (first ~10 lines)
+        day_n = None
+        for hl in norm[:10]:
+            dm = RE_B_DAY.search(hl)
+            if dm:
+                day_n = int(dm.group(1))
+                break
         heads = [i for i, l in enumerate(norm) if RE_B_HEAD.match(l)]
         for hi, h in enumerate(heads):
             m = RE_B_HEAD.match(norm[h])
@@ -162,7 +172,7 @@ def parse_b(text: str, ymd: str):
                 races.append({
                     "date": ymd, "venue": vcode, "race_no": rno,
                     "race_type": m.group(2), "distance": int(m.group(3)),
-                    "deadline": m.group(4), "racers": racers,
+                    "deadline": m.group(4), "day_n": day_n, "racers": racers,
                 })
     return races
 
