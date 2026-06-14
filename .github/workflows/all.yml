@@ -1,0 +1,31 @@
+name: all-update
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 23 * * *"
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 0-12 * * *"
+concurrency:
+  group: all-update
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  all:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: update results and odds
+        run: python scripts/update_all.py
+      - name: commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add docs/predictions
+          git diff --cached --quiet || git commit -m "results+odds update"
+          git pull --rebase --autostash
+          git push
