@@ -176,7 +176,7 @@ function renderSengen(){
   setHeader();
   const cfg=pred.sengen_cfg||{};
   const list=[];
-  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(r.sengen)list.push({v,r})}));
+  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(r.sengen||r.conf==='A')list.push({v,r})}));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   if(!list.length){
     m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(本命の2着内予測${cfg.p2_min?Math.round(cfg.p2_min*100)+"%以上":""}・対象場)を満たすレースのみ表示します。</div>`;
@@ -186,7 +186,7 @@ function renderSengen(){
     const fav=r.fuku||{};
     const fb=r.boats.find(b=>b.lane===fav.lane)||{};
     const top=r.picks[0]||{c:"-",p:0};
-    const picks=r.picks.slice(0,5).map((p,i)=>
+    const _hi=r.picks.filter(p=>r.odds&&r.odds.t3&&r.odds.t3[p.c]>=5);const _src=_hi.length?_hi:r.picks;const picks=_src.slice(0,5).map((p,i)=>
       `<div class="pickrow"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
