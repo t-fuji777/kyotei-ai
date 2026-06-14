@@ -20,9 +20,9 @@ ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
 
 # Odds sale window relative to deadline (minutes). Negative mins = after deadline.
-ODDS_BEFORE_MAX = 180   # start polling up to 3h before deadline
+ODDS_BEFORE_MAX = 60   # start polling up to 3h before deadline
 ODDS_AFTER = 5          # keep a few min after deadline, then result takes over
-ODDS_MAX_PER_RUN = 60   # cap fetches per cycle; backlog drains over runs
+ODDS_MAX_PER_RUN = 15   # cap fetches per cycle; backlog drains over runs
 
 
 def _mins_to_deadline(now, dl):
