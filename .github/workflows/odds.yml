@@ -1,0 +1,31 @@
+name: odds-update
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "1,6,11,16,21,26,31,36,41,46,51,56 23 * * *"
+    - cron: "1,6,11,16,21,26,31,36,41,46,51,56 0-12 * * *"
+concurrency:
+  group: odds
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  odds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: odds update
+        run: python scripts/fetch_odds_only.py
+      - name: commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add docs/predictions
+          git diff --cached --quiet || git commit -m "odds update"
+          git pull --rebase --autostash
+          git push
