@@ -148,6 +148,7 @@ const laneChip=(n,s)=>`<span class="lane ${s?'s':''} l${n}">${n}</span>`;
 const comboChips=(c,s)=>c.split("-").map(n=>laneChip(n,s)).join("");
 const pct=p=>(p*100).toFixed(1)+"%";
 
+function dayLabel(v){if(!v)return "";if(v.is_final)return " \u00b7 \u6700\u7d42\u65e5";if(v.day_n===1)return " \u00b7 \u521d\u65e5";if(v.day_n>1)return " \u00b7 "+v.day_n+"\u65e5\u76ee";return "";}
 function sortVenues(p){if(p&&Array.isArray(p.venues))p.venues.sort((a,b)=>(a.code||0)-(b.code||0));return p;}
 async function fetchJSON(url){
   const r=await fetch(url+"?t="+Date.now());
@@ -220,7 +221,7 @@ function renderToday(){
   }
   if(selVenue===null||!pred.venues.some(v=>v.code===selVenue)) selVenue=pred.venues[0].code;
   const chips=pred.venues.map(v=>
-    `<button class="venopt ${v.code===selVenue?'on':''}" data-v="${v.code}">${v.name}</button>`).join("");
+    `<button class="venopt ${v.code===selVenue?'on':''}" data-v="${v.code}">${v.name}${dayLabel(v)}</button>`).join("");
   const venue=pred.venues.find(v=>v.code===selVenue);
   const races=venue.races.map(r=>{
     const top=r.picks[0]||{c:"-",p:0};
@@ -252,7 +253,7 @@ function renderToday(){
         <div class="sec">3連単 推奨買い目 TOP10</div>${picks}
       </div></div>`;
   }).join("");
-  document.getElementById("hdrChips").innerHTML=`<button id="venSel">${venue?venue.name:""}<span class="car">▾</span></button><div id="venMenu" hidden>${chips}</div>`;
+  document.getElementById("hdrChips").innerHTML=`<button id="venSel">${venue?venue.name+dayLabel(venue):""}<span class="car">▾</span></button><div id="venMenu" hidden>${chips}</div>`;
   m.innerHTML=`<div class="racelist">${races}</div>
     <div class="warn">本予測は過去データに基づく統計的推定であり、的中や利益を保証するものではありません。舟券の購入は自己責任で行ってください。</div>`;
   {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});document.addEventListener("click",function _c(ev){if(!document.getElementById("venMenu"))return document.removeEventListener("click",_c);if(!ev.target.closest("#hdrChips")){const mm=document.getElementById("venMenu");if(mm)mm.hidden=true;}});}}
