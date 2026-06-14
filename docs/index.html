@@ -191,7 +191,7 @@ function renderSengen(){
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
         <span class="bp num">${pct(p.p)}</span>${(r.odds&&r.odds.t3&&r.odds.t3[p.c]!=null)?`<span class="oddv num">${r.odds.t3[p.c]}倍</span>`:""}</div>`).join("");
-    return `<div class="race">
+    return `<div class="race open">
       <div class="racehead">
         <span class="rno num">${r.no}R</span>
         <span class="rmeta"><span class="vlabel">${v.name}</span>
