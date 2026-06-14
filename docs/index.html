@@ -290,7 +290,7 @@ function renderAcc(acc){
   const m=$("#main");
   const tdrow=todayStats();
   if(!acc||!acc.days||!acc.days.length){
-    m.innerHTML=tdrow?`<div class="pad"><table><tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${tdrow}</table></div><div class="note">本日分の速報です。確定実績は翌朝から記録されます。</div>`:'<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>";return;
+    m.innerHTML=tdrow?`<div class="pad"><table><tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${tdrow}</table></div><div class="note">本日分の速報です。確定実績は翌朝から記録されます。</div>`:'<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;
   }
   const t=acc.total, n=t.races||1;
   const roi=t.stake6?Math.round(t.return6/t.stake6*1000)/10:0;
