@@ -102,21 +102,36 @@ def do_results(pred, now, ymd) -> int:
     return n
 
 
+def _has_odds(r):
+    """True if this race already has fetched 3t odds stored."""
+    o = r.get("odds") or {}
+    t3 = o.get("t3") or {}
+    return len(t3) > 0
+
+
 def do_odds(pred, now, ymd) -> int:
+    # Fetch odds for EVERY race that doesn't yet have them, regardless of whether
+    # the race has finished -- boatrace keeps the odds page up for the whole day,
+    # so finished races still return their final (confirmed) odds. Skip only races
+    # whose deadline is still far in the future (odds not meaningful yet) and races
+    # that already have odds stored (so we never re-fetch and never overwrite).
     targets = []
     for v in pred["venues"]:
         for r in v["races"]:
-            if r.get("result"):
+            if _has_odds(r):
                 continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None:
                 continue
-            if -ODDS_AFTER <= mins <= ODDS_BEFORE_MAX:
-                targets.append((v["code"], r["no"]))
+            # too early: more than ODDS_BEFORE_MAX minutes before deadline
+            if mins > ODDS_BEFORE_MAX:
+                continue
+            targets.append((v["code"], r["no"]))
     if not targets:
-        print("no races in odds window")
+        print("no races need odds")
         return 0
-    print(f"odds targets ({len(targets)}): {targets[:ODDS_MAX_PER_RUN]}", flush=True)
+    print(f"odds targets ({len(targets)} need odds): {targets[:ODDS_MAX_PER_RUN]}",
+          flush=True)
     n = 0
     fetched = 0
     for v in pred["venues"]:
@@ -129,6 +144,7 @@ def do_odds(pred, now, ymd) -> int:
             odds = fetch_odds(ymd, v["code"], r["no"])
             time.sleep(0.3)
             if not odds or not (odds.get("t3") or odds.get("fuku")):
+                print(f"  odds {v['code']}-{r['no']}R: none yet")
                 continue
             merged = _axis_from_odds(r, odds)
             ex = r.get("odds", {})
