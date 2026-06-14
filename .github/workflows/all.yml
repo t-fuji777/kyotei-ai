@@ -12,20 +12,22 @@ permissions:
 jobs:
   all:
     runs-on: ubuntu-latest
-    timeout-minutes: 16
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests
-      - name: update results and odds
-        run: python scripts/update_all.py
+      - run: pip install pandas numpy lightgbm lhafile requests
+      - name: live re-predict + results + odds
+        run: |
+          python scripts/update_live.py || true
+          python scripts/update_all.py || true
       - name: commit
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add docs/predictions
-          git diff --cached --quiet || git commit -m "results+odds update"
-          git pull --rebase --autostash
-          git push
+          git diff --cached --quiet || git commit -m "live+results+odds update"
+          git pull --rebase --autostash || (git rebase --abort || true; git pull --rebase --autostash) || true
+          git push || (git pull --rebase --autostash || true; git push)
