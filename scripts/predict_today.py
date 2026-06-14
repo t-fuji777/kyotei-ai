@@ -52,6 +52,7 @@ def races_to_rows(races, live=None):
         for rc in r["racers"]:
             row = {"date": r["date"], "venue": r["venue"], "race_no": r["race_no"],
                    "race_type": r["race_type"], "deadline": r["deadline"],
+                   "day_n": r.get("day_n"),
                    "lane": rc["lane"], "toban": rc["toban"], "name": rc["name"],
                    "age": rc["age"], "weight": rc["weight"], "class": rc["class"],
                    "nat_win": rc["nat_win"], "nat_in2": rc["nat_in2"],
@@ -92,8 +93,10 @@ def predict_races(tgt: pd.DataFrame, hist, fan, models, sengen):
         for _, x in g.iterrows():
             boats.append({"lane": int(x["lane"]), "name": x["name"], "cls": x["class"],
                           "wp": round(float(x["p_norm"]), 3)})
+        day_n_val = g["day_n"].iloc[0] if "day_n" in g.columns else None
         race_obj = {"no": int(rno), "type": g["race_type"].iloc[0],
                     "deadline": g["deadline"].iloc[0],
+                    "day_n": (int(day_n_val) if day_n_val is not None and not pd.isna(day_n_val) else None),
                     "boats": boats, "picks": picks,
                     "conf": confidence(picks[0]["p"]),
                     "fuku": {"lane": int(g["lane"].to_numpy()[fav]),
@@ -134,9 +137,15 @@ def main():
     print(f"hist rows={len(hist)}, fan={len(fan)}, target races={len(races)}", flush=True)
     by_venue, n_sengen = predict_races(tgt, hist, fan, models, sengen)
 
+    yusho = "\u512a\u52dd"  # 優勝 (championship final)
     for vcode in sorted(by_venue):
+        vraces = sorted(by_venue[vcode], key=lambda r: r["no"])
+        dns = [r.get("day_n") for r in vraces if r.get("day_n") is not None]
+        day_n = dns[0] if dns else None
+        is_final = any(yusho in str(r.get("type", "")) for r in vraces)
         out["venues"].append({"code": vcode, "name": VENUES[vcode],
-                              "races": sorted(by_venue[vcode], key=lambda r: r["no"])})
+                              "day_n": day_n, "is_final": is_final,
+                              "races": vraces})
     write(out, ymd)
     print(f"predicted: venues={len(out['venues'])} "
           f"races={sum(len(v['races']) for v in out['venues'])} sengen={n_sengen}")
