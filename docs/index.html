@@ -52,8 +52,8 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 
 .racelist{padding:0 16px}
 .race{background:var(--surface);border:1px solid var(--line);border-radius:12px;
-  margin-bottom:10px;overflow:hidden}
-.racehead{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}
+  margin-bottom:7px;overflow:hidden}
+.racehead{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}
 .rno{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;font-size:16px;font-weight:800;min-width:34px}
 .rven{font-size:10px;font-weight:600;color:var(--dim);line-height:1.1;margin-top:2px;letter-spacing:.02em}
 .rno.jump{cursor:pointer;border-radius:8px;padding:2px 6px;margin:-2px -6px;background:rgba(91,192,222,.08);box-shadow:inset 0 0 0 1px rgba(91,192,222,.16);transition:background .15s}
@@ -86,7 +86,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .l4{background:var(--b4);color:#fff}
 .l5{background:var(--b5);color:#231A00}
 .l6{background:var(--b6);color:#04231A}
-.racebody{display:none;border-top:1px solid var(--line);padding:12px 14px}
+.racebody{display:none;border-top:1px solid var(--line);padding:8px 14px 12px}
 .race.open .racebody{display:block}
 .resbox{background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.35);border-radius:10px;padding:10px 12px;margin:0 0 12px}
 .resttl{font-size:11px;font-weight:700;letter-spacing:.08em;color:#7dd3fc;margin-bottom:6px}
@@ -117,14 +117,14 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .rb-hit{background:#16a34a;color:#fff}
 .rb-miss{background:rgba(148,163,184,.18);color:#94a3b8}
 
-.sec{font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.08em;margin:8px 0 6px}
-.boatrow{display:flex;align-items:center;gap:8px;padding:4px 0}
+.sec{font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.08em;margin:8px 0 6px}.racebody>.sec:first-child{margin-top:0}
+.boatrow{display:flex;align-items:center;gap:8px;padding:3px 0}
 .bname{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bcls{font-size:10px;color:var(--dim);min-width:20px}
 .bar{flex:0 0 96px;height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
 .bp{min-width:42px;text-align:right;font-size:12px;font-weight:700}
-.pickrow{display:flex;align-items:center;gap:8px;padding:5px 0}
+.pickrow{display:flex;align-items:center;gap:8px;padding:3px 0}
 .prank{min-width:18px;color:var(--dim);font-size:11px;text-align:right}
 .pickrow .bar{flex:1}
 .pickrow .bar i{background:#3D7FB8}
@@ -202,13 +202,14 @@ function setHeader(){
 }
 
 function axisTable(r){ return ""; }
+function sengenOk(r){if(top5p(r)<0.40)return false;return r.picks.slice(0,5).every(function(p){var o=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;return o==null||o>=5.0;});}
 function renderSengen(){
   const m=$("#main");
   if(!pred){m.innerHTML='<div class="spin"></div>';return}
   setHeader();
   const cfg=pred.sengen_cfg||{};
   const list=[];
-  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(top5p(r)>=0.40)list.push({v,r})}));
+  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(sengenOk(r))list.push({v,r})}));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   if(!list.length){
     m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(3連単 上位5点の的中率40%以上)を満たすレースのみ表示します。</div>`;
@@ -228,7 +229,7 @@ function renderSengen(){
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}">${r.no}R<span class="rven">${v.name}</span></span>
         <span class="rmeta"><span class="rtype">${r.type||""}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>'}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>'}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-3px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
       </div>
       <div class="racebody">
         <div class="sec">3連単 買い目 上位5点（的中率 ${Math.round(top5p(r)*100)}%）</div>${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
@@ -271,7 +272,7 @@ function renderToday(){
         <span class="rno num">${r.no}R</span>
         <span class="rmeta"><span class="rtype">${r.type||""}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>'}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>'}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-3px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
       </div>
       <div class="racebody">
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
@@ -295,7 +296,7 @@ function todayStats(){
     n++;if(x.hit_win)w++;const p5=top5p(r);tp+=p5;
     if(r.picks&&r.picks[0]&&r.picks[0].c===x.order)t1++;
     if(t5hit(r)){t6++;rt+=(x.pay3t||0)}st+=500;
-    if(p5>=0.40){sn++;sp+=p5;if(t5hit(r))sh++}}
+    if(sengenOk(r)){sn++;sp+=p5;if(t5hit(r))sh++}}
   if(!n) return null;
   const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
   const row=`<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
