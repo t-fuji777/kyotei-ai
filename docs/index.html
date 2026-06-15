@@ -160,6 +160,9 @@ const laneChip=(n,s)=>`<span class="lane ${s?'s':''} l${n}">${n}</span>`;
 const comboChips=(c,s)=>c.split("-").map(n=>laneChip(n,s)).join("");
 const pct=p=>(p*100).toFixed(1)+"%";
 const confCls=p=>p>=0.9?"confA":p>=0.8?"confB":"confC";
+const top5p=r=>r.picks?r.picks.slice(0,5).reduce((a,p)=>a+(p.p||0),0):0;
+const cumCls=p=>p>=0.4?"confA":p>=0.3?"confB":"confC";
+const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
 
 function dayLabel(v){if(!v)return "";if(v.is_final)return " \u00b7 \u6700\u7d42\u65e5";if(v.day_n===1)return " \u00b7 \u521d\u65e5";if(v.day_n>1)return " \u00b7 "+v.day_n+"\u65e5\u76ee";return "";}
 function sortVenues(p){if(p&&Array.isArray(p.venues))p.venues.sort((a,b)=>(a.code||0)-(b.code||0));return p;}
@@ -183,10 +186,10 @@ function renderSengen(){
   setHeader();
   const cfg=pred.sengen_cfg||{};
   const list=[];
-  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(r.fuku&&r.fuku.p>=0.90)list.push({v,r})}));
+  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(top5p(r)>=0.40)list.push({v,r})}));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   if(!list.length){
-    m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(本命の2着内予測90%以上)を満たすレースのみ表示します。</div>`;
+    m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(3連単 上位5点の合算自信度40%以上)を満たすレースのみ表示します。</div>`;
     return;
   }
   const cards=list.map(({v,r})=>{
@@ -204,14 +207,14 @@ function renderSengen(){
         <span class="rmeta"><span class="vlabel">${v.name}</span>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
         <span class="honmei">${laneChip(fav.lane,true)}<span class="bname" style="margin-left:6px">${fb.name||""}</span></span>
-        ${r.result?`<span class="${r.result.hit_fuku?"hitchip":"misschip"}">${r.result.hit_fuku?"的中":"不的中"} ${r.result.order}</span>`:(r.live?'<span class="livechip">展示反映</span>':"")}
-        <span class="senp num">2着内${fav.p?Math.round(fav.p*100)+"%":"-"}</span>
+        ${r.result?`<span class="${t5hit(r)?"hitchip":"misschip"}">${t5hit(r)?"的中":"不的中"} ${r.result.order}</span>`:(r.live?'<span class="livechip">展示反映</span>':"")}
+        <span class="senp num">5点合算${Math.round(top5p(r)*100)}%</span>
       </div>
       <div class="racebody">
-        <div class="sec">3連単 推奨買い目（本命2着内 ${fav.p?Math.round(fav.p*100)+"%":"-"} / オッズ5倍以上のみ）</div>${picks||'<div class="note" style="padding:6px 0;text-align:left">オッズ5倍以上の買い目なし（オッズ確定後に表示）</div>'}
+        <div class="sec">3連単 推奨買い目（5点合算 ${Math.round(top5p(r)*100)}% / オッズ5倍以上のみ）</div>${picks||'<div class="note" style="padding:6px 0;text-align:left">オッズ5倍以上の買い目なし（オッズ確定後に表示）</div>'}
       </div></div>`;
   }).join("");
-  m.innerHTML=`<div class="note" style="margin-bottom:10px">本命艇が2着以内に入る確率が高いレースだけを抽出(目標的中率90%超)。<br>件数は日により変動します(0件の日もあります)。</div>
+  m.innerHTML=`<div class="note" style="margin-bottom:10px">3連単 上位5点の合算自信度が高いレースだけを抽出(合算40%以上)。<br>件数は日により変動します(0件の日もあります)。</div>
     <div class="racelist">${cards}</div>
     <div class="warn">本予測は統計的推定であり、的中や利益を保証するものではありません。</div>`;
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
@@ -249,10 +252,10 @@ function renderToday(){
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
         <span class="honmei">${comboChips(top.c,true)}</span>
         ${r.result?`<span class="resv num">結果 ${r.result.order}</span>`:(r.live?'<span class="livechip">展示反映</span>':"")}
-        <span class="conf ${r.fuku?confCls(r.fuku.p):"confC"}">${r.fuku&&r.fuku.p!=null?Math.round(r.fuku.p*100)+"%":"-"}</span>
+        <span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span>
       </div>
       <div class="racebody">
-        ${r.result?`<div class="resbox"><div class="resttl">結果</div><div class="resrow"><span class="reschips">${comboChips(r.result.order,false)}</span><span class="reskime">${r.result.kimarite||""}</span><span class="respay">3連単 <b>¥${(r.result.pay3t||0).toLocaleString()}</b></span></div><div class="resbadges"><span class="rbadge ${r.result.hit_fuku?"rb-hit":"rb-miss"}">本命複勝 ${r.result.hit_fuku?"的中":"不的中"}</span><span class="rbadge ${r.result.hit_t1?"rb-hit":"rb-miss"}">本命3連単 ${r.result.hit_t1?"的中":"不的中"}</span>${r.result.hit_t10?`<span class="rbadge rb-hit">買い目TOP10内</span>`:""}</div></div>`:""}
+        ${r.result?`<div class="resbox"><div class="resttl">結果</div><div class="resrow"><span class="reschips">${comboChips(r.result.order,false)}</span><span class="reskime">${r.result.kimarite||""}</span><span class="respay">3連単 <b>¥${(r.result.pay3t||0).toLocaleString()}</b></span></div><div class="resbadges"><span class="rbadge ${r.result.hit_t1?"rb-hit":"rb-miss"}">本命3連単 ${r.result.hit_t1?"的中":"不的中"}</span>${t5hit(r)?`<span class="rbadge rb-hit">買い目TOP5内</span>`:""}</div></div>`:""}
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
         ${axisTable(r)}
         <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
@@ -272,7 +275,7 @@ function todayStats(){
   let n=0,w=0,t6=0,sn=0,sh=0,st=0,rt=0;
   for(const v of pred.venues)for(const r of v.races){const x=r.result;if(!x)continue;
     n++;if(x.hit_win)w++;if(x.hit_t6){t6++;rt+=(x.pay3t||0)}st+=600;
-    if(r.fuku&&r.fuku.p>=0.90){sn++;if(x.hit_fuku)sh++}}
+    if(top5p(r)>=0.40){sn++;if(t5hit(r))sh++}}
   if(!n) return null;
   const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
   return `<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
