@@ -308,37 +308,26 @@ function todayStats(){
 function renderAcc(acc){
   const m=$("#main");
   const td=todayStats();
-  const tdrow=td?td.row:null;
-  if(!acc||!acc.days||!acc.days.length){
-    m.innerHTML=tdrow?`<div class="pad"><table><tr><th>日付</th><th>R数</th><th>1着</th><th>TOP5</th><th>厳選</th><th>回収</th></tr>${tdrow}</table></div><div class="note">本日分の速報です。確定実績は翌朝から記録されます。</div>`:'<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;
-  }
-  const t0=acc.total;
-  const t=td?{races:t0.races+td.n,win_hit:t0.win_hit+td.win_hit,top1_hit:t0.top1_hit+td.top1_hit,top5_hit:(t0.top5_hit||0)+td.top5_hit,sen_n:t0.sen_n+td.sen_n,sen_hit:t0.sen_hit+td.sen_hit,sen_pred_sum:(t0.sen_pred_sum||0)+td.sen_pred_sum,top5_pred_sum:(t0.top5_pred_sum||0)+td.top5_pred_sum,stake5:(t0.stake5||0)+td.stake5,return5:(t0.return5||0)+td.return5}:t0;
-  const n=t.races||1;
-  const roi=t.stake5?Math.round((t.return5||0)/t.stake5*1000)/10:0;
-  const senAct=t.sen_n?(t.sen_hit/t.sen_n*100).toFixed(1):null;
-  const senPred=t.sen_n?((t.sen_pred_sum||0)/t.sen_n*100).toFixed(1):null;
-  const t5pred=n?((t.top5_pred_sum||0)/n*100).toFixed(1):null;
-  const rows=acc.days.slice().reverse().slice(0,60).map(d=>{
-    const r=d.stake5?Math.round((d.return5||0)/d.stake5*100):0;
-    const sen=d.sen_n?Math.round(d.sen_hit/d.sen_n*100)+"%("+d.sen_n+")":"-";
-    return `<tr><td class="num">${d.date.slice(4,6)}/${d.date.slice(6,8)}</td>
-      <td class="num">${d.races}</td>
-      <td class="num">${Math.round(d.win_hit/Math.max(d.races,1)*100)}%</td>
-      <td class="num">${Math.round((d.top5_hit||0)/Math.max(d.races,1)*100)}%</td>
-      <td class="num">${sen}</td>
-      <td class="num">${r}%</td></tr>`}).join("");
-  m.innerHTML=`<div class="cards">
-      <div class="card"><div class="v num">${(t.win_hit/n*100).toFixed(1)}% <span style="font-size:12px;color:var(--dim)">(${t.win_hit}/${n})</span></div><div class="k">1着的中率(本命艇)</div></div>
-      <div class="card"><div class="v num">${(t.top1_hit/n*100).toFixed(1)}% <span style="font-size:12px;color:var(--dim)">(${t.top1_hit}/${n})</span></div><div class="k">3連単 予測的中率</div></div>
-      <div class="card"><div class="v num">${((t.top5_hit||0)/n*100).toFixed(1)}% <span style="font-size:12px;color:var(--dim)">(${t.top5_hit||0}/${n})</span>${t5pred!=null?(' <span style="font-size:11px;color:var(--dim)">/ 予測'+t5pred+'%</span>'):''}</div><div class="k">3連単 TOP5内的中率 実績/予測</div></div>
-      <div class="card"><div class="v num">${roi}%</div><div class="k">回収率(TOP5均等買い)</div></div>
-      <div class="card"><div class="v num">${senAct!=null?senAct:"-"}% <span style="font-size:12px;color:var(--dim)">(${t.sen_hit||0}/${t.sen_n||0})</span>${senPred!=null?(' <span style="font-size:11px;color:var(--dim)">/ 予測'+senPred+'%</span>'):''}</div><div class="k">厳選 的中率 実績/予測</div></div>
-    </div>
-    <div class="pad"><table>
-      <tr><th>日付</th><th>R数</th><th>1着</th><th>TOP5</th><th>厳選</th><th>回収</th></tr>${tdrow||""}${rows}
+  const accRow=(label,X,st)=>{
+    const R=X.races||0,t1=X.top1_hit||0,t5=X.top5_hit||0,sn=X.sen_n||0,sh=X.sen_hit||0;
+    const roi=X.stake5?Math.round((X.return5||0)/X.stake5*100):0;
+    const cell=(num,den)=>den?`${num} <span style="color:var(--dim);font-size:11px">(${(num/den*100).toFixed(1)}%)</span>`:"-";
+    return `<tr${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t1,R)}</td><td class="num">${cell(t5,R)}</td><td class="num">${cell(sh,sn)}</td><td class="num">${roi}%</td></tr>`;
+  };
+  const days=(acc&&acc.days)?acc.days:[];
+  const t0=(acc&&acc.total)?acc.total:null;
+  const tj=td?{races:td.n,top1_hit:td.top1_hit,top5_hit:td.top5_hit,sen_n:td.sen_n,sen_hit:td.sen_hit,stake5:td.stake5,return5:td.return5}:null;
+  let tt=t0;
+  if(t0&&tj)tt={races:(t0.races||0)+tj.races,top1_hit:(t0.top1_hit||0)+tj.top1_hit,top5_hit:(t0.top5_hit||0)+tj.top5_hit,sen_n:(t0.sen_n||0)+tj.sen_n,sen_hit:(t0.sen_hit||0)+tj.sen_hit,stake5:(t0.stake5||0)+tj.stake5,return5:(t0.return5||0)+tj.return5};
+  else if(!t0)tt=tj;
+  if(!tt||!tt.races){m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;}
+  const dayRows=days.slice().reverse().slice(0,60).map(d=>accRow(d.date.slice(4,6)+"/"+d.date.slice(6,8),d)).join("");
+  const todayRow=tj?accRow('本日<span style="color:var(--dim);font-size:9px">速報</span>',tj):"";
+  const totalRow=days.length?accRow('累計',tt,'font-weight:700'):"";
+  m.innerHTML=`<div class="pad"><table>
+      <tr><th>日付</th><th>R数</th><th>3連単</th><th>TOP5</th><th>厳選</th><th>回収率</th></tr>${totalRow}${todayRow}${dayRows}
     </table></div>
-    <div class="warn">回収率はTOP5買い目に各100円を投じた場合の仮想値です。実際のオッズ変動・購入行動とは異なります。</div>`;
+    <div class="warn">回収率はTOP5買い目に各100円を投じた場合の仮想値です。</div>`;
 }
 
 function renderModel(rep){
