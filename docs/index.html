@@ -291,24 +291,30 @@ function renderToday(){
 
 function todayStats(){
   if(!pred||!pred.venues) return null;
-  let n=0,w=0,t6=0,sn=0,sh=0,st=0,rt=0;
+  let n=0,w=0,t1=0,t6=0,sn=0,sh=0,st=0,rt=0,sp=0,tp=0;
   for(const v of pred.venues)for(const r of v.races){const x=r.result;if(!x)continue;
-    n++;if(x.hit_win)w++;if(t5hit(r)){t6++;rt+=(x.pay3t||0)}st+=500;
-    if(top5p(r)>=0.40){sn++;if(t5hit(r))sh++}}
+    n++;if(x.hit_win)w++;const p5=top5p(r);tp+=p5;
+    if(r.picks&&r.picks[0]&&r.picks[0].c===x.order)t1++;
+    if(t5hit(r)){t6++;rt+=(x.pay3t||0)}st+=500;
+    if(p5>=0.40){sn++;sp+=p5;if(t5hit(r))sh++}}
   if(!n) return null;
   const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
-  return `<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
+  const row=`<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
     <td class="num">${n}</td><td class="num">${Math.round(w/n*100)}%</td>
     <td class="num">${Math.round(t6/n*100)}%</td><td class="num">${sen}</td>
     <td class="num">${st?Math.round(rt/st*100):0}%</td></tr>`;
+  return {row,n,win_hit:w,top1_hit:t1,top5_hit:t6,sen_n:sn,sen_hit:sh,sen_pred_sum:sp,top5_pred_sum:tp,stake5:st,return5:rt};
 }
 function renderAcc(acc){
   const m=$("#main");
-  const tdrow=todayStats();
+  const td=todayStats();
+  const tdrow=td?td.row:null;
   if(!acc||!acc.days||!acc.days.length){
     m.innerHTML=tdrow?`<div class="pad"><table><tr><th>日付</th><th>R数</th><th>1着</th><th>TOP5</th><th>厳選</th><th>回収</th></tr>${tdrow}</table></div><div class="note">本日分の速報です。確定実績は翌朝から記録されます。</div>`:'<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;
   }
-  const t=acc.total, n=t.races||1;
+  const t0=acc.total;
+  const t=td?{races:t0.races+td.n,win_hit:t0.win_hit+td.win_hit,top1_hit:t0.top1_hit+td.top1_hit,top5_hit:(t0.top5_hit||0)+td.top5_hit,sen_n:t0.sen_n+td.sen_n,sen_hit:t0.sen_hit+td.sen_hit,sen_pred_sum:(t0.sen_pred_sum||0)+td.sen_pred_sum,top5_pred_sum:(t0.top5_pred_sum||0)+td.top5_pred_sum,stake5:(t0.stake5||0)+td.stake5,return5:(t0.return5||0)+td.return5}:t0;
+  const n=t.races||1;
   const roi=t.stake5?Math.round((t.return5||0)/t.stake5*1000)/10:0;
   const senAct=t.sen_n?(t.sen_hit/t.sen_n*100).toFixed(1):null;
   const senPred=t.sen_n?((t.sen_pred_sum||0)/t.sen_n*100).toFixed(1):null;
