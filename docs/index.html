@@ -222,9 +222,7 @@ function renderSengen(){
         <span class="rno num">${r.no}R</span>
         <span class="rmeta"><span class="vlabel">${v.name}</span>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="honmei">${laneChip(fav.lane,true)}<span class="bname" style="margin-left:6px">${fb.name||""}</span></span>
-        ${r.result?`<span class="${t5hit(r)?"hitchip":"misschip"}">${t5hit(r)?"的中":"不的中"} ${r.result.order}</span>`:(r.live?'<span class="livechip">展示反映</span>':"")}
-        <span class="senp num">5点合算${Math.round(top5p(r)*100)}%</span>
+        <span class="hjp"><span class="hjc"><span class="hjl">合算</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">予測</span><span class="hjv hjw">${comboChips(top.c,true)}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
       </div>
       <div class="racebody">
         <div class="sec">3連単 買い目 上位5点（合算 ${Math.round(top5p(r)*100)}%）</div>${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
@@ -266,8 +264,7 @@ function renderToday(){
         <span class="rno num">${r.no}R</span>
         <span class="rmeta"><span class="rtype">${r.type||""}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">予測</span><span class="hjv hjw">${comboChips(top.c,true)}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
-        <span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span>
+        <span class="hjp"><span class="hjc"><span class="hjl">合算</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">予測</span><span class="hjv hjw">${comboChips(top.c,true)}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
       </div>
       <div class="racebody">
         ${r.result?`<div class="resbox"><div class="rsub" style="margin-top:0">3連単 ¥${(r.result.pay3t||0).toLocaleString()}${r.result.kimarite?" ・ "+r.result.kimarite:""}${t5hit(r)?'<span class="rtag">買い目TOP5内</span>':""}</div></div>`:""}
