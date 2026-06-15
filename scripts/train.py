@@ -88,9 +88,11 @@ def race_eval_rows(part: pd.DataFrame):
             fav=fav, fav_p2=float(g["p_top2"].to_numpy()[fav]),
             fav_pos=float(pos[fav]) if not np.isnan(pos[fav]) else 99.0,
             t1p=float(ranked[0][1]),
+            top5p=float(sum(p for _, p in ranked[:5])),
             hit_win=int(actual is not None and fav == actual[0]),
             hit_fuku=int(pos[fav] <= 2) if not np.isnan(pos[fav]) else 0,
             hit_t1=int(actual == ranked[0][0]) if actual else 0,
+            hit_t5=int(actual in [k for k, _ in ranked[:5]]) if actual else 0,
             hit_t6=int(actual in [k for k, _ in ranked[:6]]) if actual else 0,
             hit_t10=int(actual in [k for k, _ in ranked[:10]]) if actual else 0,
             hit_t18=int(actual in [k for k, _ in ranked[:18]]) if actual else 0,
@@ -101,20 +103,12 @@ def race_eval_rows(part: pd.DataFrame):
 
 
 def pick_sengen(valid_r: pd.DataFrame):
-    """validで複勝的中率>=92%となる最小閾値を全場一律で選ぶ(会場選別は過適合のため廃止)。"""
-    best = None
-    for thr in (0.85, 0.86, 0.87, 0.88, 0.89, 0.90, 0.91, 0.92, 0.93, 0.94):
-        s = valid_r[valid_r["fav_p2"] >= thr]
-        if len(s) < 50:
-            continue
-        rate = s["hit_fuku"].mean()
-        if rate >= 0.92:
-            best = {"p2_min": thr, "venues": list(range(1, 25)),
-                    "n": int(len(s)), "valid_rate": round(float(rate), 4)}
-            break
-    if best is None:
-        best = {"p2_min": 0.90, "venues": list(range(1, 25)), "n": 0, "valid_rate": None}
-    return best
+    """厳選=3連単 上位5点の合算自信度(top5p)>=0.40。validで3連単TOP5的中率を測る。"""
+    thr = 0.40
+    s = valid_r[valid_r["top5p"] >= thr]
+    rate = float(s["hit_t5"].mean()) if len(s) else None
+    return {"top5_min": thr, "n": int(len(s)),
+            "valid_rate": round(rate, 4) if rate is not None else None}
 
 
 def report(r: pd.DataFrame, sengen):
@@ -125,10 +119,12 @@ def report(r: pd.DataFrame, sengen):
     for k in (1, 6, 10, 18):
         rep[f"top{k}_hit_rate"] = round(r[f"hit_t{k}"].mean(), 4)
     rep["top6_roi"] = round(float(r.loc[r["in_t6"], "pay3t"].sum()) / max(n * 600, 1), 4)
-    s = r[(r["fav_p2"] >= sengen["p2_min"]) & (r["venue"].isin(sengen["venues"]))]
+    rep["top5_hit_rate"] = round(r["hit_t5"].mean(), 4)
+    s = r[r["top5p"] >= sengen["top5_min"]]
     rep["sengen"] = {"races": int(len(s)),
                      "races_per_day": round(len(s) / max(r["date"].nunique(), 1), 1),
-                     "fuku_hit_rate": round(float(s["hit_fuku"].mean()), 4) if len(s) else None}
+                     "top5_min": sengen["top5_min"],
+                     "top5_hit_rate": round(float(s["hit_t5"].mean()), 4) if len(s) else None}
     return rep
 
 
@@ -207,7 +203,7 @@ def main():
         "rows_train": len(tr), "rows_valid": len(va), "rows_test": len(te),
         "period": [str(df["date"].min()), str(df["date"].max())],
         "best_iterations": iters,
-        "sengen": {"p2_min": sengen["p2_min"], "venues": sengen["venues"],
+        "sengen": {"top5_min": sengen["top5_min"],
                    "valid_rate": sengen["valid_rate"]},
         "test_metrics": rep_test, "baseline_metrics": rep_base,
         "feature_importance": dict(sorted(imp.items(), key=lambda x: -x[1])),
