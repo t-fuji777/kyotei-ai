@@ -322,7 +322,7 @@ function renderAcc(acc){
   if(t0&&tj)tt={races:(t0.races||0)+tj.races,top1_hit:(t0.top1_hit||0)+tj.top1_hit,top5_hit:(t0.top5_hit||0)+tj.top5_hit,sen_n:(t0.sen_n||0)+tj.sen_n,sen_hit:(t0.sen_hit||0)+tj.sen_hit,stake5:(t0.stake5||0)+tj.stake5,return5:(t0.return5||0)+tj.return5};
   else if(!t0)tt=tj;
   if(!tt||!tt.races){m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;}
-  const dayRows=days.slice().reverse().slice(0,60).map(d=>accRow(d.date.slice(4,6)+"/"+d.date.slice(6,8),d)).join("");
+  const dayRows=days.slice().reverse().slice(0,60).map(d=>accRow('<span style="color:var(--dim);font-size:10px">'+d.date.slice(2,4)+'年</span><br>'+d.date.slice(4,6)+"/"+d.date.slice(6,8),d)).join("");
   const todayRow=tj?accRow('本日<br><span style="color:var(--dim);font-size:9px">速報</span>',tj):"";
   const totalRow=days.length?accRow('累計',tt,'font-weight:700'):"";
   m.innerHTML=`<div class="pad"><table class="acctbl">
