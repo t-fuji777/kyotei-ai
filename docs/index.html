@@ -193,7 +193,7 @@ function renderSengen(){
     const fav=r.fuku||{};
     const fb=r.boats.find(b=>b.lane===fav.lane)||{};
     const top=r.picks[0]||{c:"-",p:0};
-    const _hi=r.picks.filter(p=>r.odds&&r.odds.t3&&r.odds.t3[p.c]>=5);const _src=_hi.length?_hi:r.picks;const picks=_src.slice(0,5).map((p,i)=>
+    const picks=r.picks.filter(p=>r.odds&&r.odds.t3&&r.odds.t3[p.c]>=5).slice(0,5).map((p,i)=>
       `<div class="pickrow"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
@@ -208,7 +208,7 @@ function renderSengen(){
         <span class="senp num">2着内${fav.p?Math.round(fav.p*100)+"%":"-"}</span>
       </div>
       <div class="racebody">
-        <div class="sec">3連単 推奨買い目（本命2着内 ${fav.p?Math.round(fav.p*100)+"%":"-"} / オッズ5倍以上を優先）</div>${picks}
+        <div class="sec">3連単 推奨買い目（本命2着内 ${fav.p?Math.round(fav.p*100)+"%":"-"} / オッズ5倍以上のみ）</div>${picks||'<div class="note" style="padding:6px 0;text-align:left">オッズ5倍以上の買い目なし（オッズ確定後に表示）</div>'}
       </div></div>`;
   }).join("");
   m.innerHTML=`<div class="note" style="margin-bottom:10px">本命艇が2着以内に入る確率が高いレースだけを抽出(目標的中率90%超)。<br>件数は日により変動します(0件の日もあります)。</div>
