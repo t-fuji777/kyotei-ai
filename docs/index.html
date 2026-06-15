@@ -99,6 +99,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .jmiss{color:#F87171}
 .rsub{margin-top:9px;font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .rtag{background:rgba(52,211,153,.15);color:#34D399;border:1px solid rgba(52,211,153,.4);border-radius:6px;padding:1px 6px;font-size:10px}
+.rwait{color:var(--dim);opacity:.55}
 .resbadges{display:flex;gap:6px;flex-wrap:wrap}
 .rbadge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px}
 .rb-hit{background:#16a34a;color:#fff}
@@ -264,7 +265,7 @@ function renderToday(){
         <span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span>
       </div>
       <div class="racebody">
-        ${r.result?`<div class="resbox"><div class="rgrid"><div class="rcol"><span class="rhd">予測</span><span class="rcombo">${comboChips(top.c,true)}</span></div><div class="rcol"><span class="rhd">結果</span><span class="rcombo">${comboChips(r.result.order,false)}</span></div><div class="rcol"><span class="rhd">判定</span><span class="rjudge ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span></div></div><div class="rsub">3連単 ¥${(r.result.pay3t||0).toLocaleString()}${r.result.kimarite?" ・ "+r.result.kimarite:""}${t5hit(r)?'<span class="rtag">買い目TOP5内</span>':""}</div></div>`:""}
+        <div class="resbox"><div class="rgrid"><div class="rcol"><span class="rhd">予測</span><span class="rcombo">${comboChips(top.c,true)}</span></div><div class="rcol"><span class="rhd">結果</span><span class="rcombo">${r.result?comboChips(r.result.order,false):'<span class="rwait">—</span>'}</span></div><div class="rcol"><span class="rhd">判定</span>${r.result?`<span class="rjudge ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait" style="font-size:22px">—</span>'}</div></div>${r.result?`<div class="rsub">3連単 ¥${(r.result.pay3t||0).toLocaleString()}${r.result.kimarite?" ・ "+r.result.kimarite:""}${t5hit(r)?'<span class="rtag">買い目TOP5内</span>':""}</div>`:'<div class="rsub rwait">結果待ち（レース確定後に表示）</div>'}</div>
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
         ${axisTable(r)}
         <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
