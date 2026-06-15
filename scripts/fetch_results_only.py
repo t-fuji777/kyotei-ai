@@ -15,7 +15,7 @@ from fetch_result import fetch_result
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
 GRACE_MIN = 3            # ignore races until this many min past deadline
-RESULT_MAX_PER_RUN = 40  # cap fetches per cycle; backlog drains over runs
+RESULT_MAX_PER_RUN = 150  # cap fetches per cycle; backlog drains over runs
 
 
 def write(obj, ymd):
@@ -39,7 +39,7 @@ def update_results(pred, now, ymd) -> int:
     tried = 0
     for v in pred["venues"]:
         for r in v["races"]:
-            if r.get("result"):
+            if r.get("result") and "ninki" in r["result"]:
                 continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None or mins > -GRACE_MIN:
