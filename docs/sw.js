@@ -1,4 +1,4 @@
-const CACHE = "kyotei-ai-v14";
+const CACHE = "kyotei-ai-v15";
 
 self.addEventListener("install", e => {
   self.skipWaiting();
@@ -14,8 +14,11 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  const fresh = e.request.mode === "navigate"
+    ? fetch(e.request.url, { cache: "reload" })
+    : fetch(e.request);
   e.respondWith(
-    fetch(e.request)
+    fresh
       .then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
