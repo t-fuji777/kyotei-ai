@@ -22,7 +22,7 @@ JST = timezone(timedelta(hours=9))
 # Odds sale window relative to deadline (minutes). Negative mins = after deadline.
 ODDS_BEFORE_MAX = 120  # start polling up to 2h before deadline
 ODDS_AFTER = 5          # keep a few min after deadline, then result takes over
-ODDS_MAX_PER_RUN = 25   # cap fetches per cycle; backlog drains over runs
+ODDS_MAX_PER_RUN = 60   # cap fetches per cycle; backlog drains over runs
 
 
 def _mins_to_deadline(now, dl):
@@ -70,14 +70,21 @@ def update_odds(pred, now, ymd) -> int:
     targets = []
     for v in pred["venues"]:
         for r in v["races"]:
-            # skip races already finished (odds page becomes result page)
-            if r.get("result"):
-                continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None:
                 continue
-            if -ODDS_AFTER <= mins <= ODDS_BEFORE_MAX:
-                targets.append((v["code"], r["no"]))
+            has_t3 = bool(r.get("odds", {}).get("t3"))
+            closed = bool(r.get("result")) or mins < -ODDS_AFTER
+            picks = r.get("picks", [])
+            sengen = sum(p.get("p", 0) for p in picks[:5]) >= 0.40
+            # sengen races: keep odds at ALL times (even after the race the
+            # odds3t page still serves the final odds). non-sengen: only the
+            # open window. closed races keep final odds -> fetch once then skip.
+            if not (sengen or -ODDS_AFTER <= mins <= ODDS_BEFORE_MAX):
+                continue
+            if closed and has_t3:
+                continue
+            targets.append((v["code"], r["no"]))
     if not targets:
         print("no races in odds window")
         return 0
