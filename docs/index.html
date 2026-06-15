@@ -293,7 +293,7 @@ function todayStats(){
   if(!pred||!pred.venues) return null;
   let n=0,w=0,t6=0,sn=0,sh=0,st=0,rt=0;
   for(const v of pred.venues)for(const r of v.races){const x=r.result;if(!x)continue;
-    n++;if(x.hit_win)w++;if(x.hit_t6){t6++;rt+=(x.pay3t||0)}st+=600;
+    n++;if(x.hit_win)w++;if(t5hit(r)){t6++;rt+=(x.pay3t||0)}st+=500;
     if(top5p(r)>=0.40){sn++;if(t5hit(r))sh++}}
   if(!n) return null;
   const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
@@ -306,30 +306,33 @@ function renderAcc(acc){
   const m=$("#main");
   const tdrow=todayStats();
   if(!acc||!acc.days||!acc.days.length){
-    m.innerHTML=tdrow?`<div class="pad"><table><tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${tdrow}</table></div><div class="note">本日分の速報です。確定実績は翌朝から記録されます。</div>`:'<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;
+    m.innerHTML=tdrow?`<div class="pad"><table><tr><th>日付</th><th>R数</th><th>1着</th><th>TOP5</th><th>厳選</th><th>回収</th></tr>${tdrow}</table></div><div class="note">本日分の速報です。確定実績は翌朝から記録されます。</div>`:'<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;
   }
   const t=acc.total, n=t.races||1;
-  const roi=t.stake6?Math.round(t.return6/t.stake6*1000)/10:0;
+  const roi=t.stake5?Math.round((t.return5||0)/t.stake5*1000)/10:0;
+  const senAct=t.sen_n?(t.sen_hit/t.sen_n*100).toFixed(1):null;
+  const senPred=t.sen_n?((t.sen_pred_sum||0)/t.sen_n*100).toFixed(1):null;
+  const t5pred=n?((t.top5_pred_sum||0)/n*100).toFixed(1):null;
   const rows=acc.days.slice().reverse().slice(0,60).map(d=>{
-    const r=d.stake6?Math.round(d.return6/d.stake6*100):0;
+    const r=d.stake5?Math.round((d.return5||0)/d.stake5*100):0;
     const sen=d.sen_n?Math.round(d.sen_hit/d.sen_n*100)+"%("+d.sen_n+")":"-";
     return `<tr><td class="num">${d.date.slice(4,6)}/${d.date.slice(6,8)}</td>
       <td class="num">${d.races}</td>
       <td class="num">${Math.round(d.win_hit/Math.max(d.races,1)*100)}%</td>
-      <td class="num">${Math.round(d.top6_hit/Math.max(d.races,1)*100)}%</td>
+      <td class="num">${Math.round((d.top5_hit||0)/Math.max(d.races,1)*100)}%</td>
       <td class="num">${sen}</td>
       <td class="num">${r}%</td></tr>`}).join("");
   m.innerHTML=`<div class="cards">
       <div class="card"><div class="v num">${(t.win_hit/n*100).toFixed(1)}%</div><div class="k">1着的中率(本命艇)</div></div>
-      <div class="card"><div class="v num">${(t.top1_hit/n*100).toFixed(1)}%</div><div class="k">3連単 本線的中率</div></div>
-      <div class="card"><div class="v num">${(t.top6_hit/n*100).toFixed(1)}%</div><div class="k">3連単 TOP6内的中率</div></div>
-      <div class="card"><div class="v num">${roi}%</div><div class="k">回収率(TOP6均等買い)</div></div>
-      <div class="card"><div class="v num">${t.sen_n?(t.sen_hit/t.sen_n*100).toFixed(1):"-"}%</div><div class="k">厳選 3連単的中率 (${t.sen_hit||0}/${t.sen_n||0})</div></div>
+      <div class="card"><div class="v num">${(t.top1_hit/n*100).toFixed(1)}%</div><div class="k">3連単 予測的中率</div></div>
+      <div class="card"><div class="v num">${((t.top5_hit||0)/n*100).toFixed(1)}%${t5pred!=null?(' <span style="font-size:11px;color:var(--dim)">/ \u4e88\u6e2c'+t5pred+'%</span>'):''}</div><div class="k">3\u9023\u5358 TOP5\u5185\u7684\u4e2d\u7387(\u5b9f\u7e3e/\u4e88\u6e2c)</div></div>
+      <div class="card"><div class="v num">${roi}%</div><div class="k">回収率(TOP5均等買い)</div></div>
+      <div class="card"><div class="v num">${senAct!=null?senAct:"-"}%${senPred!=null?(' <span style="font-size:11px;color:var(--dim)">/ \u4e88\u6e2c'+senPred+'%</span>'):''}</div><div class="k">\u53b3\u9078 \u7684\u4e2d\u7387 \u5b9f\u7e3e/\u4e88\u6e2c (${t.sen_hit||0}/${t.sen_n||0})</div></div>
     </div>
     <div class="pad"><table>
-      <tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${tdrow||""}${rows}
+      <tr><th>日付</th><th>R数</th><th>1着</th><th>TOP5</th><th>厳選</th><th>回収</th></tr>${tdrow||""}${rows}
     </table></div>
-    <div class="warn">回収率はTOP6買い目に各100円を投じた場合の仮想値です。実際のオッズ変動・購入行動とは異なります。</div>`;
+    <div class="warn">回収率はTOP5買い目に各100円を投じた場合の仮想値です。実際のオッズ変動・購入行動とは異なります。</div>`;
 }
 
 function renderModel(rep){
