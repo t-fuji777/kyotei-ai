@@ -50,7 +50,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
   font-weight:600;cursor:pointer}
 .chip.on{background:var(--accent);border-color:var(--accent);color:#06121E}
 
-.racelist{padding:0 16px}
+.racelist{padding:0 16px}.racelist>.race:first-child{margin-top:7px}
 .race{background:var(--surface);border:1px solid var(--line);border-radius:12px;
   margin-bottom:7px;overflow:hidden}
 .racehead{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}
@@ -108,7 +108,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .hjp{display:flex;gap:9px;align-items:flex-start;flex-shrink:0}
 .hjc{display:flex;flex-direction:column;align-items:center;gap:6px}
 .hjl{font-size:8px;letter-spacing:.04em;color:var(--dim);line-height:1}
-.hjv{display:inline-flex;gap:3px;align-items:center;min-height:18px;font-size:12px}
+.hjv{display:inline-flex;gap:3px;align-items:center;min-height:18px;font-size:12px}.hjp>.hjc:nth-child(-n+3)>.hjv{margin-top:4px}
 .hjw{min-width:60px;justify-content:center}
 .lph{background:rgba(140,160,180,.08);box-shadow:inset 0 0 0 1px rgba(140,160,180,.22)}
 .rj2{font-size:15px;font-weight:800;line-height:1}
@@ -229,7 +229,7 @@ function renderSengen(){
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}">${r.no}R<span class="rven">${v.name}</span></span>
         <span class="rmeta"><span class="rtype">${r.type||""}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>'}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-3px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>'}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
       </div>
       <div class="racebody">
         <div class="sec">3連単 買い目 上位5点（的中率 ${Math.round(top5p(r)*100)}%）</div>${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
@@ -272,7 +272,7 @@ function renderToday(){
         <span class="rno num">${r.no}R</span>
         <span class="rmeta"><span class="rtype">${r.type||""}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>'}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-3px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>'}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
       </div>
       <div class="racebody">
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
