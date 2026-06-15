@@ -32,7 +32,7 @@ def parse_result(html: str) -> dict | None:
     order = f"{pos2lane[1]}-{pos2lane[2]}-{pos2lane[3]}"
 
     km = re.search(r"決まり手[\s\S]{0,400}?>(逃げ|差し|まくり差し|まくり|抜き|恵まれ)<", h)
-    res = {"order": order, "kimarite": km.group(1) if km else None}
+    res = {"order": order, "kimarite": km.group(1) if km else None, "ninki": None}
 
     p3 = re.search(r"3連単([\s\S]{0,1200}?)</tbody>", h)
     if p3:
@@ -41,6 +41,8 @@ def parse_result(html: str) -> dict | None:
         if len(nums) >= 3 and pay:
             res["pay3t"] = int(pay.group(1).replace(",", ""))
             res["pay3t_combo"] = "-".join(nums[:3])
+            nin = re.search(r"<td[^>]*>(?:\s|<[^>]+>)*(\d+)", p3.group(1)[pay.end():])
+            res["ninki"] = int(nin.group(1)) if nin else None
 
     fk = re.search(r"複勝([\s\S]{0,1500}?)</tbody>", h)
     if fk:
