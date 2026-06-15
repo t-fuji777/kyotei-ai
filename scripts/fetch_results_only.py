@@ -34,16 +34,17 @@ def _mins_to_deadline(now, dl):
     return (t - now).total_seconds() / 60
 
 
-def update_results(pred, now, ymd) -> int:
+def update_results(pred, now, ymd, backfill=False) -> int:
     n_res = 0
     tried = 0
     for v in pred["venues"]:
         for r in v["races"]:
             if r.get("result") and "ninki" in r["result"]:
                 continue
-            mins = _mins_to_deadline(now, r.get("deadline"))
-            if mins is None or mins > -GRACE_MIN:
-                continue
+            if not backfill:
+                mins = _mins_to_deadline(now, r.get("deadline"))
+                if mins is None or mins > -GRACE_MIN:
+                    continue
             if tried >= RESULT_MAX_PER_RUN:
                 print(f"result cap {RESULT_MAX_PER_RUN} reached; rest next run")
                 return n_res
@@ -73,7 +74,8 @@ def update_results(pred, now, ymd) -> int:
 
 def main():
     now = datetime.now(JST)
-    ymd = now.strftime("%Y%m%d")
+    ymd = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else now.strftime("%Y%m%d")
+    backfill = ymd != now.strftime("%Y%m%d")
     path = ROOT / "docs" / "predictions" / f"{ymd}.json"
     if not path.exists():
         print("no prediction file for today; run predict_today first")
@@ -83,7 +85,7 @@ def main():
         print("no venues today")
         return
 
-    n_res = update_results(pred, now, ymd)
+    n_res = update_results(pred, now, ymd, backfill)
     if n_res == 0:
         print("nothing to update")
         return
