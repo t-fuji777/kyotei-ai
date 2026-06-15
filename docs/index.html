@@ -237,7 +237,7 @@ function renderToday(){
         ${r.ex?`<span class="exv num">${r.ex[b.lane]??"-"}</span>`:""}
         <span class="bar"><i style="width:${Math.min(100,b.wp*140)}%"></i></span>
         <span class="bp num">${pct(b.wp)}</span></div>`).join("");
-    const picks=r.picks.map((p,i)=>
+    const picks=r.picks.slice(0,5).map((p,i)=>
       `<div class="pickrow"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
@@ -256,7 +256,7 @@ function renderToday(){
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
         ${axisTable(r)}
         <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
-        <div class="sec">3連単 推奨買い目 TOP10</div>${picks}
+        <div class="sec">3連単 推奨買い目 TOP5</div>${picks}
       </div></div>`;
   }).join("");
   document.getElementById("hdrChips").innerHTML=`<button id="venSel">${venue?venue.name+dayLabel(venue):""}<span class="car">▾</span></button><div id="venMenu" hidden>${chips}</div>`;
