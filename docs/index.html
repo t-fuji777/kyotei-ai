@@ -211,7 +211,7 @@ function renderSengen(){
   (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(top5p(r)>=0.40)list.push({v,r})}));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   if(!list.length){
-    m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(3連単 上位5点の合算自信度40%以上)を満たすレースのみ表示します。</div>`;
+    m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(3連単 上位5点の適正率40%以上)を満たすレースのみ表示します。</div>`;
     return;
   }
   const cards=list.map(({v,r})=>{
@@ -231,10 +231,10 @@ function renderSengen(){
         <span class="hjp"><span class="hjc"><span class="hjl">適正率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">予測</span><span class="hjv hjw">${comboChips(top.c,true)}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>'}</span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span></span>${(r.live&&!r.result)?'<span class="livechip">展示反映</span>':""}
       </div>
       <div class="racebody">
-        <div class="sec">3連単 買い目 上位5点（合算 ${Math.round(top5p(r)*100)}%）</div>${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
+        <div class="sec">3連単 買い目 上位5点（適正率 ${Math.round(top5p(r)*100)}%）</div>${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
       </div></div>`;
   }).join("");
-  m.innerHTML=`<div class="note" style="margin-bottom:10px">3連単 上位5点の合算自信度が高いレースだけを抽出(合算40%以上)。<br>件数は日により変動します(0件の日もあります)。</div>
+  m.innerHTML=`<div class="note" style="margin-bottom:10px">3連単 上位5点の適正率が高いレースだけを抽出(適正率40%以上)。<br>件数は日により変動します(0件の日もあります)。</div>
     <div class="racelist">${cards}</div>
     <div class="warn">本予測は統計的推定であり、的中や利益を保証するものではありません。</div>`;
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
@@ -342,7 +342,7 @@ function renderModel(rep){
     <div class="kv"><span>学習日時</span><span class="num">${rep.trained_at||"-"}</span></div>
     <div class="kv"><span>学習期間</span><span class="num">${(rep.period||[]).join(" - ")}</span></div>
     <div class="kv"><span>学習行数</span><span class="num">${(rep.rows_train||0).toLocaleString()}</span></div>
-    <div class="kv"><span>厳選条件</span><span class="num">3連単 上位5点の合算自信度${rep.sengen&&rep.sengen.top5_min!=null?Math.round(rep.sengen.top5_min*100):"-"}%以上</span></div>
+    <div class="kv"><span>厳選条件</span><span class="num">3連単 上位5点の適正率${rep.sengen&&rep.sengen.top5_min!=null?Math.round(rep.sengen.top5_min*100):"-"}%以上</span></div>
     <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
     <div class="kv"><span>1着的中率</span><span class="num">${pct(tm.win_hit_rate||0)} (基準 ${pct(bm.win_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 本線</span><span class="num">${pct(tm.top1_hit_rate||0)} (基準 ${pct(bm.top1_hit_rate||0)})</span></div>
