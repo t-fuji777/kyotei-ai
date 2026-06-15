@@ -16,6 +16,15 @@ ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
 
 
+def _picks_ok(r):
+    t3 = (r.get("odds") or {}).get("t3") or {}
+    for p in r["picks"][:5]:
+        o = t3.get(p["c"])
+        if o is not None and o < 5.0:
+            return False
+    return True
+
+
 def evaluate(ymd: str, day_df: pd.DataFrame):
     pred_path = ROOT / "docs" / "predictions" / f"{ymd}.json"
     if not pred_path.exists():
@@ -60,7 +69,7 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
             if fuku_lane in top2_lanes.get(key, ()):
                 day["fuku_hit"] += 1
             day["top5_pred_sum"] += top5p
-            if top5p >= 0.40:
+            if top5p >= 0.40 and _picks_ok(r):
                 day["sen_n"] += 1
                 day["sen_pred_sum"] += top5p
                 if act in picks[:5]:
