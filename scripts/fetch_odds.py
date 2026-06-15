@@ -128,6 +128,19 @@ def _floatify(d: dict) -> dict:
     return out
 
 
+def fetch_t3(ymd: str, jcd: int, rno: int) -> dict | None:
+    """Lightweight: fetch ONLY the trifecta (odds3t) page and return its t3 dict.
+    Avoids the heavy 5-page sweep, so it is far faster and much less likely to be
+    throttled/soft-blocked by boatrace.jp from GitHub Actions IPs. Used by the
+    odds-only updater to keep buy-list odds populated reliably."""
+    try:
+        h = _get("odds3t", ymd, jcd, rno)
+    except Exception as e:
+        print(f"t3 {jcd}-{rno}R: not available ({e})")
+        return None
+    return _parse_tri(h, 100, 130, "-") or None
+
+
 def fetch_odds(ymd: str, jcd: int, rno: int) -> dict | None:
     # fetch the win/place page first; if it fails or odds are not published yet,
     # bail immediately so we do not waste time on the other four pages.
