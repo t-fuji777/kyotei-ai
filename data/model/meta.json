@@ -1,5 +1,5 @@
 {
- "trained_at": "2026-06-15 10:52 JST",
+ "trained_at": "2026-06-15 13:23 JST",
  "rows_train": 1261560,
  "rows_valid": 154536,
  "rows_test": 161382,
@@ -13,34 +13,8 @@
   "top3": 429
  },
  "sengen": {
-  "p2_min": 0.91,
-  "venues": [
-   1,
-   2,
-   3,
-   4,
-   5,
-   6,
-   7,
-   8,
-   9,
-   10,
-   11,
-   12,
-   13,
-   14,
-   15,
-   16,
-   17,
-   18,
-   19,
-   20,
-   21,
-   22,
-   23,
-   24
-  ],
-  "valid_rate": 0.9337
+  "top5_min": 0.4,
+  "valid_rate": 0.4912
  },
  "test_metrics": {
   "races": 26468,
@@ -51,10 +25,12 @@
   "top10_hit_rate": 0.5082,
   "top18_hit_rate": 0.6583,
   "top6_roi": 0.7778,
+  "top5_hit_rate": 0.3457,
   "sengen": {
-   "races": 817,
-   "races_per_day": 4.5,
-   "fuku_hit_rate": 0.9437
+   "races": 3623,
+   "races_per_day": 19.8,
+   "top5_min": 0.4,
+   "top5_hit_rate": 0.5344
   }
  },
  "baseline_metrics": {
@@ -66,10 +42,12 @@
   "top10_hit_rate": 0.4019,
   "top18_hit_rate": 0.548,
   "top6_roi": 0.72,
+  "top5_hit_rate": 0.2578,
   "sengen": {
    "races": 0,
    "races_per_day": 0.0,
-   "fuku_hit_rate": null
+   "top5_min": 0.4,
+   "top5_hit_rate": null
   }
  },
  "feature_importance": {
