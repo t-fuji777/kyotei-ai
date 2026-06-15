@@ -305,7 +305,7 @@ function renderAcc(acc){
       <div class="card"><div class="v num">${(t.top1_hit/n*100).toFixed(1)}%</div><div class="k">3連単 本線的中率</div></div>
       <div class="card"><div class="v num">${(t.top6_hit/n*100).toFixed(1)}%</div><div class="k">3連単 TOP6内的中率</div></div>
       <div class="card"><div class="v num">${roi}%</div><div class="k">回収率(TOP6均等買い)</div></div>
-      <div class="card"><div class="v num">${t.sen_n?(t.sen_hit/t.sen_n*100).toFixed(1):"-"}%</div><div class="k">厳選 複勝的中率 (${t.sen_hit||0}/${t.sen_n||0})</div></div>
+      <div class="card"><div class="v num">${t.sen_n?(t.sen_hit/t.sen_n*100).toFixed(1):"-"}%</div><div class="k">厳選 3連単的中率 (${t.sen_hit||0}/${t.sen_n||0})</div></div>
     </div>
     <div class="pad"><table>
       <tr><th>日付</th><th>R数</th><th>1着</th><th>TOP6</th><th>厳選</th><th>回収</th></tr>${tdrow||""}${rows}
@@ -323,14 +323,13 @@ function renderModel(rep){
     <div class="kv"><span>学習日時</span><span class="num">${rep.trained_at||"-"}</span></div>
     <div class="kv"><span>学習期間</span><span class="num">${(rep.period||[]).join(" - ")}</span></div>
     <div class="kv"><span>学習行数</span><span class="num">${(rep.rows_train||0).toLocaleString()}</span></div>
-    <div class="kv"><span>厳選条件</span><span class="num">複勝予測${rep.sengen?Math.round(rep.sengen.p2_min*100):"-"}%以上 / ${rep.sengen?rep.sengen.venues.length:"-"}場</span></div>
+    <div class="kv"><span>厳選条件</span><span class="num">3連単 上位5点の合算自信度${rep.sengen&&rep.sengen.top5_min!=null?Math.round(rep.sengen.top5_min*100):"-"}%以上</span></div>
     <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
     <div class="kv"><span>1着的中率</span><span class="num">${pct(tm.win_hit_rate||0)} (基準 ${pct(bm.win_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 本線</span><span class="num">${pct(tm.top1_hit_rate||0)} (基準 ${pct(bm.top1_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 TOP6内</span><span class="num">${pct(tm.top6_hit_rate||0)} (基準 ${pct(bm.top6_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 TOP10内</span><span class="num">${pct(tm.top10_hit_rate||0)} (基準 ${pct(bm.top10_hit_rate||0)})</span></div>
-    <div class="kv"><span>複勝的中率(本命2着内)</span><span class="num">${pct(tm.fuku_hit_rate||0)}</span></div>
-    <div class="kv"><span>厳選 複勝的中率</span><span class="num">${tm.sengen&&tm.sengen.fuku_hit_rate!=null?pct(tm.sengen.fuku_hit_rate)+" ("+tm.sengen.races_per_day+"R/日)":"-"}</span></div>
+    <div class="kv"><span>厳選 3連単的中率</span><span class="num">${tm.sengen&&tm.sengen.top5_hit_rate!=null?pct(tm.sengen.top5_hit_rate)+" ("+tm.sengen.races_per_day+"R/日)":"-"}</span></div>
     <div class="kv"><span>回収率(TOP6均等買い)</span><span class="num">${pct(tm.top6_roi||0)}</span></div>
     <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}
   </div>`;
