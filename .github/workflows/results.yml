@@ -1,6 +1,9 @@
 name: results-update
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "8,23,38,53 23 * * *"
+    - cron: "8,23,38,53 0-13 * * *"
 concurrency:
   group: results
   cancel-in-progress: false
