@@ -39,9 +39,10 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
         pays[(int(venue), int(rno))] = float(pay.iloc[0]) if len(pay) else 0.0
 
     day = {"date": ymd, "races": 0, "win_hit": 0,
-           "top1_hit": 0, "top6_hit": 0, "top10_hit": 0,
-           "stake6": 0, "return6": 0,
-           "fuku_hit": 0, "sen_n": 0, "sen_hit": 0}
+           "top1_hit": 0, "top5_hit": 0, "top6_hit": 0, "top10_hit": 0,
+           "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
+           "fuku_hit": 0, "sen_n": 0, "sen_hit": 0,
+           "sen_pred_sum": 0.0, "top5_pred_sum": 0.0}
     for v in pred.get("venues", []):
         for r in v["races"]:
             key = (v["code"], r["no"])
@@ -58,12 +59,18 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 day["win_hit"] += 1
             if fuku_lane in top2_lanes.get(key, ()):
                 day["fuku_hit"] += 1
+            day["top5_pred_sum"] += top5p
             if top5p >= 0.40:
                 day["sen_n"] += 1
+                day["sen_pred_sum"] += top5p
                 if act in picks[:5]:
                     day["sen_hit"] += 1
             if picks and picks[0] == act:
                 day["top1_hit"] += 1
+            day["stake5"] += 500
+            if act in picks[:5]:
+                day["top5_hit"] += 1
+                day["return5"] += pays.get(key, 0)
             day["stake6"] += 600
             if act in picks[:6]:
                 day["top6_hit"] += 1
@@ -77,6 +84,7 @@ def main():
     yesterday = (datetime.now(JST) - timedelta(days=1)).strftime("%Y%m%d")
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=yesterday)
+    ap.add_argument("--skip-dataset", action="store_true")
     a = ap.parse_args()
     ymd = a.date
 
@@ -84,7 +92,8 @@ def main():
     if df is None:
         print(f"{ymd}: no data (no races held)")
         return
-    save_year(df, ymd[:4])
+    if not a.skip_dataset:
+        save_year(df, ymd[:4])
 
     day = evaluate(ymd, df)
     if day:
@@ -93,9 +102,9 @@ def main():
         acc["days"] = [d for d in acc["days"] if d["date"] != ymd] + [day]
         acc["days"].sort(key=lambda d: d["date"])
         acc["days"] = acc["days"][-365:]
-        t = {"races": 0, "win_hit": 0, "top1_hit": 0, "top6_hit": 0,
-             "top10_hit": 0, "stake6": 0, "return6": 0,
-             "fuku_hit": 0, "sen_n": 0, "sen_hit": 0}
+        t = {"races": 0, "win_hit": 0, "top1_hit": 0, "top5_hit": 0, "top6_hit": 0,
+             "top10_hit": 0, "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
+             "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0}
         for d in acc["days"]:
             for k in t:
                 t[k] += d.get(k, 0)
