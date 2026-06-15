@@ -90,6 +90,15 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .reskime{font-size:13px;color:#cbd5e1}
 .respay{font-size:13px;color:#e2e8f0;margin-left:auto}
 .respay b{color:#fde047;font-size:15px}
+.rgrid{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.rcol{display:flex;flex-direction:column;gap:4px;align-items:center}
+.rhd{font-size:9px;letter-spacing:.08em;color:var(--dim)}
+.rcombo{display:inline-flex;gap:3px}
+.rjudge{font-size:22px;font-weight:800;line-height:1}
+.jhit{color:#34D399}
+.jmiss{color:#F87171}
+.rsub{margin-top:9px;font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rtag{background:rgba(52,211,153,.15);color:#34D399;border:1px solid rgba(52,211,153,.4);border-radius:6px;padding:1px 6px;font-size:10px}
 .resbadges{display:flex;gap:6px;flex-wrap:wrap}
 .rbadge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px}
 .rb-hit{background:#16a34a;color:#fff}
@@ -161,7 +170,7 @@ const comboChips=(c,s)=>c.split("-").map(n=>laneChip(n,s)).join("");
 const pct=p=>(p*100).toFixed(1)+"%";
 const confCls=p=>p>=0.9?"confA":p>=0.8?"confB":"confC";
 const top5p=r=>r.picks?r.picks.slice(0,5).reduce((a,p)=>a+(p.p||0),0):0;
-const cumCls=p=>p>=0.4?"confA":p>=0.3?"confB":"confC";
+const cumCls=p=>p>=0.4?"confA":p>=0.35?"confB":"confC";
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
 
 function dayLabel(v){if(!v)return "";if(v.is_final)return " \u00b7 \u6700\u7d42\u65e5";if(v.day_n===1)return " \u00b7 \u521d\u65e5";if(v.day_n>1)return " \u00b7 "+v.day_n+"\u65e5\u76ee";return "";}
@@ -196,7 +205,7 @@ function renderSengen(){
     const fav=r.fuku||{};
     const fb=r.boats.find(b=>b.lane===fav.lane)||{};
     const top=r.picks[0]||{c:"-",p:0};
-    const picks=r.picks.filter(p=>r.odds&&r.odds.t3&&r.odds.t3[p.c]>=5).slice(0,5).map((p,i)=>
+    const picks=r.picks.slice(0,5).map((p,i)=>
       `<div class="pickrow"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
@@ -211,7 +220,7 @@ function renderSengen(){
         <span class="senp num">5点合算${Math.round(top5p(r)*100)}%</span>
       </div>
       <div class="racebody">
-        <div class="sec">3連単 推奨買い目（5点合算 ${Math.round(top5p(r)*100)}% / オッズ5倍以上のみ）</div>${picks||'<div class="note" style="padding:6px 0;text-align:left">オッズ5倍以上の買い目なし（オッズ確定後に表示）</div>'}
+        <div class="sec">3連単 買い目 上位5点（合算 ${Math.round(top5p(r)*100)}%）</div>${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
       </div></div>`;
   }).join("");
   m.innerHTML=`<div class="note" style="margin-bottom:10px">3連単 上位5点の合算自信度が高いレースだけを抽出(合算40%以上)。<br>件数は日により変動します(0件の日もあります)。</div>
@@ -255,7 +264,7 @@ function renderToday(){
         <span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span>
       </div>
       <div class="racebody">
-        ${r.result?`<div class="resbox"><div class="resttl">結果</div><div class="resrow"><span class="reschips">${comboChips(r.result.order,false)}</span><span class="reskime">${r.result.kimarite||""}</span><span class="respay">3連単 <b>¥${(r.result.pay3t||0).toLocaleString()}</b></span></div><div class="resbadges"><span class="rbadge ${r.result.hit_t1?"rb-hit":"rb-miss"}">本命3連単 ${r.result.hit_t1?"的中":"不的中"}</span>${t5hit(r)?`<span class="rbadge rb-hit">買い目TOP5内</span>`:""}</div></div>`:""}
+        ${r.result?`<div class="resbox"><div class="rgrid"><div class="rcol"><span class="rhd">予測</span><span class="rcombo">${comboChips(top.c,true)}</span></div><div class="rcol"><span class="rhd">結果</span><span class="rcombo">${comboChips(r.result.order,false)}</span></div><div class="rcol"><span class="rhd">判定</span><span class="rjudge ${(top.c===r.result.order)?"jhit":"jmiss"}">${(top.c===r.result.order)?"〇":"✕"}</span></div></div><div class="rsub">3連単 ¥${(r.result.pay3t||0).toLocaleString()}${r.result.kimarite?" ・ "+r.result.kimarite:""}${t5hit(r)?'<span class="rtag">買い目TOP5内</span>':""}</div></div>`:""}
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
         ${axisTable(r)}
         <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
