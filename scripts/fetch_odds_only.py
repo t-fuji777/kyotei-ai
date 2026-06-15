@@ -14,15 +14,15 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from fetch_odds import fetch_odds
+from fetch_odds import fetch_t3
 
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
 
 # Odds sale window relative to deadline (minutes). Negative mins = after deadline.
-ODDS_BEFORE_MAX = 60   # start polling up to 3h before deadline
+ODDS_BEFORE_MAX = 120  # start polling up to 2h before deadline
 ODDS_AFTER = 5          # keep a few min after deadline, then result takes over
-ODDS_MAX_PER_RUN = 15   # cap fetches per cycle; backlog drains over runs
+ODDS_MAX_PER_RUN = 25   # cap fetches per cycle; backlog drains over runs
 
 
 def _mins_to_deadline(now, dl):
@@ -93,18 +93,18 @@ def update_odds(pred, now, ymd) -> int:
                 print(f"odds cap {ODDS_MAX_PER_RUN} reached; rest next run")
                 return n_odds
             fetched += 1
-            odds = fetch_odds(ymd, v["code"], r["no"])
-            time.sleep(0.3)
-            if not odds or not (odds.get("t3") or odds.get("fuku")):
+            t3all = fetch_t3(ymd, v["code"], r["no"])
+            time.sleep(0.6)
+            if not t3all:
                 print(f"  odds {v['code']}-{r['no']}R: none yet")
                 continue
-            merged = _axis_from_odds(r, odds)
+            combos = [p["c"] for p in r.get("picks", [])]
             ex_odds = r.get("odds", {})
-            ex_odds.update(merged)
+            ex_odds["t3"] = {c: t3all[c] for c in combos if c in t3all}
+            ex_odds["axis_t3"] = t3all.get(combos[0]) if combos else None
             r["odds"] = ex_odds
             n_odds += 1
-            print(f"  odds {v['code']}-{r['no']}R: t3={len(odds.get('t3',{}))} "
-                  f"fuku={len(odds.get('fuku',{}))}")
+            print(f"  odds {v['code']}-{r['no']}R: t3={len(ex_odds['t3'])}")
     return n_odds
 
 
