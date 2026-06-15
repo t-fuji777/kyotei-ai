@@ -16,7 +16,7 @@ VENUES = {
 }
 
 BASE = "https://www1.mbrace.or.jp/od2"
-UA = "Mozilla/5.0 (compatible; kyotei-ai/1.0; personal research)"
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 
 def zen2han(s: str) -> str:
@@ -37,6 +37,8 @@ try:
     import requests as _rq
     _SESS = _rq.Session()
     _SESS.headers["User-Agent"] = UA
+    _SESS.headers["Accept-Language"] = "ja,en;q=0.9"
+    _SESS.headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 except Exception:
     _SESS = None
 
