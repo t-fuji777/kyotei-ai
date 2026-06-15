@@ -1,0 +1,31 @@
+name: acc-backfill
+on:
+  workflow_dispatch:
+concurrency:
+  group: data
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  bf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install lhafile pandas requests
+      - name: backfill accuracy
+        run: |
+          for d in 20260612 20260613 20260614; do
+            python scripts/update_results.py --date "$d" --skip-dataset
+          done
+      - name: commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add docs/accuracy.json
+          git diff --cached --quiet || git commit -m "acc backfill top5 calibration"
+          git pull --rebase --autostash
+          git push
