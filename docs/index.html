@@ -137,7 +137,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
-th:first-child,td:first-child{text-align:left}
+th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:center;vertical-align:middle}
 .pad{padding:0 16px}
 .note{color:var(--dim);font-size:13px;padding:32px 24px;text-align:center;line-height:1.8}
 .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
@@ -311,8 +311,8 @@ function renderAcc(acc){
   const accRow=(label,X,st)=>{
     const R=X.races||0,t1=X.top1_hit||0,t5=X.top5_hit||0,sn=X.sen_n||0,sh=X.sen_hit||0;
     const roi=X.stake5?Math.round((X.return5||0)/X.stake5*100):0;
-    const cell=(num,den)=>den?`${num} <span style="color:var(--dim);font-size:11px">(${(num/den*100).toFixed(1)}%)</span>`:"-";
-    const scell=(h,n)=>n?`${h}/${n} <span style="color:var(--dim);font-size:11px">(${(h/n*100).toFixed(1)}%)</span>`:"-";
+    const cell=(num,den)=>den?`${num}<br><span style="color:var(--dim);font-size:11px">(${(num/den*100).toFixed(1)}%)</span>`:"-";
+    const scell=(h,n)=>n?`${h}/${n}<br><span style="color:var(--dim);font-size:11px">(${(h/n*100).toFixed(1)}%)</span>`:"-";
     return `<tr${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t1,R)}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${roi}%</td></tr>`;
   };
   const days=(acc&&acc.days)?acc.days:[];
@@ -323,12 +323,11 @@ function renderAcc(acc){
   else if(!t0)tt=tj;
   if(!tt||!tt.races){m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;}
   const dayRows=days.slice().reverse().slice(0,60).map(d=>accRow(d.date.slice(4,6)+"/"+d.date.slice(6,8),d)).join("");
-  const todayRow=tj?accRow('本日<span style="color:var(--dim);font-size:9px">速報</span>',tj):"";
+  const todayRow=tj?accRow('本日<br><span style="color:var(--dim);font-size:9px">速報</span>',tj):"";
   const totalRow=days.length?accRow('累計',tt,'font-weight:700'):"";
-  m.innerHTML=`<div class="pad"><table>
+  m.innerHTML=`<div class="pad"><table class="acctbl">
       <tr><th>日付</th><th>R数</th><th>3連単</th><th>TOP5</th><th>厳選</th><th>回収率</th></tr>${totalRow}${todayRow}${dayRows}
-    </table></div>
-    <div class="warn">厳選の分母は買い目TOP5の合計確率が40%以上の高信頼レース数。回収率はTOP5買い目に各100円を投じた仮想値です。</div>`;
+    </table></div>`;
 }
 
 function renderModel(rep){
