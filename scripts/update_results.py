@@ -53,14 +53,15 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
             win_lane = int(act.split("-")[0])
             top_boat = max(r["boats"], key=lambda b: b["wp"])["lane"]
             fuku_lane = r.get("fuku", {}).get("lane", top_boat)
+            top5p = sum(p.get("p", 0) for p in r["picks"][:5])
             if top_boat == win_lane:
                 day["win_hit"] += 1
             if fuku_lane in top2_lanes.get(key, ()):
                 day["fuku_hit"] += 1
-                if r.get("sengen"):
-                    day["sen_hit"] += 1
-            if r.get("sengen"):
+            if top5p >= 0.40:
                 day["sen_n"] += 1
+                if act in picks[:5]:
+                    day["sen_hit"] += 1
             if picks and picks[0] == act:
                 day["top1_hit"] += 1
             day["stake6"] += 600
