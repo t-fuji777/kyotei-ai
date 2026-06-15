@@ -159,6 +159,7 @@ let cur="today", pred=null, selVenue=null;
 const laneChip=(n,s)=>`<span class="lane ${s?'s':''} l${n}">${n}</span>`;
 const comboChips=(c,s)=>c.split("-").map(n=>laneChip(n,s)).join("");
 const pct=p=>(p*100).toFixed(1)+"%";
+const confCls=p=>p>=0.9?"confA":p>=0.8?"confB":"confC";
 
 function dayLabel(v){if(!v)return "";if(v.is_final)return " \u00b7 \u6700\u7d42\u65e5";if(v.day_n===1)return " \u00b7 \u521d\u65e5";if(v.day_n>1)return " \u00b7 "+v.day_n+"\u65e5\u76ee";return "";}
 function sortVenues(p){if(p&&Array.isArray(p.venues))p.venues.sort((a,b)=>(a.code||0)-(b.code||0));return p;}
@@ -175,23 +176,17 @@ function setHeader(){
   $("#hdrMeta").textContent=`予測生成 ${pred.generated_at||"-"} / 学習 ${pred.model_trained_at||"-"}`;
 }
 
-function axisTable(r){
-  const ax=r.odds&&r.odds.axis;if(!ax)return"";
-  const cb=r.odds.axis_combo||{};
-  const L=[["複勝","fuku"],["拡連複","k"],["2連複","f2"],["2連単","t2"],["3連複","f3"],["3連単","t3"]];
-  const rows=L.map(([nm,k])=>ax[k]!=null?`<div class="pickrow"><span class="bname" style="min-width:52px">${nm}</span><span class="honmei num">${cb[k]||""}</span><span class="bar"></span><span class="oddv num">${ax[k]}倍</span></div>`:"").join("");
-  return rows?`<div class="sec">買い方比較 ─ 予測1位の組み合わせを各券種で買う場合の直前オッズ</div>${rows}`:"";
-}
+function axisTable(r){ return ""; }
 function renderSengen(){
   const m=$("#main");
   if(!pred){m.innerHTML='<div class="spin"></div>';return}
   setHeader();
   const cfg=pred.sengen_cfg||{};
   const list=[];
-  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(r.sengen||r.conf==='A')list.push({v,r})}));
+  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(r.fuku&&r.fuku.p>=0.90)list.push({v,r})}));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   if(!list.length){
-    m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(本命の2着内予測${cfg.p2_min?Math.round(cfg.p2_min*100)+"%以上":""}・対象場)を満たすレースのみ表示します。</div>`;
+    m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(本命の2着内予測90%以上)を満たすレースのみ表示します。</div>`;
     return;
   }
   const cards=list.map(({v,r})=>{
@@ -210,11 +205,10 @@ function renderSengen(){
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
         <span class="honmei">${laneChip(fav.lane,true)}<span class="bname" style="margin-left:6px">${fb.name||""}</span></span>
         ${r.result?`<span class="${r.result.hit_fuku?"hitchip":"misschip"}">${r.result.hit_fuku?"的中":"不的中"} ${r.result.order}</span>`:(r.live?'<span class="livechip">展示反映</span>':"")}
-        <span class="senp num">複勝${fav.p?Math.round(fav.p*100)+"%":"-"}</span>${r.odds&&r.odds.fuku?`<span class="oddv num">${r.odds.fuku}倍</span>`:""}
+        <span class="senp num">2着内${fav.p?Math.round(fav.p*100)+"%":"-"}</span>
       </div>
       <div class="racebody">
-        <div class="sec">おすすめの買い方: ${laneChip(fav.lane)} の複勝 ── 2着以内に入る予測が ${fav.p?Math.round(fav.p*100)+"%":"-"}</div>${axisTable(r)}
-        <div class="sec">参考: 3連単で買う場合の組み合わせ候補(右の%は その並びで決まる予測確率)</div>${picks}
+        <div class="sec">3連単 推奨買い目（本命2着内 ${fav.p?Math.round(fav.p*100)+"%":"-"} / オッズ5倍以上を優先）</div>${picks}
       </div></div>`;
   }).join("");
   m.innerHTML=`<div class="note" style="margin-bottom:10px">本命艇が2着以内に入る確率が高いレースだけを抽出(目標的中率90%超)。<br>件数は日により変動します(0件の日もあります)。</div>
@@ -255,7 +249,7 @@ function renderToday(){
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
         <span class="honmei">${comboChips(top.c,true)}</span>
         ${r.result?`<span class="resv num">結果 ${r.result.order}</span>`:(r.live?'<span class="livechip">展示反映</span>':"")}
-        <span class="conf conf${r.conf}">${r.conf}</span>
+        <span class="conf ${r.fuku?confCls(r.fuku.p):"confC"}">${r.fuku&&r.fuku.p!=null?Math.round(r.fuku.p*100)+"%":"-"}</span>
       </div>
       <div class="racebody">
         ${r.result?`<div class="resbox"><div class="resttl">結果</div><div class="resrow"><span class="reschips">${comboChips(r.result.order,false)}</span><span class="reskime">${r.result.kimarite||""}</span><span class="respay">3連単 <b>¥${(r.result.pay3t||0).toLocaleString()}</b></span></div><div class="resbadges"><span class="rbadge ${r.result.hit_fuku?"rb-hit":"rb-miss"}">本命複勝 ${r.result.hit_fuku?"的中":"不的中"}</span><span class="rbadge ${r.result.hit_t1?"rb-hit":"rb-miss"}">本命3連単 ${r.result.hit_t1?"的中":"不的中"}</span>${r.result.hit_t10?`<span class="rbadge rb-hit">買い目TOP10内</span>`:""}</div></div>`:""}
@@ -278,7 +272,7 @@ function todayStats(){
   let n=0,w=0,t6=0,sn=0,sh=0,st=0,rt=0;
   for(const v of pred.venues)for(const r of v.races){const x=r.result;if(!x)continue;
     n++;if(x.hit_win)w++;if(x.hit_t6){t6++;rt+=(x.pay3t||0)}st+=600;
-    if(r.sengen){sn++;if(x.hit_fuku)sh++}}
+    if(r.fuku&&r.fuku.p>=0.90){sn++;if(x.hit_fuku)sh++}}
   if(!n) return null;
   const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
   return `<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
