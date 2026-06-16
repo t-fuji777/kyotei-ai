@@ -60,7 +60,34 @@ def fetch_result(ymd: str, jcd: int, rno: int) -> dict | None:
     return parse_result(raw.decode("utf-8", errors="replace"))
 
 
+BEFORE_URL = "https://www.boatrace.jp/owpc/pc/race/beforeinfo?rno={rno}&jcd={jcd:02d}&hd={ymd}"
+
+
+def fetch_before_html(ymd, jcd, rno):
+    raw = http_get(BEFORE_URL.format(rno=rno, jcd=jcd, ymd=ymd), timeout=20, retries=2)
+    return raw.decode("utf-8", errors="replace")
+
+
+def _probe_before(ymd, jcd, rno):
+    hh = re.sub(r"\s+", " ", fetch_before_html(ymd, jcd, rno))
+    print("LEN", len(hh))
+    print("TABLES", re.findall(r'<table[^>]*class="([^"]*)"', hh)[:20])
+    mw = re.search(r'weather1[\s\S]{0,1700}', hh)
+    print("WEATHER", (mw.group(0)[:1400] if mw else "NONE"))
+    for m in re.finditer(r'<table[\s\S]*?</table>', hh):
+        t = m.group(0)
+        if ("展示" in t) or ("tenji" in t.lower()):
+            tbs = re.findall(r'<tbody[\s\S]*?</tbody>', t)
+            print("TENJI_NTBODY", len(tbs))
+            print("TBODY0", (tbs[0][:1700] if tbs else t[:1700]))
+            break
+    print("NUMS", re.findall(r'.{12}\d\.\d{2}.{4}', hh)[:30])
+
+
 if __name__ == "__main__":
     import json
-    ymd, jcd, rno = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
-    print(json.dumps(fetch_result(ymd, jcd, rno), ensure_ascii=False))
+    if len(sys.argv) > 1 and sys.argv[1] == "probe":
+        _probe_before(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+    else:
+        ymd, jcd, rno = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+        print(json.dumps(fetch_result(ymd, jcd, rno), ensure_ascii=False))
