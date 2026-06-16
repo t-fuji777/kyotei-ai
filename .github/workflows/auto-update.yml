@@ -1,0 +1,38 @@
+name: auto-update
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 23 * * *"
+    - cron: "*/30 0-12 * * *"
+concurrency:
+  group: auto-update
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 320
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pandas numpy lightgbm lhafile requests
+      - name: loop update_live (results + odds + exhibition)
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          START=$(date +%s)
+          while true; do
+            H=$(TZ=Asia/Tokyo date +%H)
+            if [ "$H" -ge 22 ] || [ "$H" -lt 8 ]; then echo "outside active hours, exit"; exit 0; fi
+            python scripts/update_live.py || true
+            git add docs/predictions
+            git diff --cached --quiet || git commit -m "auto update"
+            git pull --rebase --autostash || (git rebase --abort || true; git pull --rebase --autostash) || true
+            git push || (git pull --rebase --autostash || true; git push || true)
+            E=$(( $(date +%s) - START ))
+            if [ "$E" -ge 17400 ]; then echo "5h cap, exit for handoff"; exit 0; fi
+            sleep 300
+          done
