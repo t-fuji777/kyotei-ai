@@ -80,6 +80,7 @@ def predict_races(tgt: pd.DataFrame, hist, fan, models, sengen):
     for (venue, rno), g in tgt.groupby(["venue", "race_no"]):
         g = g.sort_values("lane")
         if len(g) != 6:
+            print(f"SKIP {int(venue)}-{int(rno)}R: parsed {len(g)} boats (need 6)", flush=True)
             continue
         pw = g["p_norm"].to_numpy()
         pr = trifecta_probs(pw, g["p_top2"].to_numpy(), g["p_top3"].to_numpy())
