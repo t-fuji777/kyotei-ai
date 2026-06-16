@@ -254,7 +254,11 @@ function renderToday(){
   const chips=pred.venues.map(v=>
     `<button class="venopt ${v.code===selVenue?'on':''}" data-v="${v.code}">${v.name}${dayLabel(v)}</button>`).join("");
   const venue=pred.venues.find(v=>v.code===selVenue);
-  const races=venue.races.map(r=>{
+  const _have={};venue.races.forEach(rr=>{_have[rr.no]=rr;});
+  const _maxNo=Math.max(12,...venue.races.map(rr=>rr.no));
+  const _full=[];for(let _n=1;_n<=_maxNo;_n++){_full.push(_have[_n]||{no:_n,_gap:true});}
+  const races=_full.map(r=>{
+    if(r._gap)return `<div class="race gap" data-r="${r.no}"><span class="rno num">${r.no}R</span><span class="note">予測対象外（番組データ不備）</span></div>`;
     const top=r.picks[0]||{c:"-",p:0};
     const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>
       `<div class="boatrow">${laneChip(b.lane)}
