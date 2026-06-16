@@ -1,4 +1,4 @@
-const CACHE = "kyotei-ai-v45";
+const CACHE = "kyotei-ai-v46";
 
 self.addEventListener("install", e => {
   self.skipWaiting();
