@@ -144,6 +144,7 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
 .kv span:first-child{color:var(--dim)}
 .warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
   color:var(--dim);font-size:11px;line-height:1.7}
+.sencount{display:flex;justify-content:flex-end;padding:8px 16px 0}.sencount .num{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--accent)}
 .spin{width:28px;height:28px;border:3px solid var(--surface2);border-top-color:var(--accent);
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -236,8 +237,8 @@ function renderSengen(){
       </div></div>`;
   }).join("");
   m.innerHTML=`
-    <div class="racelist sengen">${cards}</div>
-    <div class="warn">本予測は統計的推定であり、的中や利益を保証するものではありません。</div>`;
+    <div class="sencount"><span class="num">厳選 ${list.length}件</span></div>
+    <div class="racelist sengen">${cards}</div>`;
   m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();selVenue=+el.dataset.vc;const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
 }
 
