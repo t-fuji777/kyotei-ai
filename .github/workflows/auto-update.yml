@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pandas numpy lightgbm lhafile requests
-      - name: loop update_live (results + odds + exhibition)
+      - name: loop results + live re-predict
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
@@ -27,7 +27,8 @@ jobs:
           while true; do
             H=$(TZ=Asia/Tokyo date +%H)
             if [ "$H" -ge 22 ] || [ "$H" -lt 8 ]; then echo "outside active hours, exit"; exit 0; fi
-            python scripts/update_live.py || true
+            python scripts/fetch_results_only.py || true
+            python scripts/predict_today.py --live || true
             git add docs/predictions
             git diff --cached --quiet || git commit -m "auto update"
             git pull --rebase --autostash || (git rebase --abort || true; git pull --rebase --autostash) || true
