@@ -25,7 +25,7 @@ RESULT_MAX_PER_RUN = 40
 # ---- odds config ----
 ODDS_BEFORE_MAX = 60    # only fetch odds for races within 60 min of deadline
 ODDS_AFTER = 5
-ODDS_MAX_PER_RUN = 12   # keep small so the whole run finishes in time
+ODDS_MAX_PER_RUN = 30   # keep small so the whole run finishes in time
 
 
 def _mins_to_deadline(now, dl):
