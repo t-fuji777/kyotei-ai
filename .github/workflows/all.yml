@@ -1,9 +1,6 @@
 name: all-update
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "2,17,32,47 23 * * *"
-    - cron: "2,17,32,47 0-12 * * *"
 concurrency:
   group: all-update
   cancel-in-progress: false
