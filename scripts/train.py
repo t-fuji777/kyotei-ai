@@ -120,6 +120,7 @@ def report(r: pd.DataFrame, sengen):
         rep[f"top{k}_hit_rate"] = round(r[f"hit_t{k}"].mean(), 4)
     rep["top6_roi"] = round(float(r.loc[r["in_t6"], "pay3t"].sum()) / max(n * 600, 1), 4)
     rep["top5_hit_rate"] = round(r["hit_t5"].mean(), 4)
+    rep["top5_roi"] = round(float(r.loc[r["hit_t5"] == 1, "pay3t"].sum()) / max(n * 500, 1), 4)
     s = r[r["top5p"] >= sengen["top5_min"]]
     rep["sengen"] = {"races": int(len(s)),
                      "races_per_day": round(len(s) / max(r["date"].nunique(), 1), 1),
