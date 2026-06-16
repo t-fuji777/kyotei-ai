@@ -126,11 +126,11 @@ def do_odds(pred, now, ymd) -> int:
             # too early: more than ODDS_BEFORE_MAX minutes before deadline
             if mins > ODDS_BEFORE_MAX:
                 continue
-            targets.append((v["code"], r["no"]))
+            targets.append((mins, v["code"], r["no"]))
     if not targets:
         print("no races need odds")
         return 0
-    print(f"odds targets ({len(targets)} need odds): {targets[:ODDS_MAX_PER_RUN]}",
+    targets.sort(key=lambda t: (t[0] < 0, abs(t[0])))\n    targets = [(c, n) for _, c, n in targets[:ODDS_MAX_PER_RUN]]\n    print(f"odds targets ({len(targets)}): {targets}",
           flush=True)
     n = 0
     fetched = 0
