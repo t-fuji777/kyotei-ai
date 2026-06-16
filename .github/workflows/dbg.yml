@@ -2,10 +2,10 @@ name: dbg
 on:
   workflow_dispatch:
     inputs:
-      args:
-        description: 'fetch_result.py args'
+      cmd:
+        description: 'command to run'
         required: false
-        default: 'probe 20260615 1 12'
+        default: 'python scripts/predict_today.py --live'
 jobs:
   dbg:
     runs-on: ubuntu-latest
@@ -14,5 +14,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests
-      - run: python scripts/fetch_result.py ${{ inputs.args }}
+      - run: pip install lhafile pandas numpy lightgbm requests
+      - run: ${{ inputs.cmd }}
