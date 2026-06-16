@@ -130,7 +130,9 @@ def do_odds(pred, now, ymd) -> int:
     if not targets:
         print("no races need odds")
         return 0
-    targets.sort(key=lambda t: (t[0] < 0, abs(t[0])))\n    targets = [(c, n) for _, c, n in targets[:ODDS_MAX_PER_RUN]]\n    print(f"odds targets ({len(targets)}): {targets}",
+    targets.sort(key=lambda t: (t[0] < 0, abs(t[0])))
+    targets = [(c, n) for _, c, n in targets[:ODDS_MAX_PER_RUN]]
+    print(f"odds targets ({len(targets)}): {targets}",
           flush=True)
     n = 0
     fetched = 0
