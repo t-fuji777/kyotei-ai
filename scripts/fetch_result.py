@@ -68,6 +68,26 @@ def fetch_before_html(ymd, jcd, rno):
     return raw.decode("utf-8", errors="replace")
 
 
+def parse_before(html):
+    """beforeinfo HTML -> {"ex": {lane: tenji_time}, "wind": int(m), "wave": int(cm)}.
+    展示タイム=各艦tbody内の >X.XX< (体重·チルト·STと区別可)。"""
+    h = re.sub(r"\s+", " ", html)
+
+    def wnum(title):
+        m = re.search(re.escape(title) + r'</span> <span class="weather1_bodyUnitLabelData">(\d+)', h)
+        return int(m.group(1)) if m else None
+
+    ex = {}
+    for tb in re.findall(r'<tbody[\s\S]*?</tbody>', h):
+        ml = re.search(r'is-boatColor(\d)', tb)
+        if not ml:
+            continue
+        me = re.search(r'>(\d\.\d{2})<', tb)
+        if me:
+            ex[int(ml.group(1))] = float(me.group(1))
+    return {"ex": ex, "wind": wnum("風速"), "wave": wnum("波高")}
+
+
 def _probe_before(ymd, jcd, rno):
     hh = re.sub(r"\s+", " ", fetch_before_html(ymd, jcd, rno))
     print("LEN", len(hh))
@@ -82,6 +102,7 @@ def _probe_before(ymd, jcd, rno):
             print("TBODY0", (tbs[0][:1700] if tbs else t[:1700]))
             break
     print("NUMS", re.findall(r'.{12}\d\.\d{2}.{4}', hh)[:30])
+    print("PARSED", parse_before(fetch_before_html(ymd, jcd, rno)))
 
 
 if __name__ == "__main__":
