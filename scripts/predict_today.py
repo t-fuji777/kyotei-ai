@@ -181,6 +181,12 @@ def predict_live(ymd, meta, models, sengen):
             r["fuku"] = nr["fuku"]
             r["sengen"] = nr["sengen"]
             r["live"] = True
+            bi = live.get((vc2, nr["no"]))
+            if bi:
+                r["ex"] = bi["ex"]
+                r["wind"] = bi["wind"]
+                r["wave"] = bi["wave"]
+                r["live_at"] = now.strftime("%H:%M")
             n_upd += 1
     if n_upd:
         old["live_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
