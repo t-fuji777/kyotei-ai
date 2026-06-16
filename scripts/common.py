@@ -104,7 +104,7 @@ def split_venues(text: str, kind: str):
 
 
 # ---------------- B(番組表) ----------------
-RE_B_HEAD = re.compile(r"^\s*(\d{1,2})R\s+(\S+)\s+H(\d+)m\s*電話投票締切予定(\d{1,2}:\d{2})")
+RE_B_HEAD = re.compile(r"^\s*(\d{1,2})R\s+(.+?)\s+H(\d+)m\s*電話投票締切予定(\d{1,2}:\d{2})")
 RE_B_TAIL = re.compile(
     r"^\s*(\d\.\d\d)\s+(\d{1,3}\.\d\d)"      # 全国勝率 全国2率
     r"\s+(\d\.\d\d)\s+(\d{1,3}\.\d\d)"        # 当地勝率 当地2率
