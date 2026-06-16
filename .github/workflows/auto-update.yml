@@ -27,7 +27,7 @@ jobs:
           while true; do
             H=$(TZ=Asia/Tokyo date +%H)
             if [ "$H" -ge 22 ] || [ "$H" -lt 8 ]; then echo "outside active hours, exit"; exit 0; fi
-            python scripts/fetch_results_only.py || true
+            python scripts/update_all.py || true
             python scripts/predict_today.py --live || true
             git add docs/predictions
             git diff --cached --quiet || git commit -m "auto update"
