@@ -1,5 +1,5 @@
 {
- "trained_at": "2026-06-16 09:41 JST",
+ "trained_at": "2026-06-16 10:09 JST",
  "rows_train": 1261560,
  "rows_valid": 154536,
  "rows_test": 162126,
@@ -26,6 +26,7 @@
   "top18_hit_rate": 0.6587,
   "top6_roi": 0.778,
   "top5_hit_rate": 0.3455,
+  "top5_roi": 0.7905,
   "sengen": {
    "races": 3638,
    "races_per_day": 19.8,
@@ -43,6 +44,7 @@
   "top18_hit_rate": 0.5479,
   "top6_roi": 0.7191,
   "top5_hit_rate": 0.2577,
+  "top5_roi": 0.7303,
   "sengen": {
    "races": 0,
    "races_per_day": 0.0,
