@@ -342,11 +342,11 @@ function renderModel(rep){
     <div class="kv"><span>厳選条件</span><span class="num">3連単 上位5点の的中率${rep.sengen&&rep.sengen.top5_min!=null?Math.round(rep.sengen.top5_min*100):"-"}%以上</span></div>
     <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
     <div class="kv"><span>1着的中率</span><span class="num">${pct(tm.win_hit_rate||0)} (基準 ${pct(bm.win_hit_rate||0)})</span></div>
-    <div class="kv"><span>3連単 本線</span><span class="num">${pct(tm.top1_hit_rate||0)} (基準 ${pct(bm.top1_hit_rate||0)})</span></div>
-    <div class="kv"><span>3連単 TOP6内</span><span class="num">${pct(tm.top6_hit_rate||0)} (基準 ${pct(bm.top6_hit_rate||0)})</span></div>
+    <div class="kv"><span>3連単 予測</span><span class="num">${pct(tm.top1_hit_rate||0)} (基準 ${pct(bm.top1_hit_rate||0)})</span></div>
+    <div class="kv"><span>3連単 TOP5内</span><span class="num">${pct(tm.top5_hit_rate||0)} (基準 ${pct(bm.top5_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 TOP10内</span><span class="num">${pct(tm.top10_hit_rate||0)} (基準 ${pct(bm.top10_hit_rate||0)})</span></div>
     <div class="kv"><span>厳選 3連単的中率</span><span class="num">${tm.sengen&&tm.sengen.top5_hit_rate!=null?pct(tm.sengen.top5_hit_rate)+" ("+tm.sengen.races_per_day+"R/日)":"-"}</span></div>
-    <div class="kv"><span>回収率(TOP6均等買い)</span><span class="num">${pct(tm.top6_roi||0)}</span></div>
+    <div class="kv"><span>回収率(TOP5均等買い)</span><span class="num">${pct(tm.top5_roi||0)}</span></div>
     <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}
   </div>`;
 }
