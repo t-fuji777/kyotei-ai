@@ -144,7 +144,7 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
 .kv span:first-child{color:var(--dim)}
 .warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
   color:var(--dim);font-size:11px;line-height:1.7}
-.sencount{display:flex;justify-content:flex-end;padding:8px 16px 0}.sencount .num{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--accent)}
+#senCount{margin-left:auto;flex:0 0 auto;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--accent)}#senCount:empty{display:none}
 .spin{width:28px;height:28px;border:3px solid var(--surface2);border-top-color:var(--accent);
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -154,7 +154,7 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
 <body>
 <div id="app">
   <header>
-    <div class="hdrtop"><h1>艇<span>AI</span> 競艇予測</h1><div id="hdrChips"></div></div>
+    <div class="hdrtop"><h1>艇<span>AI</span> 競艇予測</h1><div id="hdrChips"></div><span id="senCount" class="num"></span></div>
     <div id="hdrDate" class="num"></div>
     <div id="hdrMeta" class="num"></div>
   </header>
@@ -212,6 +212,7 @@ function renderSengen(){
   const list=[];
   (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(sengenOk(r))list.push({v,r})}));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
+  {const sc=$("#senCount");if(sc)sc.textContent=list.length+"件";}
   if(!list.length){
     m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(3連単 上位5点の的中率40%以上)を満たすレースのみ表示します。</div>`;
     return;
@@ -237,7 +238,6 @@ function renderSengen(){
       </div></div>`;
   }).join("");
   m.innerHTML=`
-    <div class="sencount"><span class="num">厳選 ${list.length}件</span></div>
     <div class="racelist sengen">${cards}</div>`;
   m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();selVenue=+el.dataset.vc;const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
 }
@@ -354,7 +354,7 @@ function renderModel(rep){
 
 async function show(tab){
   cur=tab;
-  {const hc=document.getElementById("hdrChips");if(hc)hc.innerHTML="";}
+  {const hc=document.getElementById("hdrChips");if(hc)hc.innerHTML="";const sc=document.getElementById("senCount");if(sc)sc.textContent="";}
   const map={sen:"Sen",today:"Today",acc:"Acc",model:"Model"};
   ["Sen","Today","Acc","Model"].forEach(t=>$("#tab"+t).classList.toggle("on",map[tab]===t));
   const m=$("#main");m.innerHTML='<div class="spin"></div>';
