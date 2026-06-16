@@ -31,7 +31,7 @@ def load_models():
     meta = json.loads((ROOT / "data" / "model" / "meta.json").read_text())
     models = {t: lgb.Booster(model_file=str(ROOT / "data" / "model" / f"model_{t}.txt"))
               for t in ("win", "top2", "top3")}
-    sengen = meta.get("sengen", {"p2_min": 0.89, "venues": list(range(1, 25))})
+    sengen = {"p2_min": 0.89, "venues": list(range(1, 25)), **meta.get("sengen", {})}
     return meta, models, sengen
 
 
