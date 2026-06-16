@@ -170,6 +170,9 @@ def parse_b(text: str, ymd: str):
                     r = parse_b_racer_line(lines[j])
                     if r:
                         racers.append(r)
+            if len(racers) != 6:
+                _cand = [zen2han(lines[j])[:16] for j in range(h+1, end) if zen2han(lines[j]).strip()[:1].isdigit()]
+                print(f'PARSE_B_DROP {vcode}-{rno}R racers={len(racers)}/6 cand={_cand!r}', flush=True)
             if len(racers) == 6:
                 races.append({
                     "date": ymd, "venue": vcode, "race_no": rno,
