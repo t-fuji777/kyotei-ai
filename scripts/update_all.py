@@ -21,7 +21,7 @@ JST = timezone(timedelta(hours=9))
 
 # ---- results config ----
 GRACE_MIN = 3
-RESULT_MAX_PER_RUN = 40
+RESULT_MAX_PER_RUN = 150
 # ---- odds config ----
 ODDS_BEFORE_MAX = 60    # only fetch odds for races within 60 min of deadline
 ODDS_AFTER = 5
