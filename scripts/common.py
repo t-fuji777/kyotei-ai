@@ -129,6 +129,7 @@ def parse_b_racer_line(raw_line: str):
         klass = b[22:24].decode("cp932")
         rest = b[24:].decode("cp932", errors="replace")
     except (ValueError, UnicodeDecodeError):
+        print(f"B_PRIMFAIL {raw_line[:40]!r} blen={len(b)} cb={[len(c.encode('cp932','replace')) for c in raw_line[6:18]]}", flush=True)
         mm = re.match(r"^([1-6])\s+(\d{4})(.+?)(\d{2})(\D+?)(\d{2})([AB][12])(.*)$", zen2han(raw_line))
         if not mm:
             return None
