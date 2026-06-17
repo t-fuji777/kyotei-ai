@@ -251,8 +251,8 @@ function renderToday(){
     return;
   }
   if(selVenue===null||!pred.venues.some(v=>v.code===selVenue)) selVenue=pred.venues[0].code;
-  const _NM='桐生 戸田 江戸川 平和島 多摩川 浜名湖 蒲郡 常滑 津 三国 びわこ 住之江 尼崎 鳴門 丸亀 児島 宮島 徳山 下関 若松 芦屋 福岡 唐津 大村'.split(' ');const _hv={};pred.venues.forEach(x=>{_hv[x.code]=x;});const _ALLV=[];for(let _c=1;_c<=24;_c++){_ALLV.push(_hv[_c]||{code:_c,name:_NM[_c-1],_off:1});}const chips=_ALLV.map(v=>
-    v._off?`<span class="venopt off">${v.name} —</span>`:`<button class="venopt ${v.code===selVenue?'on':''}" data-v="${v.code}">${v.name}${dayLabel(v)}</button>`).join("");
+  const _NM='桐生 戸田 江戸川 平和島 多摩川 浜名湖 蒲郡 常滑 津 三国 びわこ 住之江 尼崎 鳴門 丸亀 児島 宮島 徳山 下関 若松 芦屋 福岡 唐津 大村'.split(' ');const _hv={};pred.venues.forEach(x=>{_hv[x.code]=x;});const _ALLV=[];for(let _c=1;_c<=24;_c++){_ALLV.push(_hv[_c]||{code:_c,name:_NM[_c-1],_off:1});}const _P="　 ： — 最終日 初 日 日目".split(" ");const _pn=n=>n.length===1?_P[0]+n+_P[0]:n.length===2?n[0]+_P[0]+n[1]:n;const _zf=n=>String(n).replace(/[0-9]/g,x=>String.fromCharCode(x.charCodeAt(0)+65248));const _lb=v=>v._off?_P[0]+_P[2]:v.is_final?_P[3]:v.day_n===1?_P[4]+_P[0]+_P[5]:v.day_n>1?_zf(v.day_n)+_P[6]:_P[0]+_P[2];const _disp=v=>_pn(v.name)+_P[1]+(v.code===11?" ":"")+_lb(v);const chips=_ALLV.map(v=>
+    v._off?`<span class="venopt off">${_disp(v)}</span>`:`<button class="venopt ${v.code===selVenue?'on':''}" data-v="${v.code}">${_disp(v)}</button>`).join("");
   const venue=pred.venues.find(v=>v.code===selVenue);
   const _have={};venue.races.forEach(rr=>{_have[rr.no]=rr;});
   const _maxNo=Math.max(12,...venue.races.map(rr=>rr.no));
