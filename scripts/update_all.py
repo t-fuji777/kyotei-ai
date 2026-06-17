@@ -118,8 +118,11 @@ def do_odds(pred, now, ymd) -> int:
     targets = []
     for v in pred["venues"]:
         for r in v["races"]:
-            if _has_odds(r):
-                continue
+            o = r.get("odds") or {}
+            if o.get("t3"):
+                m0 = _mins_to_deadline(now, r.get("deadline"))
+                if o.get("final") or m0 is None or m0 >= 0:
+                    continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None:
                 continue
@@ -152,6 +155,9 @@ def do_odds(pred, now, ymd) -> int:
             merged = _axis_from_odds(r, odds)
             ex = r.get("odds", {})
             ex.update(merged)
+            _m = _mins_to_deadline(now, r.get("deadline"))
+            if _m is not None and _m < 0:
+                ex["final"] = True
             r["odds"] = ex
             n += 1
             print(f"  odds {v['code']}-{r['no']}R: t3={len(odds.get('t3',{}))}")
