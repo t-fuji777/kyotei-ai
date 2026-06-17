@@ -190,9 +190,40 @@ def do_racenames(pred, ymd) -> int:
     return updated
 
 
+def _carryover(now):
+    yest = (now - timedelta(days=1)).strftime("%Y%m%d")
+    d = ROOT / "docs" / "predictions"
+    yp = d / f"{yest}.json"
+    if not yp.exists():
+        return
+    try:
+        py = json.loads(yp.read_text())
+    except Exception:
+        return
+    if not py.get("venues"):
+        return
+    if not any(not r.get("result") for v in py["venues"] for r in v.get("races", [])):
+        return
+    ny = do_results(py, now, yest)
+    if not ny:
+        return
+    py["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
+    txt = json.dumps(py, ensure_ascii=False)
+    yp.write_text(txt)
+    lp = d / "latest.json"
+    if lp.exists():
+        try:
+            if json.loads(lp.read_text()).get("date") == yest:
+                lp.write_text(txt)
+        except Exception:
+            pass
+    print(f"carryover {yest}: results={ny}")
+
+
 def main():
     now = datetime.now(JST)
     ymd = now.strftime("%Y%m%d")
+    _carryover(now)
     path = ROOT / "docs" / "predictions" / f"{ymd}.json"
     if not path.exists():
         print("no prediction file for today")
