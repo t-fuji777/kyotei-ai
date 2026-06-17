@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from fetch_result import fetch_result
-from fetch_odds import fetch_odds
+from fetch_odds import fetch_odds, fetch_racename
 
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
@@ -164,6 +164,32 @@ def do_odds(pred, now, ymd) -> int:
     return n
 
 
+RACENAME_MAX_PER_RUN = 60
+
+
+def do_racenames(pred, ymd) -> int:
+    # B-program race names are truncated to ~6 chars; fetch the full name from
+    # the official racelist page and overwrite. Names are day-invariant, so once
+    # stored (rn_full flag) we never re-fetch.
+    tried = updated = 0
+    for v in pred["venues"]:
+        for r in v["races"]:
+            if r.get("rn_full"):
+                continue
+            if tried >= RACENAME_MAX_PER_RUN:
+                print(f"racenames: {updated} updated (cap)", flush=True)
+                return updated
+            nm = fetch_racename(ymd, v["code"], r["no"])
+            tried += 1
+            time.sleep(0.3)
+            if nm:
+                r["type"] = nm
+                r["rn_full"] = True
+                updated += 1
+    print(f"racenames: {updated} updated, {tried} tried", flush=True)
+    return updated
+
+
 def main():
     now = datetime.now(JST)
     ymd = now.strftime("%Y%m%d")
@@ -178,7 +204,8 @@ def main():
 
     n_res = do_results(pred, now, ymd)
     n_odds = do_odds(pred, now, ymd)
-    if n_res == 0 and n_odds == 0:
+    n_name = do_racenames(pred, ymd)
+    if n_res == 0 and n_odds == 0 and n_name == 0:
         print("nothing to update")
         return
     if n_res:
@@ -186,7 +213,7 @@ def main():
     if n_odds:
         pred["odds_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
     write(pred, ymd)
-    print(f"updated: results={n_res} odds={n_odds}")
+    print(f"updated: results={n_res} odds={n_odds} names={n_name}")
 
 
 if __name__ == "__main__":
