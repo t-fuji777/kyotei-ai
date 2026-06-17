@@ -61,7 +61,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 @keyframes flashbg{0%{background:rgba(91,192,222,.30)}100%{background:transparent}}
 .race.flash{animation:flashbg 1.5s ease}
 .rmeta{flex:1;min-width:0}
-.rtype{font-size:12px;color:var(--dim)}
+.rtype{font-size:12px;color:var(--dim);display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;vertical-align:bottom}
 .rdl{font-size:11px;color:var(--dim)}
 .honmei{display:flex;gap:3px;align-items:center}
 .conf{font-size:11px;font-weight:800;border-radius:6px;padding:3px 7px;min-width:24px;text-align:center}
@@ -204,6 +204,7 @@ function setHeader(){
 
 function axisTable(r){ return ""; }
 function sengenOk(r){if(top5p(r)<0.40)return false;return r.picks.slice(0,5).every(function(p){var o=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;return o==null||o>=5.0;});}
+function fitRtype(){document.querySelectorAll(".rtype").forEach(el=>{el.style.fontSize="";let fs=12,g=0;while(el.scrollWidth>el.clientWidth+0.5&&fs>8&&g<24){fs-=0.5;el.style.fontSize=fs+"px";g++;}});}
 function renderSengen(){
   const m=$("#main");
   if(!pred){m.innerHTML='<div class="spin"></div>';return}
@@ -239,6 +240,7 @@ function renderSengen(){
   }).join("");
   m.innerHTML=`
     <div class="racelist sengen">${cards}</div>`;
+  requestAnimationFrame(fitRtype);
   m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();selVenue=+el.dataset.vc;const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
 }
 
@@ -290,6 +292,7 @@ function renderToday(){
     <div class="warn">本予測は過去データに基づく統計的推定であり、的中や利益を保証するものではありません。舟券の購入は自己責任で行ってください。</div>`;
   {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});document.addEventListener("click",function _c(ev){if(!document.getElementById("venMenu"))return document.removeEventListener("click",_c);if(!ev.target.closest("#hdrChips")){const mm=document.getElementById("venMenu");if(mm)mm.hidden=true;}});}}
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
+  requestAnimationFrame(fitRtype);
   /* venue selector dropdown */
 }
 
