@@ -48,5 +48,5 @@ jobs:
           git config user.email github-actions@github.com
           git add data/races data/fan data/model docs
           git diff --cached --quiet || git commit -m "daily update $(TZ=Asia/Tokyo date +%Y%m%d)"
-          git pull --rebase --autostash
+          git pull --rebase --autostash -X theirs
           git push
