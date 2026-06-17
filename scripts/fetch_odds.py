@@ -174,6 +174,19 @@ def fetch_odds(ymd: str, jcd: int, rno: int) -> dict | None:
     return res
 
 
+def fetch_racename(ymd, jcd, rno):
+    """Return the full race name (distance stripped) or None."""
+    try:
+        h = _get("racelist", ymd, jcd, rno)
+    except Exception:
+        return None
+    m = re.search(r"title16_titleDetail__add2020[^>]*>(.*?)</h3>", h)
+    if not m:
+        return None
+    txt = _strip(m.group(1))
+    txt = re.sub(r"\s*\d+\s*m\s*$", "", txt).strip()
+    return txt or None
+
 if __name__ == "__main__":
     import json
     ymd, jcd, rno = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
