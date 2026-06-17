@@ -129,7 +129,13 @@ def parse_b_racer_line(raw_line: str):
         klass = b[22:24].decode("cp932")
         rest = b[24:].decode("cp932", errors="replace")
     except (ValueError, UnicodeDecodeError):
-        return None
+        mm = re.match(r"^([1-6])\s+(\d{4})(.+?)(\d{2})(\D+?)(\d{2})([AB][12])(.*)$", zen2han(raw_line))
+        if not mm:
+            return None
+        try:
+            lane=int(mm.group(1)); toban=int(mm.group(2)); name=mm.group(3).replace("　","").replace(" ","").strip(); age=int(mm.group(4)); branch=mm.group(5).replace("　","").strip(); weight=int(mm.group(6)); klass=mm.group(7); rest=mm.group(8)
+        except (ValueError, IndexError):
+            return None
     m = RE_B_TAIL.match(zen2han(rest))
     if not m:
         return None
