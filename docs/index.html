@@ -139,7 +139,7 @@ th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
 th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:center;vertical-align:middle}
 .pad{padding:0 16px}
-.note{color:var(--dim);font-size:13px;padding:32px 24px;text-align:center;line-height:1.8}
+.note{color:var(--dim);font-size:13px;padding:32px 24px;text-align:center;line-height:1.8}.race.gap{opacity:.55}.gapnote{margin-left:auto;color:var(--dim);font-size:12px}.venopt.off{opacity:.4;color:var(--dim);cursor:default;pointer-events:none}
 .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
 .kv span:first-child{color:var(--dim)}
 .warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
@@ -251,14 +251,14 @@ function renderToday(){
     return;
   }
   if(selVenue===null||!pred.venues.some(v=>v.code===selVenue)) selVenue=pred.venues[0].code;
-  const chips=pred.venues.map(v=>
-    `<button class="venopt ${v.code===selVenue?'on':''}" data-v="${v.code}">${v.name}${dayLabel(v)}</button>`).join("");
+  const _NM='桐生 戸田 江戸川 平和島 多摩川 浜名湖 蒲郡 常滑 津 三国 びわこ 住之江 尼崎 鳴門 丸亀 児島 宮島 徳山 下関 若松 芦屋 福岡 唐津 大村'.split(' ');const _hv={};pred.venues.forEach(x=>{_hv[x.code]=x;});const _ALLV=[];for(let _c=1;_c<=24;_c++){_ALLV.push(_hv[_c]||{code:_c,name:_NM[_c-1],_off:1});}const chips=_ALLV.map(v=>
+    v._off?`<span class="venopt off">${v.name} —</span>`:`<button class="venopt ${v.code===selVenue?'on':''}" data-v="${v.code}">${v.name}${dayLabel(v)}</button>`).join("");
   const venue=pred.venues.find(v=>v.code===selVenue);
   const _have={};venue.races.forEach(rr=>{_have[rr.no]=rr;});
   const _maxNo=Math.max(12,...venue.races.map(rr=>rr.no));
   const _full=[];for(let _n=1;_n<=_maxNo;_n++){_full.push(_have[_n]||{no:_n,_gap:true});}
   const races=_full.map(r=>{
-    if(r._gap)return `<div class="race gap" data-r="${r.no}"><span class="rno num">${r.no}R</span><span class="note">予測対象外（番組データ不備）</span></div>`;
+    if(r._gap)return `<div class="race gap" data-r="${r.no}"><div class="racehead"><span class="rno num">${r.no}R</span><span class="gapnote">予測対象外</span></div></div>`;
     const top=r.picks[0]||{c:"-",p:0};
     const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>
       `<div class="boatrow">${laneChip(b.lane)}
