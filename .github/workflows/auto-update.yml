@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "*/30 23 * * *"
-    - cron: "*/30 0-12 * * *"
+    - cron: "*/30 0-13 * * *"
 concurrency:
   group: auto-update
   cancel-in-progress: false
@@ -26,7 +26,7 @@ jobs:
           START=$(date +%s)
           while true; do
             H=$(TZ=Asia/Tokyo date +%H)
-            if [ "$H" -ge 22 ] || [ "$H" -lt 8 ]; then echo "outside active hours, exit"; exit 0; fi
+            if [ "$H" -ge 23 ] || [ "$H" -lt 8 ]; then echo "outside active hours, exit"; exit 0; fi
             python scripts/update_all.py || true
             python scripts/predict_today.py --live || true
             git add docs/predictions
