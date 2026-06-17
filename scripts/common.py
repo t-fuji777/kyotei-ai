@@ -176,6 +176,8 @@ def parse_b(text: str, ymd: str):
                     r = parse_b_racer_line(lines[j])
                     if r:
                         racers.append(r)
+                    else:
+                        print(f"B_FAIL {vcode}-{rno}R {lines[j][:90]!r} blen={len(lines[j].encode('cp932','replace'))}", flush=True)
             if len(racers) != 6:
                 _cand = [zen2han(lines[j])[:16] for j in range(h+1, end) if zen2han(lines[j]).strip()[:1].isdigit()]
                 print(f'PARSE_B_DROP {vcode}-{rno}R racers={len(racers)}/6 cand={_cand!r}', flush=True)
