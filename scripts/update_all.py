@@ -114,7 +114,7 @@ def do_odds(pred, now, ymd) -> int:
     # the race has finished -- boatrace keeps the odds page up for the whole day,
     # so finished races still return their final (confirmed) odds. Skip only races
     # whose deadline is still far in the future (odds not meaningful yet) and races
-    # that already have odds stored (so we never re-fetch and never overwrite).
+    # that already have odds stored (provisional ones are re-fetched once after deadline, then marked final).
     targets = []
     for v in pred["venues"]:
         for r in v["races"]:
