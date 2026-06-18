@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from fetch_result import fetch_result
-from fetch_odds import fetch_odds, fetch_racename
+from fetch_odds import fetch_odds, fetch_racename, fetch_t3
 
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
@@ -26,6 +26,9 @@ RESULT_MAX_PER_RUN = 150
 ODDS_BEFORE_MAX = 60    # only fetch odds for races within 60 min of deadline
 ODDS_AFTER = 5
 ODDS_MAX_PER_RUN = 12   # keep small so the whole run finishes in time
+# ---- morning provisional odds config ----
+MORNING_ODDS_MAX_PER_RUN = 60       # lightweight t3-only sweep, far-out races
+MORNING_ODDS_FROM_HHMM = (7, 45)    # advance (zen-uri) odds appear ~7:45 JST
 
 
 def _mins_to_deadline(now, dl):
@@ -119,9 +122,11 @@ def do_odds(pred, now, ymd) -> int:
     for v in pred["venues"]:
         for r in v["races"]:
             o = r.get("odds") or {}
-            if o.get("t3"):
+            if o.get("final"):
+                continue
+            if o.get("t3") and not o.get("prov"):
                 m0 = _mins_to_deadline(now, r.get("deadline"))
-                if o.get("final") or m0 is None or m0 >= 0:
+                if m0 is None or m0 >= 0:
                     continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None:
@@ -155,12 +160,53 @@ def do_odds(pred, now, ymd) -> int:
             merged = _axis_from_odds(r, odds)
             ex = r.get("odds", {})
             ex.update(merged)
+            ex.pop("prov", None)
             _m = _mins_to_deadline(now, r.get("deadline"))
             if _m is not None and _m < 0:
                 ex["final"] = True
             r["odds"] = ex
             n += 1
             print(f"  odds {v['code']}-{r['no']}R: t3={len(odds.get('t3',{}))}")
+    return n
+
+
+def do_morning_odds(pred, now, ymd) -> int:
+    # Early-morning provisional sweep. Once advance (zen-uri) odds are published
+    # (~7:45 JST), fetch lightweight trifecta-only odds for EVERY race that has no
+    # odds yet, no matter how far its deadline is, and mark them provisional.
+    # do_odds replaces these with the full real odds (and clears the prov flag) as
+    # each race enters its 60-min window, then marks them final after deadline.
+    # Unpublished races return None here and are simply retried on the next pass.
+    if (now.hour, now.minute) < MORNING_ODDS_FROM_HHMM:
+        return 0
+    targets = []
+    for v in pred["venues"]:
+        for r in v["races"]:
+            if (r.get("odds") or {}).get("t3") or r.get("result"):
+                continue
+            mins = _mins_to_deadline(now, r.get("deadline"))
+            if mins is None or mins <= ODDS_BEFORE_MAX:
+                continue  # within-window / finished races are do_odds' job
+            targets.append((v["code"], r["no"]))
+    if not targets:
+        return 0
+    targets = targets[:MORNING_ODDS_MAX_PER_RUN]
+    print(f"morning odds targets ({len(targets)}): {targets}", flush=True)
+    n = 0
+    for v in pred["venues"]:
+        for r in v["races"]:
+            if (v["code"], r["no"]) not in targets:
+                continue
+            t3 = fetch_t3(ymd, v["code"], r["no"])
+            time.sleep(0.3)
+            if not t3:
+                continue
+            ex = r.get("odds", {})
+            ex.update(_axis_from_odds(r, {"t3": t3}))
+            ex["prov"] = True
+            r["odds"] = ex
+            n += 1
+            print(f"  morning odds {v['code']}-{r['no']}R: t3={len(t3)} (prov)")
     return n
 
 
@@ -235,16 +281,17 @@ def main():
 
     n_res = do_results(pred, now, ymd)
     n_odds = do_odds(pred, now, ymd)
+    n_morn = do_morning_odds(pred, now, ymd)
     n_name = do_racenames(pred, ymd)
-    if n_res == 0 and n_odds == 0 and n_name == 0:
+    if n_res == 0 and n_odds == 0 and n_morn == 0 and n_name == 0:
         print("nothing to update")
         return
     if n_res:
         pred["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
-    if n_odds:
+    if n_odds or n_morn:
         pred["odds_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
     write(pred, ymd)
-    print(f"updated: results={n_res} odds={n_odds} names={n_name}")
+    print(f"updated: results={n_res} odds={n_odds} morning={n_morn} names={n_name}")
 
 
 if __name__ == "__main__":
