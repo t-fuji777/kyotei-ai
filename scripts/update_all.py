@@ -29,6 +29,8 @@ ODDS_MAX_PER_RUN = 12   # keep small so the whole run finishes in time
 # ---- morning provisional odds config ----
 MORNING_ODDS_MAX_PER_RUN = 60       # lightweight t3-only sweep, far-out races
 MORNING_ODDS_FROM_HHMM = (7, 45)    # advance (zen-uri) odds appear ~7:45 JST
+SENGEN_REFETCH_MIN = 10             # re-fetch sengen candidates within N min of deadline (final 5x check)
+SENGEN_TOP5P_MIN = 0.40             # a race is a sengen candidate when top-5 cumulative prob >= this
 
 
 def _mins_to_deadline(now, dl):
@@ -124,9 +126,15 @@ def do_odds(pred, now, ymd) -> int:
             o = r.get("odds") or {}
             if o.get("final"):
                 continue
+            _p5 = sum((pk.get("p") or 0) for pk in (r.get("picks") or [])[:5])
             if o.get("t3") and not o.get("prov"):
                 m0 = _mins_to_deadline(now, r.get("deadline"))
-                if m0 is None or m0 >= 0:
+                if m0 is None:
+                    continue
+                # real odds stored and deadline still ahead: normally skip, but
+                # re-fetch sengen candidates in the final minutes so the >=5x
+                # judgment runs on near-final odds rather than the ~60-min value.
+                if m0 >= 0 and not (_p5 >= SENGEN_TOP5P_MIN and m0 <= SENGEN_REFETCH_MIN):
                     continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None:
@@ -134,7 +142,6 @@ def do_odds(pred, now, ymd) -> int:
             # too early: more than ODDS_BEFORE_MAX minutes before deadline
             if mins > ODDS_BEFORE_MAX:
                 continue
-            _p5 = sum((pk.get("p") or 0) for pk in (r.get("picks") or [])[:5])
             targets.append((_p5 < 0.40, mins, v["code"], r["no"]))
     if not targets:
         print("no races need odds")
