@@ -34,8 +34,8 @@ header h1 span{color:var(--accent)}
 #dateNav{margin-left:auto;display:flex;align-items:center;gap:3px}
 #dateNav .dnav{background:var(--surface);border:1px solid var(--line);color:var(--text);width:25px;height:25px;border-radius:8px;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 0 4px 0}
 #dateNav .dnav:disabled{opacity:.35;cursor:default}
-#dateNav .dsel{display:flex;align-items:center;justify-content:center;position:relative;gap:2px;width:120px;height:25px;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:0 4px;font-size:15px;font-weight:600;line-height:1;cursor:pointer;white-space:nowrap}
-#dateNav .dsel .car{color:var(--dim);font-size:20px;position:absolute;right:5px;top:50%;transform:translateY(-50%)}
+#dateNav .dsel{display:flex;align-items:center;justify-content:space-between;gap:2px;width:120px;height:25px;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:0 5px 0 8px;font-size:13px;font-weight:700;line-height:1;cursor:pointer;white-space:nowrap}
+#dateNav .dsel .car{color:var(--dim);font-size:20px}
 #dMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:172px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}
 #dMenu[hidden]{display:none}
 #dMenu .dopt{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:13px;border-radius:6px;cursor:pointer;white-space:nowrap}
@@ -499,5 +499,5 @@ $("#tabModel").onclick=()=>show("model");
 show("sen");
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
 </script>
-</body>
+<script>(function(){function init(){function sync(){var dM=document.getElementById('dMenu'),vM=document.getElementById('venMenu'),dNav=document.getElementById('dateNav'),vChip=document.getElementById('hdrChips');if(vChip)vChip.style.visibility=(dM&&!dM.hidden)?'hidden':'';if(dNav)dNav.style.visibility=(vM&&!vM.hidden)?'hidden':'';}new MutationObserver(sync).observe(document.body,{subtree:true,attributes:true,attributeFilter:['hidden']});}if(document.body)init();else document.addEventListener('DOMContentLoaded',init);})();</script></body>
 </html>
