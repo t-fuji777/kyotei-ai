@@ -29,12 +29,12 @@ header{position:sticky;top:0;z-index:20;background:rgba(11,27,43,.92);
 header h1{font-size:18px;font-weight:800;letter-spacing:.04em}
 header h1 span{color:var(--accent)}
 #hdrDate{color:var(--dim);font-size:12px;margin-top:2px}
-#hdrMeta{color:var(--dim);font-size:11px;margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative}
-#hdrMetaTxt{flex:1 1 auto;min-width:0}
-#dateNav{flex:0 0 auto;margin-left:auto;display:flex;align-items:center;gap:4px}
-#dateNav .dnav{background:var(--surface);border:1px solid var(--line);color:var(--text);width:24px;height:24px;border-radius:6px;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+#hdrMeta{color:var(--dim);font-size:11px;margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;position:relative}
+#hdrMetaTxt{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dateNav{flex:0 0 auto;margin-left:auto;display:flex;align-items:center;gap:3px}
+#dateNav .dnav{background:var(--surface);border:1px solid var(--line);color:var(--text);width:22px;height:22px;border-radius:6px;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 #dateNav .dnav:disabled{opacity:.35;cursor:default}
-#dateNav .dsel{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:3px 8px;font-size:12px;font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}
+#dateNav .dsel{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:2px 6px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}
 #dateNav .dsel .car{color:var(--dim);font-size:10px}
 #dMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:172px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}
 #dMenu[hidden]{display:none}
