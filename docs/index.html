@@ -299,13 +299,14 @@ function renderToday(){
     const all=[];
     pred.venues.forEach(v=>v.races.forEach(r=>{if(r.picks&&r.picks.length)all.push({v,r});}));
     const byDl=(a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99");
-    const openL=all.filter(x=>_isOpen(x.r)).sort(byDl);
     const doneL=all.filter(x=>!_isOpen(x.r)).sort(byDl);
-    const sec=(lb,arr)=>arr.length?`<div class="timesec">${lb}</div>`+arr.map(({v,r})=>raceCard(r,v,true)).join(""):"";
-    const body=sec("締切前のレース",openL)+sec("締切済・結果",doneL);
+    const openL=all.filter(x=>_isOpen(x.r)).sort(byDl);
+    const sec=(lb,arr,id)=>arr.length?`<div class="timesec"${id?' id="'+id+'"':''}>${lb}</div>`+arr.map(({v,r})=>raceCard(r,v,true)).join(""):"";
+    const body=sec("締切済・結果",doneL)+sec("締切前のレース",openL,"openSec");
     m.innerHTML=_todayTog()+`<div class="racelist">${body||'<div class="note">本日のレースがありません。</div>'}</div>`;
     _wireTodayTog(m);
     m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
+    if(openL.length&&doneL.length){const el=document.getElementById("openSec");if(el){const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+el.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,at-hh-6));}}
     requestAnimationFrame(fitRtype);
     return;
   }
