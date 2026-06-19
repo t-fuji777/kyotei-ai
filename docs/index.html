@@ -150,6 +150,7 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.spin{animation:none}}
+.todaytog{display:flex;gap:6px;margin:0 0 12px}.todaytog .tt{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:8px 0;font-size:13px;font-weight:600;cursor:pointer}.todaytog .tt.on{background:var(--accent);color:#06121E;border-color:var(--accent)}.timesec{font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.04em;margin:16px 2px 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}.timesec:first-child{margin-top:4px}
 </style>
 </head>
 <body>
@@ -178,7 +179,7 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
 <script>
 const $=s=>document.querySelector(s);
 const VIEW={today:null,acc:null,model:null};
-let cur="today", pred=null, selVenue=null;
+let cur="today", pred=null, selVenue=null, todayMode="venue";
 
 const laneChip=(n,s)=>`<span class="lane ${s?'s':''} l${n}">${n}</span>`;
 const comboChips=(c,s)=>c.split("-").map(n=>laneChip(n,s)).join("");
@@ -242,15 +243,70 @@ function renderSengen(){
   m.innerHTML=`
     <div class="racelist sengen">${cards}</div>`;
   requestAnimationFrame(fitRtype);
-  m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();selVenue=+el.dataset.vc;const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
+  m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();selVenue=+el.dataset.vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
 }
 
+function _isOpen(r){
+  if(r.result) return false;
+  if(!r.deadline||r.deadline.indexOf(":")<0) return false;
+  const a=r.deadline.split(":"),now=new Date(),dl=new Date(now);
+  dl.setHours(+a[0],+a[1],0,0);
+  return now.getTime()<dl.getTime();
+}
+function raceCard(r,v,showVen){
+  const top=r.picks[0]||{c:"-",p:0};
+  const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>
+    `<div class="boatrow">${laneChip(b.lane)}
+      <span class="bname">${b.name}</span><span class="bcls">${b.cls||""}</span>
+      ${r.ex?`<span class="exv num">${r.ex[b.lane]??"-"}</span>`:""}
+      <span class="bar"><i style="width:${Math.min(100,b.wp*140)}%"></i></span>
+      <span class="bp num">${pct(b.wp)}</span></div>`).join("");
+  const picks=r.picks.slice(0,5).map((p,i)=>
+    `<div class="pickrow"><span class="prank num">${i+1}</span>
+      <span class="honmei">${comboChips(p.c,true)}</span>
+      <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
+      <span class="bp num">${pct(p.p)}</span>${(r.odds&&r.odds.t3&&r.odds.t3[p.c]!=null)?`<span class="oddv num">${r.odds.t3[p.c]}倍</span>`:""}</div>`).join("");
+  return `<div class="race" data-r="${r.no}">
+      <div class="racehead">
+        <span class="rno num">${r.no}R${showVen&&v?`<span class="rven">${v.name}</span>`:""}</span>
+        <span class="rmeta"><span class="rtype">${r.type||""}</span><br>
+          <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jbest":(t5hit(r)?"jhit":"jmiss")}">${(top.c===r.result.order)?"◎":(t5hit(r)?"〇":"✕")}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):(r.live?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
+      </div>
+      <div class="racebody">
+        ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
+        ${axisTable(r)}
+        <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
+        <div class="sec">3連単 推奨買い目 TOP5</div>${picks}
+      </div></div>`;
+}
+function _todayTog(){
+  return `<div class="todaytog"><button class="tt ${todayMode==='venue'?'on':''}" data-m="venue">会場別</button><button class="tt ${todayMode==='time'?'on':''}" data-m="time">時間別</button></div>`;
+}
+function _wireTodayTog(m){
+  m.querySelectorAll(".todaytog .tt").forEach(b=>b.onclick=()=>{todayMode=b.dataset.m;renderToday();});
+}
 function renderToday(){
   const m=$("#main");
   if(!pred){m.innerHTML='<div class="spin"></div>';return}
   setHeader();
   if(!pred.venues||!pred.venues.length){
     m.innerHTML=`<div class="note">${pred.note||"本日の開催データがありません。"}</div>`;
+    return;
+  }
+  if(todayMode==='time'){
+    document.getElementById("hdrChips").innerHTML="";
+    const all=[];
+    pred.venues.forEach(v=>v.races.forEach(r=>{if(r.picks&&r.picks.length)all.push({v,r});}));
+    const byDl=(a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99");
+    const openL=all.filter(x=>_isOpen(x.r)).sort(byDl);
+    const doneL=all.filter(x=>!_isOpen(x.r)).sort(byDl);
+    const sec=(lb,arr)=>arr.length?`<div class="timesec">${lb}</div>`+arr.map(({v,r})=>raceCard(r,v,true)).join(""):"";
+    const body=sec("締切前のレース",openL)+sec("締切済・結果",doneL);
+    m.innerHTML=_todayTog()+`<div class="racelist">${body||'<div class="note">本日のレースがありません。</div>'}</div>`;
+    _wireTodayTog(m);
+    m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
+    requestAnimationFrame(fitRtype);
     return;
   }
   if(selVenue===null||!pred.venues.some(v=>v.code===selVenue)) selVenue=pred.venues[0].code;
@@ -262,38 +318,14 @@ function renderToday(){
   const _full=[];for(let _n=1;_n<=_maxNo;_n++){_full.push(_have[_n]||{no:_n,_gap:true});}
   const races=_full.map(r=>{
     if(r._gap)return `<div class="race gap" data-r="${r.no}"><div class="racehead"><span class="rno num">${r.no}R</span><span class="gapnote">予測対象外</span></div></div>`;
-    const top=r.picks[0]||{c:"-",p:0};
-    const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>
-      `<div class="boatrow">${laneChip(b.lane)}
-        <span class="bname">${b.name}</span><span class="bcls">${b.cls||""}</span>
-        ${r.ex?`<span class="exv num">${r.ex[b.lane]??"-"}</span>`:""}
-        <span class="bar"><i style="width:${Math.min(100,b.wp*140)}%"></i></span>
-        <span class="bp num">${pct(b.wp)}</span></div>`).join("");
-    const picks=r.picks.slice(0,5).map((p,i)=>
-      `<div class="pickrow"><span class="prank num">${i+1}</span>
-        <span class="honmei">${comboChips(p.c,true)}</span>
-        <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
-        <span class="bp num">${pct(p.p)}</span>${(r.odds&&r.odds.t3&&r.odds.t3[p.c]!=null)?`<span class="oddv num">${r.odds.t3[p.c]}倍</span>`:""}</div>`).join("");
-    return `<div class="race" data-r="${r.no}">
-      <div class="racehead">
-        <span class="rno num">${r.no}R</span>
-        <span class="rmeta"><span class="rtype">${r.type||""}</span><br>
-          <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${r.result?`<span class="rj2 ${(top.c===r.result.order)?"jbest":(t5hit(r)?"jhit":"jmiss")}">${(top.c===r.result.order)?"◎":(t5hit(r)?"〇":"✕")}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${r.result?comboChips(r.result.order,true):(r.live?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
-      </div>
-      <div class="racebody">
-        ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
-        ${axisTable(r)}
-        <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
-        <div class="sec">3連単 推奨買い目 TOP5</div>${picks}
-      </div></div>`;
+    return raceCard(r,venue,false);
   }).join("");
   document.getElementById("hdrChips").innerHTML=`<button id="venSel">${venue?_disp(venue):""}<span class="car">▾</span></button><div id="venMenu" hidden>${chips}</div>`;
-  m.innerHTML=`<div class="racelist">${races}</div>`;
+  m.innerHTML=_todayTog()+`<div class="racelist">${races}</div>`;
+  _wireTodayTog(m);
   {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const _on=menu.querySelector(".venopt.on");if(_on)_on.scrollIntoView({block:"center"});}};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});document.addEventListener("click",function _c(ev){if(!document.getElementById("venMenu"))return document.removeEventListener("click",_c);if(!ev.target.closest("#hdrChips")){const mm=document.getElementById("venMenu");if(mm)mm.hidden=true;}});}}
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
   requestAnimationFrame(fitRtype);
-  /* venue selector dropdown */
 }
 
 function todayStats(){
