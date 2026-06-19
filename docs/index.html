@@ -24,18 +24,18 @@ html,body{background:var(--bg);color:var(--text);
 #app{max-width:480px;margin:0 auto;min-height:100vh;
   padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 header{position:sticky;top:0;z-index:20;background:rgba(11,27,43,.92);
-  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
-  padding:calc(10px + env(safe-area-inset-top)) 16px 10px}
+  backdrop-filter:blur(8px);
+  padding:calc(10px + env(safe-area-inset-top)) 16px 4px}
 header h1{font-size:18px;font-weight:800;letter-spacing:.04em}
 header h1 span{color:var(--accent)}
 #hdrDate{color:var(--dim);font-size:12px;margin-top:2px}
 #hdrMeta{color:var(--dim);font-size:11px;margin-top:2px;display:block;position:relative}
 #hdrMetaTxt{white-space:pre-line}
-#dateNav{position:absolute;top:0;right:0;display:flex;align-items:center;gap:3px}
-#dateNav .dnav{background:var(--surface);border:1px solid var(--line);color:var(--text);width:22px;height:22px;border-radius:6px;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+#dateNav{margin-left:auto;display:flex;align-items:center;gap:3px}
+#dateNav .dnav{background:var(--surface);border:1px solid var(--line);color:var(--text);width:30px;height:30px;border-radius:8px;font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 #dateNav .dnav:disabled{opacity:.35;cursor:default}
-#dateNav .dsel{display:flex;align-items:center;gap:2px;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:2px 5px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}
-#dateNav .dsel .car{color:var(--dim);font-size:9px}
+#dateNav .dsel{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:3px 8px;font-size:18px;font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}
+#dateNav .dsel .car{color:var(--dim);font-size:11px}
 #dMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:172px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}
 #dMenu[hidden]{display:none}
 #dMenu .dopt{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:13px;border-radius:6px;cursor:pointer;white-space:nowrap}
@@ -54,7 +54,7 @@ nav button.on{color:var(--accent)}
 nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
   stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
-.hdrtop{display:flex;align-items:center;gap:10px}.hdrtop h1{flex:0 0 auto;margin:0}#hdrChips{flex:1 1 auto;min-width:0;display:flex;justify-content:flex-end;position:relative}#hdrChips:empty{display:none}#venSel{display:flex;justify-content:space-between;width:auto;height:30px;align-self:center;align-items:center;gap:6px;max-width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:3px 8px;font-size:18px;font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}#venSel .car{color:var(--dim);font-size:11px}#venMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:152px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}#venMenu[hidden]{display:none}.venopt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:14px;border-radius:6px;cursor:pointer;white-space:nowrap}.venopt:hover{background:var(--surface)}.venopt.on{background:var(--accent);color:#06121E;font-weight:700}
+.hdrtop{display:flex;align-items:center;gap:10px}.hdrtop h1{flex:0 0 auto;margin:0}#hdrChips{position:absolute;top:0;right:0;display:flex;justify-content:flex-end}#hdrChips:empty{display:none}#venSel{display:flex;justify-content:space-between;width:auto;height:auto;align-self:center;align-items:center;gap:2px;max-width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:2px 5px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}#venSel .car{color:var(--dim);font-size:9px}#venMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:152px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}#venMenu[hidden]{display:none}.venopt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:14px;border-radius:6px;cursor:pointer;white-space:nowrap}.venopt:hover{background:var(--surface)}.venopt.on{background:var(--accent);color:#06121E;font-weight:700}
   .chips{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;
   scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .chips::-webkit-scrollbar{display:none}
@@ -169,9 +169,9 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
 <body>
 <div id="app">
   <header>
-    <div class="hdrtop"><h1>艇<span>AI</span> 競艇予測</h1><div id="hdrChips"></div><span id="senCount" class="num"></span></div>
+    <div class="hdrtop"><h1>艇<span>AI</span> 競艇予測</h1><span id="dateNav"></span><span id="senCount" class="num"></span></div>
     <div id="hdrDate" class="num" hidden></div>
-    <div id="hdrMeta" class="num"><span id="hdrMetaTxt"></span><span id="dateNav"></span></div>
+    <div id="hdrMeta" class="num"><span id="hdrMetaTxt"></span><div id="hdrChips"></div></div>
   </header>
   <main id="main"><div class="spin"></div></main>
 </div>
