@@ -30,10 +30,20 @@ jobs:
             python scripts/update_all.py || true
             python scripts/predict_today.py --live || true
             git add docs/predictions
-            git diff --cached --quiet || git commit -m "auto update"
-            git fetch origin main || true
-            git rebase origin/main || (git rebase --abort || true)
-            git push origin HEAD:main || (git checkout -B main origin/main || true)
+            if git diff --cached --quiet; then
+              echo "nothing to commit"
+            else
+              git commit -m "auto update"
+              pushed=0
+              for attempt in 1 2 3 4 5; do
+                git fetch origin main || true
+                git rebase -X theirs origin/main || { echo "rebase failed, syncing to remote"; git rebase --abort || true; git reset --hard origin/main || true; break; }
+                if git push origin HEAD:main; then echo "pushed (try $attempt)"; pushed=1; break; fi
+                echo "push rejected (try $attempt), retrying"
+                sleep 3
+              done
+              [ "$pushed" = 1 ] || echo "push not completed this iteration (will retry next loop)"
+            fi
             E=$(( $(date +%s) - START ))
             if [ "$E" -ge 17400 ]; then echo "5h cap, exit for handoff"; exit 0; fi
             sleep 300
