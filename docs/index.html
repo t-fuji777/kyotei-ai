@@ -150,7 +150,7 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.spin{animation:none}}
-.todaytog{display:flex;gap:6px;margin:0 0 12px}.todaytog .tt{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:8px 0;font-size:13px;font-weight:600;cursor:pointer}.todaytog .tt.on{background:var(--accent);color:#06121E;border-color:var(--accent)}.timesec{font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.04em;margin:16px 2px 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}.timesec:first-child{margin-top:4px}
+.todaytog{position:sticky;top:var(--hh,84px);z-index:15;display:flex;gap:6px;padding:8px 16px;margin:0;background:var(--bg)}.todaytog .tt{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:8px 0;font-size:13px;font-weight:600;cursor:pointer}.todaytog .tt.on{background:var(--accent);color:#06121E;border-color:var(--accent)}.timesec{font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.04em;margin:16px 2px 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}.timesec:first-child{margin-top:4px}
 </style>
 </head>
 <body>
@@ -202,6 +202,7 @@ function setHeader(){
   const d=pred.date;
   $("#hdrDate").textContent=`${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)} の予測`;
   $("#hdrMeta").textContent=`予測生成 ${pred.generated_at||"-"} / 学習 ${pred.model_trained_at||"-"}`;
+  const _h=document.querySelector("header");if(_h)document.documentElement.style.setProperty("--hh",_h.offsetHeight+"px");
 }
 
 function axisTable(r){ return ""; }
@@ -299,14 +300,12 @@ function renderToday(){
     const all=[];
     pred.venues.forEach(v=>v.races.forEach(r=>{if(r.picks&&r.picks.length)all.push({v,r});}));
     const byDl=(a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99");
-    const doneL=all.filter(x=>!_isOpen(x.r)).sort(byDl);
     const openL=all.filter(x=>_isOpen(x.r)).sort(byDl);
-    const sec=(lb,arr,id)=>arr.length?`<div class="timesec"${id?' id="'+id+'"':''}>${lb}</div>`+arr.map(({v,r})=>raceCard(r,v,true)).join(""):"";
-    const body=sec("締切済・結果",doneL)+sec("締切前のレース",openL,"openSec");
+    const doneL=all.filter(x=>!_isOpen(x.r)).sort(byDl);
+    const body=openL.concat(doneL).map(({v,r})=>raceCard(r,v,true)).join("");
     m.innerHTML=_todayTog()+`<div class="racelist">${body||'<div class="note">本日のレースがありません。</div>'}</div>`;
     _wireTodayTog(m);
     m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
-    if(openL.length&&doneL.length){const el=document.getElementById("openSec");if(el){const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+el.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,at-hh-6));}}
     requestAnimationFrame(fitRtype);
     return;
   }
