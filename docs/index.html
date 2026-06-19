@@ -302,7 +302,7 @@ function renderToday(){
     const byDl=(a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99");
     const openL=all.filter(x=>_isOpen(x.r)).sort(byDl);
     const doneL=all.filter(x=>!_isOpen(x.r)).sort(byDl);
-    const body=openL.concat(doneL).map(({v,r})=>raceCard(r,v,true)).join("");
+    const body=doneL.concat(openL).map(({v,r})=>raceCard(r,v,true)).join("");
     m.innerHTML=_todayTog()+`<div class="racelist">${body||'<div class="note">本日のレースがありません。</div>'}</div>`;
     _wireTodayTog(m);
     m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
