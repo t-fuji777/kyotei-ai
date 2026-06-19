@@ -29,9 +29,9 @@ header{position:sticky;top:0;z-index:20;background:rgba(11,27,43,.92);
 header h1{font-size:18px;font-weight:800;letter-spacing:.04em}
 header h1 span{color:var(--accent)}
 #hdrDate{color:var(--dim);font-size:12px;margin-top:2px}
-#hdrMeta{color:var(--dim);font-size:11px;margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;position:relative}
-#hdrMetaTxt{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#dateNav{flex:0 0 auto;display:flex;align-items:center;gap:3px}
+#hdrMeta{color:var(--dim);font-size:11px;margin-top:2px;display:block;position:relative}
+#hdrMetaTxt{white-space:pre-line}
+#dateNav{position:absolute;top:0;right:0;display:flex;align-items:center;gap:3px}
 #dateNav .dnav{background:var(--surface);border:1px solid var(--line);color:var(--text);width:22px;height:22px;border-radius:6px;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 #dateNav .dnav:disabled{opacity:.35;cursor:default}
 #dateNav .dsel{display:flex;align-items:center;gap:2px;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:2px 5px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}
@@ -54,7 +54,7 @@ nav button.on{color:var(--accent)}
 nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
   stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
-.hdrtop{display:flex;align-items:stretch;gap:10px}.hdrtl{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:3px}.hdrtl h1{margin:0}#hdrChips{flex:0 0 auto;display:flex;align-items:stretch;position:relative}#hdrChips:empty{display:none}#venSel{display:flex;justify-content:space-between;width:120px;height:30px;align-self:center;align-items:center;gap:6px;max-width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:3px 8px;font-size:13px;font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}#venSel .car{color:var(--dim);font-size:11px}#venMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:152px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}#venMenu[hidden]{display:none}.venopt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:14px;border-radius:6px;cursor:pointer;white-space:nowrap}.venopt:hover{background:var(--surface)}.venopt.on{background:var(--accent);color:#06121E;font-weight:700}
+.hdrtop{display:flex;align-items:center;gap:10px}.hdrtop h1{flex:0 0 auto;margin:0}#hdrChips{flex:1 1 auto;min-width:0;display:flex;justify-content:flex-end;position:relative}#hdrChips:empty{display:none}#venSel{display:flex;justify-content:space-between;width:120px;height:30px;align-self:center;align-items:center;gap:6px;max-width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:3px 8px;font-size:13px;font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}#venSel .car{color:var(--dim);font-size:11px}#venMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:152px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}#venMenu[hidden]{display:none}.venopt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:14px;border-radius:6px;cursor:pointer;white-space:nowrap}.venopt:hover{background:var(--surface)}.venopt.on{background:var(--accent);color:#06121E;font-weight:700}
   .chips{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;
   scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .chips::-webkit-scrollbar{display:none}
@@ -163,15 +163,15 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.spin{animation:none}}
-.todaytog{position:sticky;top:var(--hh,84px);z-index:15;display:flex;gap:6px;padding:8px 16px;margin:0;background:var(--bg)}.todaytog .tt{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:8px 0;font-size:13px;font-weight:600;cursor:pointer}.todaytog .tt.on{background:var(--accent);color:#06121E;border-color:var(--accent)}.timesec{font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.04em;margin:16px 2px 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}.timesec:first-child{margin-top:4px}
+.todaytog{position:sticky;top:var(--hh,84px);z-index:15;display:flex;gap:0;padding:0 16px;margin:0;background:var(--bg);border-bottom:1px solid var(--line)}.todaytog .tt{flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);border-radius:0;padding:10px 0;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:-1px}.todaytog .tt.on{color:var(--accent);border-bottom-color:var(--accent)}.timesec{font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.04em;margin:16px 2px 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}.timesec:first-child{margin-top:4px}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div class="hdrtop"><div class="hdrtl"><h1>艇<span>AI</span> 競艇予測</h1><span id="dateNav"></span></div><div id="hdrChips"></div><span id="senCount" class="num"></span></div>
+    <div class="hdrtop"><h1>艇<span>AI</span> 競艇予測</h1><div id="hdrChips"></div><span id="senCount" class="num"></span></div>
     <div id="hdrDate" class="num" hidden></div>
-    <div id="hdrMeta" class="num"><span id="hdrMetaTxt"></span></div>
+    <div id="hdrMeta" class="num"><span id="hdrMetaTxt"></span><span id="dateNav"></span></div>
   </header>
   <main id="main"><div class="spin"></div></main>
 </div>
@@ -218,7 +218,7 @@ function setHeader(p){
   if(!p) return;
   const d=p.date;
   $("#hdrDate").textContent=`${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)} の予測`;
-  const mt=$("#hdrMetaTxt");if(mt)mt.textContent=`予測生成 ${p.generated_at||"-"} / 学習 ${p.model_trained_at||"-"}`;
+  const mt=$("#hdrMetaTxt");if(mt)mt.textContent=`予測生成 ${p.generated_at||"-"}\n学習 ${p.model_trained_at||"-"}`;
   const _h=document.querySelector("header");if(_h)document.documentElement.style.setProperty("--hh",_h.offsetHeight+"px");
 }
 
