@@ -29,7 +29,20 @@ header{position:sticky;top:0;z-index:20;background:rgba(11,27,43,.92);
 header h1{font-size:18px;font-weight:800;letter-spacing:.04em}
 header h1 span{color:var(--accent)}
 #hdrDate{color:var(--dim);font-size:12px;margin-top:2px}
-#hdrMeta{color:var(--dim);font-size:11px;margin-top:2px}
+#hdrMeta{color:var(--dim);font-size:11px;margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:relative}
+#hdrMetaTxt{flex:1 1 auto;min-width:0}
+#dateNav{flex:0 0 auto;margin-left:auto;display:flex;align-items:center;gap:4px}
+#dateNav .dnav{background:var(--surface);border:1px solid var(--line);color:var(--text);width:24px;height:24px;border-radius:6px;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+#dateNav .dnav:disabled{opacity:.35;cursor:default}
+#dateNav .dsel{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:3px 8px;font-size:12px;font-weight:600;line-height:1.2;cursor:pointer;white-space:nowrap}
+#dateNav .dsel .car{color:var(--dim);font-size:10px}
+#dMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:172px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}
+#dMenu[hidden]{display:none}
+#dMenu .dopt{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:13px;border-radius:6px;cursor:pointer;white-space:nowrap}
+#dMenu .dopt:hover{background:var(--surface)}
+#dMenu .dopt.on{background:var(--accent);color:#06121E;font-weight:700}
+#dMenu .dtoday{font-size:10px;color:var(--dim)}
+#dMenu .dopt.on .dtoday{color:#06121E}
 
 nav{position:fixed;bottom:0;left:0;right:0;z-index:30;
   background:rgba(11,27,43,.95);backdrop-filter:blur(8px);
@@ -158,7 +171,7 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
   <header>
     <div class="hdrtop"><h1>艇<span>AI</span> 競艇予測</h1><div id="hdrChips"></div><span id="senCount" class="num"></span></div>
     <div id="hdrDate" class="num"></div>
-    <div id="hdrMeta" class="num"></div>
+    <div id="hdrMeta" class="num"><span id="hdrMetaTxt"></span><span id="dateNav"></span></div>
   </header>
   <main id="main"><div class="spin"></div></main>
 </div>
@@ -180,6 +193,9 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
 const $=s=>document.querySelector(s);
 const VIEW={today:null,acc:null,model:null};
 let cur="today", pred=null, selVenue=null, todayMode="venue";
+let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false;
+const PREDS={};
+const _WD=["日","月","火","水","木","金","土"];
 
 const laneChip=(n,s)=>`<span class="lane ${s?'s':''} l${n}">${n}</span>`;
 const comboChips=(c,s)=>c.split("-").map(n=>laneChip(n,s)).join("");
@@ -197,11 +213,12 @@ async function fetchJSON(url){
   return r.json();
 }
 
-function setHeader(){
-  if(!pred) return;
-  const d=pred.date;
+function setHeader(p){
+  p=p||pred;
+  if(!p) return;
+  const d=p.date;
   $("#hdrDate").textContent=`${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)} の予測`;
-  $("#hdrMeta").textContent=`予測生成 ${pred.generated_at||"-"} / 学習 ${pred.model_trained_at||"-"}`;
+  const mt=$("#hdrMetaTxt");if(mt)mt.textContent=`予測生成 ${p.generated_at||"-"} / 学習 ${p.model_trained_at||"-"}`;
   const _h=document.querySelector("header");if(_h)document.documentElement.style.setProperty("--hh",_h.offsetHeight+"px");
 }
 
@@ -287,33 +304,89 @@ function _todayTog(){
 function _wireTodayTog(m){
   m.querySelectorAll(".todaytog .tt").forEach(b=>b.onclick=()=>{todayMode=b.dataset.m;renderToday();});
 }
+function shiftYmd(s,delta){const y=+s.slice(0,4),m=+s.slice(4,6),da=+s.slice(6,8);const dt=new Date(y,m-1,da+delta);const z=n=>String(n).padStart(2,"0");return ""+dt.getFullYear()+z(dt.getMonth()+1)+z(dt.getDate());}
+function fmtSel(s){return s.slice(0,4)+"/"+s.slice(4,6)+"/"+s.slice(6,8);}
+function fmtOpt(s){const y=+s.slice(0,4),m=+s.slice(4,6),da=+s.slice(6,8);return s.slice(0,4)+"/"+s.slice(4,6)+"/"+s.slice(6,8)+"（"+_WD[new Date(y,m-1,da).getDay()]+"）";}
+async function predExists(d){try{const r=await fetch("predictions/"+d+".json?h="+Date.now(),{method:"HEAD"});return r.ok;}catch(_){return false;}}
+async function ensureDateList(){
+  if(dateList)return dateList;
+  const set=new Set();
+  if(pred&&pred.date)set.add(pred.date);
+  let acc=VIEW.acc;
+  if(!acc){try{acc=await fetchJSON("accuracy.json");VIEW.acc=acc;}catch(_){acc=null;}}
+  if(acc&&acc.days)acc.days.forEach(d=>{if(d&&d.date)set.add(String(d.date));});
+  let dl=[...set].sort();
+  if(dl.length){let p=shiftYmd(dl[0],-1),g=0;while(g++<10){if(await predExists(p)){dl.unshift(p);p=shiftYmd(p,-1);}else break;}}
+  dateList=dl;latestDate=(pred&&pred.date)||(dl.length?dl[dl.length-1]:null);
+  return dl;
+}
+async function gotoDate(d){
+  if(dateNavBusy)return;
+  const curD=(viewPred||pred).date;
+  if(d===curD)return;
+  dateNavBusy=true;
+  try{
+    let P=PREDS[d];
+    if(!P){P=await fetchJSON("predictions/"+d+".json");sortVenues(P);PREDS[d]=P;}
+    viewPred=(d===((pred&&pred.date)||null))?null:P;
+    selVenue=null;
+    renderToday();
+  }catch(e){
+    dateNavBusy=false;
+    const sel=document.getElementById("dSel");if(sel){sel.textContent="取得失敗";setTimeout(()=>renderDateNav(viewPred||pred),1200);}
+    return;
+  }
+  dateNavBusy=false;
+}
+function renderDateNav(P){
+  const nav=document.getElementById("dateNav");
+  if(!nav)return;
+  const cur=P.date;
+  const dl=(dateList&&dateList.length)?dateList:[cur];
+  const idx=dl.indexOf(cur);
+  const hasPrev=idx>0;
+  const hasNext=idx>=0&&idx<dl.length-1;
+  const opts=dl.slice().reverse().map(d=>`<button class="dopt ${d===cur?'on':''}" data-d="${d}">${fmtOpt(d)}${d===latestDate?'<span class="dtoday">本日</span>':''}</button>`).join("");
+  nav.innerHTML=`<button class="dnav" id="dPrev"${hasPrev?'':' disabled'}>‹</button><button class="dsel" id="dSel">${fmtSel(cur)}<span class="car">▾</span></button><button class="dnav" id="dNext"${hasNext?'':' disabled'}>›</button><div id="dMenu" hidden>${opts}</div>`;
+  const prev=nav.querySelector("#dPrev"),next=nav.querySelector("#dNext"),sel=nav.querySelector("#dSel"),menu=nav.querySelector("#dMenu");
+  if(prev&&hasPrev)prev.onclick=()=>gotoDate(dl[idx-1]);
+  if(next&&hasNext)next.onclick=()=>gotoDate(dl[idx+1]);
+  if(sel&&menu){
+    sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const o=menu.querySelector(".dopt.on");if(o)o.scrollIntoView({block:"center"});}};
+    nav.querySelectorAll("#dMenu .dopt").forEach(o=>o.onclick=()=>{menu.hidden=true;gotoDate(o.dataset.d);});
+  }
+  if(!dnavDocBound){dnavDocBound=true;document.addEventListener("click",ev=>{const mm=document.getElementById("dMenu");if(mm&&!ev.target.closest("#dateNav"))mm.hidden=true;});}
+  const _h=document.querySelector("header");if(_h)document.documentElement.style.setProperty("--hh",_h.offsetHeight+"px");
+}
 function renderToday(){
   const m=$("#main");
-  if(!pred){m.innerHTML='<div class="spin"></div>';return}
-  setHeader();
-  if(!pred.venues||!pred.venues.length){
-    m.innerHTML=`<div class="note">${pred.note||"本日の開催データがありません。"}</div>`;
+  const P=viewPred||pred;
+  if(!P){m.innerHTML='<div class="spin"></div>';return}
+  setHeader(P);
+  renderDateNav(P);
+  if(!P.venues||!P.venues.length){
+    m.innerHTML=`<div class="note">${P.note||"この日の開催データがありません。"}</div>`;
     return;
   }
   if(todayMode==='time'){
     document.getElementById("hdrChips").innerHTML="";
     const all=[];
-    pred.venues.forEach(v=>v.races.forEach(r=>{if(r.picks&&r.picks.length)all.push({v,r});}));
+    P.venues.forEach(v=>v.races.forEach(r=>{if(r.picks&&r.picks.length)all.push({v,r});}));
     const byDl=(a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99");
     const openL=all.filter(x=>_isOpen(x.r)).sort(byDl);
     const doneL=all.filter(x=>!_isOpen(x.r)).sort(byDl);
     const body=doneL.map(({v,r})=>raceCard(r,v,true)).join("")+((openL.length&&doneL.length)?'<div id="openTop"></div>':"")+openL.map(({v,r})=>raceCard(r,v,true)).join("");
-    m.innerHTML=_todayTog()+`<div class="racelist">${body||'<div class="note">本日のレースがありません。</div>'}</div>`;
+    m.innerHTML=_todayTog()+`<div class="racelist">${body||'<div class="note">レースがありません。</div>'}</div>`;
     _wireTodayTog(m);
     m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
     if(openL.length&&doneL.length){const el=document.getElementById("openTop");if(el){const hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const tg=m.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=window.scrollY+el.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,at-hh-th));}}
     requestAnimationFrame(fitRtype);
     return;
   }
-  if(selVenue===null||!pred.venues.some(v=>v.code===selVenue)) selVenue=pred.venues[0].code;
-  const _NM='桐生 戸田 江戸川 平和島 多摩川 浜名湖 蒲郡 常滑 津 三国 びわこ 住之江 尼崎 鳴門 丸亀 児島 宮島 徳山 下関 若松 芦屋 福岡 唐津 大村'.split(' ');const _hv={};pred.venues.forEach(x=>{_hv[x.code]=x;});const _ALLV=[];for(let _c=1;_c<=24;_c++){_ALLV.push(_hv[_c]||{code:_c,name:_NM[_c-1],_off:1});}const _P="　 ： — 最終日 初 日 日目".split(" ");const _pn=n=>n.length===1?_P[0]+n+_P[0]:n.length===2?n[0]+_P[0]+n[1]:n;const _zf=n=>String(n).replace(/[0-9]/g,x=>String.fromCharCode(x.charCodeAt(0)+65248));const _lb=v=>v._off?_P[0]+_P[2]:v.is_final?_P[3]:v.day_n===1?_P[4]+_P[0]+_P[5]:v.day_n>1?_zf(v.day_n)+_P[6]:_P[0]+_P[2];const _disp=v=>_pn(v.name)+_P[1]+(v.code===11?" ":"")+_lb(v);const chips=_ALLV.map(v=>
+  if(selVenue===null||!P.venues.some(v=>v.code===selVenue)) selVenue=P.venues[0].code;
+  const _NM='桐生 戸田 江戸川 平和島 多摩川 浜名湖 蒲郡 常滑 津 三国 びわこ 住之江 尼崎 鳴門 丸亀 児島 宮島 徳山 下関 若松 芦屋 福岡 唐津 大村'.split(' ');const _hv={};P.venues.forEach(x=>{_hv[x.code]=x;});const _ALLV=[];for(let _c=1;_c<=24;_c++){_ALLV.push(_hv[_c]||{code:_c,name:_NM[_c-1],_off:1});}const _P="　 ： — 最終日 初 日 日目".split(" ");const _pn=n=>n.length===1?_P[0]+n+_P[0]:n.length===2?n[0]+_P[0]+n[1]:n;const _zf=n=>String(n).replace(/[0-9]/g,x=>String.fromCharCode(x.charCodeAt(0)+65248));const _lb=v=>v._off?_P[0]+_P[2]:v.is_final?_P[3]:v.day_n===1?_P[4]+_P[0]+_P[5]:v.day_n>1?_zf(v.day_n)+_P[6]:_P[0]+_P[2];const _disp=v=>_pn(v.name)+_P[1]+(v.code===11?" ":"")+_lb(v);const chips=_ALLV.map(v=>
     v._off?`<span class="venopt off">${_disp(v)}</span>`:`<button class="venopt ${v.code===selVenue?'on':''}" data-v="${v.code}">${_disp(v)}</button>`).join("");
-  const venue=pred.venues.find(v=>v.code===selVenue);
+  const venue=P.venues.find(v=>v.code===selVenue);
   const _have={};venue.races.forEach(rr=>{_have[rr.no]=rr;});
   const _maxNo=Math.max(12,...venue.races.map(rr=>rr.no));
   const _full=[];for(let _n=1;_n<=_maxNo;_n++){_full.push(_have[_n]||{no:_n,_gap:true});}
@@ -394,7 +467,7 @@ function renderModel(rep){
 
 async function show(tab){
   cur=tab;
-  {const hc=document.getElementById("hdrChips");if(hc)hc.innerHTML="";const sc=document.getElementById("senCount");if(sc)sc.textContent="";}
+  {const hc=document.getElementById("hdrChips");if(hc)hc.innerHTML="";const sc=document.getElementById("senCount");if(sc)sc.textContent="";const dn=document.getElementById("dateNav");if(dn)dn.innerHTML="";}
   const map={sen:"Sen",today:"Today",acc:"Acc",model:"Model"};
   ["Sen","Today","Acc","Model"].forEach(t=>$("#tab"+t).classList.toggle("on",map[tab]===t));
   const m=$("#main");m.innerHTML='<div class="spin"></div>';
@@ -403,8 +476,11 @@ async function show(tab){
       if(!pred) pred=await fetchJSON("predictions/latest.json");sortVenues(pred);
       renderSengen();
     }else if(tab==="today"){
+      viewPred=null;
       if(!pred) pred=await fetchJSON("predictions/latest.json");sortVenues(pred);
+      if(pred){latestDate=pred.date;if(!PREDS[pred.date])PREDS[pred.date]=pred;}
       renderToday();
+      ensureDateList().then(()=>{if(cur==="today"){renderDateNav(viewPred||pred);}});
     }else if(tab==="acc"){
       if(!VIEW.acc) VIEW.acc=await fetchJSON("accuracy.json").catch(()=>null);
       renderAcc(VIEW.acc);
