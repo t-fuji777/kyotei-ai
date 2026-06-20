@@ -264,7 +264,7 @@ function renderSengen(){
   m.innerHTML=`
     <div class="racelist sengen">${cards}</div>`;
   requestAnimationFrame(fitRtype);
-  if(openL.length&&doneL.length){const _ot=document.getElementById("openTop");if(_ot){const _hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const _at=window.scrollY+_ot.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,_at-_hh));}}
+  if(openL.length&&doneL.length){const _ot=document.getElementById("openTop");if(_ot){const _hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const _at=window.scrollY+_ot.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,_at-_hh-7));}}
   m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();selVenue=+el.dataset.vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
 }
 
@@ -383,7 +383,7 @@ function renderToday(){
     m.innerHTML=_todayTog()+`<div class="racelist">${body||'<div class="note">レースがありません。</div>'}</div>`;
     _wireTodayTog(m);
     m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
-    if(openL.length&&doneL.length){const el=document.getElementById("openTop");if(el){const hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const tg=m.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=window.scrollY+el.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,at-hh-th));}}
+    if(openL.length&&doneL.length){const el=document.getElementById("openTop");if(el){const hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const tg=m.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=window.scrollY+el.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,at-hh-th-7));}}
     requestAnimationFrame(fitRtype);
     return;
   }
