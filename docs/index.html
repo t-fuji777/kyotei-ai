@@ -193,7 +193,7 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
 <script>
 const $=s=>document.querySelector(s);
 const VIEW={today:null,acc:null,model:null};
-let cur="today", pred=null, selVenue=null, todayMode="venue";
+let cur="today", pred=null, selVenue=null, todayMode="time";
 let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false;
 const PREDS={};
 const _WD=["日","月","火","水","木","金","土"];
@@ -303,7 +303,7 @@ function raceCard(r,v,showVen){
       </div></div>`;
 }
 function _todayTog(){
-  return `<div class="todaytog"><button class="tt ${todayMode==='venue'?'on':''}" data-m="venue">会場別</button><button class="tt ${todayMode==='time'?'on':''}" data-m="time">時間別</button></div>`;
+  return `<div class="todaytog"><button class="tt ${todayMode==='time'?'on':''}" data-m="time">時間別</button><button class="tt ${todayMode==='venue'?'on':''}" data-m="venue">会場別</button></div>`;
 }
 function _wireTodayTog(m){
   m.querySelectorAll(".todaytog .tt").forEach(b=>b.onclick=()=>{todayMode=b.dataset.m;renderToday();});
