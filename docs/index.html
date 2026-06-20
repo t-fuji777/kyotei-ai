@@ -353,7 +353,7 @@ function renderDateNav(P){
   if(prev&&hasPrev)prev.onclick=()=>gotoDate(dl[idx-1]);
   if(next&&hasNext)next.onclick=()=>gotoDate(dl[idx+1]);
   if(sel&&menu){
-    sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const o=menu.querySelector(".dopt.on");if(o)o.scrollIntoView({block:"center"});}};
+    sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const _vm=document.getElementById("venMenu");if(_vm)_vm.hidden=true;const o=menu.querySelector(".dopt.on");if(o)o.scrollIntoView({block:"center"});}};
     nav.querySelectorAll("#dMenu .dopt").forEach(o=>o.onclick=()=>{menu.hidden=true;gotoDate(o.dataset.d);});
   }
   if(!dnavDocBound){dnavDocBound=true;document.addEventListener("click",ev=>{const mm=document.getElementById("dMenu");if(mm&&!ev.target.closest("#dateNav"))mm.hidden=true;});}
@@ -398,7 +398,7 @@ function renderToday(){
   document.getElementById("hdrChips").innerHTML=`<button id="venSel">${venue?_disp(venue):""}<span class="car">▾</span></button><div id="venMenu" hidden>${chips}</div>`;
   m.innerHTML=_todayTog()+`<div class="racelist">${races}</div>`;
   _wireTodayTog(m);
-  {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const _on=menu.querySelector(".venopt.on");if(_on)_on.scrollIntoView({block:"center"});}};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});document.addEventListener("click",function _c(ev){if(!document.getElementById("venMenu"))return document.removeEventListener("click",_c);if(!ev.target.closest("#hdrChips")){const mm=document.getElementById("venMenu");if(mm)mm.hidden=true;}});}}
+  {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const _dm=document.getElementById("dMenu");if(_dm)_dm.hidden=true;const _on=menu.querySelector(".venopt.on");if(_on)_on.scrollIntoView({block:"center"});}};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});document.addEventListener("click",function _c(ev){if(!document.getElementById("venMenu"))return document.removeEventListener("click",_c);if(!ev.target.closest("#hdrChips")){const mm=document.getElementById("venMenu");if(mm)mm.hidden=true;}});}}
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
   requestAnimationFrame(fitRtype);
 }
