@@ -23,7 +23,7 @@ html,body{background:var(--bg);color:var(--text);
 .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
 #app{max-width:480px;margin:0 auto;min-height:100vh;
   padding-bottom:calc(72px + env(safe-area-inset-bottom))}
-header{position:sticky;top:0;z-index:20;background:rgba(11,27,43,.92);
+header{position:sticky;top:0;z-index:20;background:#0B1B2B;
   backdrop-filter:blur(8px);
   padding:calc(10px + env(safe-area-inset-top)) 16px 4px}
 header h1{font-size:18px;font-weight:800;letter-spacing:.04em}
@@ -163,7 +163,7 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.spin{animation:none}}
-.todaytog{position:sticky;top:var(--hh,84px);z-index:15;display:flex;gap:0;padding:0;margin:0 16px;background:var(--bg)}.todaytog::after{content:"";position:absolute;left:-16px;bottom:0;width:calc(100% + 32px);height:1px;background:var(--line)}
+.todaytog{position:sticky;top:calc(var(--hh,84px) - 1px);z-index:15;display:flex;gap:0;padding:0 16px;margin:0;background:var(--bg)}.todaytog::after{content:"";position:absolute;left:0;bottom:0;width:100%;height:1px;background:var(--line)}
 body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabToday.on) header{padding-bottom:0px}.todaytog .tt{flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);border-radius:0;padding:4px 0 10px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:-1px}.todaytog .tt.on{color:var(--accent);border-bottom-color:var(--accent)}.timesec{font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.04em;margin:16px 2px 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}.timesec:first-child{margin-top:4px}
 </style>
 </head>
