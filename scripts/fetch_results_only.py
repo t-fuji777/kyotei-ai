@@ -18,12 +18,13 @@ GRACE_MIN = 3            # ignore races until this many min past deadline
 RESULT_MAX_PER_RUN = 150  # cap fetches per cycle; backlog drains over runs
 
 
-def write(obj, ymd):
+def write(obj, ymd, is_today=True):
     d = ROOT / "docs" / "predictions"
     d.mkdir(parents=True, exist_ok=True)
     txt = json.dumps(obj, ensure_ascii=False)
     (d / f"{ymd}.json").write_text(txt)
-    (d / "latest.json").write_text(txt)
+    if is_today:
+        (d / "latest.json").write_text(txt)
 
 
 def _mins_to_deadline(now, dl):
@@ -90,7 +91,7 @@ def main():
         print("nothing to update")
         return
     pred["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
-    write(pred, ymd)
+    write(pred, ymd, not backfill)
     print(f"results updated: {n_res}")
 
 
