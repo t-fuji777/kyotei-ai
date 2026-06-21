@@ -55,6 +55,11 @@ def update_results(pred, now, ymd, backfill=False) -> int:
             if not res:
                 print(f"  result {v['code']}-{r['no']}R: not fixed yet")
                 continue
+            if res.get("status"):
+                r["result"] = res
+                n_res += 1
+                print(f"  result {v['code']}-{r['no']}R: {res['status']}")
+                continue
             order = res["order"]
             top2 = set(map(int, order.split("-")[:2]))
             fuku_lane = r.get("fuku", {}).get("lane")
