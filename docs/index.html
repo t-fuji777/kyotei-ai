@@ -158,7 +158,7 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
 .kv span:first-child{color:var(--dim)}
 .warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
   color:var(--dim);font-size:11px;line-height:1.7}
-#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:13px;line-height:1.42;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}
+#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:13px;line-height:1.42;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}
 .spin{width:28px;height:28px;border:3px solid var(--surface2);border-top-color:var(--accent);
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -234,7 +234,7 @@ function renderSengen(){
   const list=[];
   (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(sengenOk(r))list.push({v,r})}));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
-  {const sc=$("#senCount");if(sc){const dec=list.filter(x=>x.r.result).length;const hit=list.filter(x=>t5hit(x.r)).length;const rate=dec?(hit/dec*100).toFixed(1)+'％':'ー％';sc.innerHTML=`<span class="ssl">本 日：</span><span class="ssv">${list.length}件</span><span class="ssl">的 中 数：</span><span class="ssv">${hit}件</span><span class="ssl">的 中 率：</span><span class="ssv">${rate}</span>`;}}
+  {const sc=$("#senCount");if(sc){const dec=list.filter(x=>x.r.result).length;const hit=list.filter(x=>t5hit(x.r)).length;const rate=dec?(hit/dec*100).toFixed(1)+'％':'ー％';sc.innerHTML=`<span class="ssl"><span class="ssk">本日</span>：</span><span class="ssv">${list.length}件</span><span class="ssl"><span class="ssk">的中</span>：</span><span class="ssv">${hit}件</span><span class="ssl"><span class="ssk">的中率</span>：</span><span class="ssv">${rate}</span>`;}}
   if(!list.length){
     m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(3連単 上位5点の的中率40%以上)を満たすレースのみ表示します。</div>`;
     return;
