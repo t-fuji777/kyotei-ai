@@ -16,6 +16,8 @@ def _strip(s: str) -> str:
 
 def parse_result(html: str) -> dict | None:
     h = re.sub(r"\s+", " ", html)
+    if "レース中止" in h:
+        return {"status": "中止", "ninki": None}
     m = re.search(r"<table[^>]*is-w495[\s\S]*?</table>", h)
     if not m:
         return None
@@ -28,7 +30,9 @@ def parse_result(html: str) -> dict | None:
         if pos.isdigit() and tds[1].isdigit():
             pos2lane[int(pos)] = int(tds[1])
     if not all(k in pos2lane for k in (1, 2, 3)):
-        return None  # 未確定 or 返還等
+        if "不成立" in h:
+            return {"status": "不成立", "ninki": None}
+        return None  # 未確定
     order = f"{pos2lane[1]}-{pos2lane[2]}-{pos2lane[3]}"
 
     km = re.search(r"決まり手[\s\S]{0,400}?>(逃げ|差し|まくり差し|まくり|抜き|恵まれ)<", h)
