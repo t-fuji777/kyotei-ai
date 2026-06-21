@@ -234,7 +234,7 @@ function renderSengen(){
   const list=[];
   (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(sengenOk(r))list.push({v,r})}));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
-  {const sc=$("#senCount");if(sc){const dec=list.filter(x=>x.r.result).length;const hit=list.filter(x=>t5hit(x.r)).length;const rate=dec?(hit/dec*100).toFixed(1)+'％':'ー％';sc.innerHTML=`<span class="ssl">厳 選 数：</span><span class="ssv">${list.length}件</span><span class="ssl">的 中 数：</span><span class="ssv">${hit}件</span><span class="ssl">的 中 率：</span><span class="ssv">${rate}</span>`;}}
+  {const sc=$("#senCount");if(sc){const dec=list.filter(x=>x.r.result).length;const hit=list.filter(x=>t5hit(x.r)).length;const rate=dec?(hit/dec*100).toFixed(1)+'％':'ー％';sc.innerHTML=`<span class="ssl">本 日：</span><span class="ssv">${list.length}件</span><span class="ssl">的 中 数：</span><span class="ssv">${hit}件</span><span class="ssl">的 中 率：</span><span class="ssv">${rate}</span>`;}}
   if(!list.length){
     m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(3連単 上位5点の的中率40%以上)を満たすレースのみ表示します。</div>`;
     return;
@@ -383,7 +383,7 @@ function renderToday(){
     m.innerHTML=_todayTog()+`<div class="racelist">${body||'<div class="note">レースがありません。</div>'}</div>`;
     _wireTodayTog(m);
     m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
-    if(openL.length&&doneL.length){const el=document.getElementById("openTop");if(el){const hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const tg=m.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=window.scrollY+el.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,at-hh-th-7));}}
+    if(openL.length&&doneL.length){const el=document.getElementById("openTop");if(el){const hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const tg=m.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=window.scrollY+el.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,at-hh-th-7));}}else if(!openL.length){window.scrollTo(0,0);}
     requestAnimationFrame(fitRtype);
     return;
   }
@@ -401,6 +401,7 @@ function renderToday(){
   document.getElementById("hdrChips").innerHTML=`<button id="venSel">${venue?_disp(venue):""}<span class="car">▾</span></button><div id="venMenu" hidden>${chips}</div>`;
   m.innerHTML=_todayTog()+`<div class="racelist">${races}</div>`;
   _wireTodayTog(m);
+  if(!P.venues.some(v=>v.races.some(r=>_isOpen(r))))window.scrollTo(0,0);
   {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const _dm=document.getElementById("dMenu");if(_dm)_dm.hidden=true;const _on=menu.querySelector(".venopt.on");if(_on)_on.scrollIntoView({block:"center"});}};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});document.addEventListener("click",function _c(ev){if(!document.getElementById("venMenu"))return document.removeEventListener("click",_c);if(!ev.target.closest("#hdrChips")){const mm=document.getElementById("venMenu");if(mm)mm.hidden=true;}});}}
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
   requestAnimationFrame(fitRtype);
