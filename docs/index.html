@@ -219,7 +219,7 @@ function setHeader(p){
   if(!p) return;
   const d=p.date;
   $("#hdrDate").textContent=`${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)} の予測`;
-  const mt=$("#hdrMetaTxt");if(mt)mt.textContent=`予測生成：${p.generated_at||"-"}\n学　　習：${p.model_trained_at||"-"}`;
+  const mt=$("#hdrMetaTxt");if(mt){let _rn=0,_dec=0,_hit=0;(p.venues||[]).forEach(v=>(v.races||[]).forEach(r=>{_rn++;if(r.result&&!r.result.status){_dec++;if(t5hit(r))_hit++;}}));const _rate=_dec?(_hit/_dec*100).toFixed(1)+"％":"ー％";mt.textContent=`予測生成：${p.generated_at||"-"}　R数：${_rn}\n学　　習：${p.model_trained_at||"-"}　的中率：${_rate}`;}
   const _h=document.querySelector("header");if(_h)document.documentElement.style.setProperty("--hh",_h.offsetHeight+"px");
 }
 
