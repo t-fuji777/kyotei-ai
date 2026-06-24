@@ -185,6 +185,7 @@ def predict_live(ymd, meta, models, sengen):
             bi = live.get((vc2, nr["no"]))
             if bi:
                 r["ex"] = bi["ex"]
+                r["st_ex"] = {str(k): val for k, val in bi.get("st", {}).items()}
                 r["wind"] = bi["wind"]
                 r["wave"] = bi["wave"]
                 r["live_at"] = now.strftime("%H:%M")
