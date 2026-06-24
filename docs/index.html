@@ -132,9 +132,9 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .rb-miss{background:rgba(148,163,184,.18);color:#94a3b8}
 
 .sec{font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.08em;margin:8px 0 6px}.racebody>.sec:first-child{margin-top:0}
-.boatrow{display:flex;align-items:center;gap:8px;padding:3px 0}
-.bname{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bcls{font-size:10px;color:var(--dim);min-width:20px}
+.boatrow{display:grid;grid-template-columns:auto minmax(0,1fr) 34px 50px 34px 42px;align-items:center;column-gap:8px;padding:4px 0}
+.bname{min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bcls{justify-self:start;font-size:11px;color:var(--dim)}.bst{justify-self:end;text-align:right;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}.bex{justify-self:end;text-align:right;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
 .bar{flex:0 0 96px;height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
 .bp{min-width:42px;text-align:right;font-size:12px;font-weight:700}
@@ -277,12 +277,7 @@ function _isOpen(r){
 }
 function raceCard(r,v,showVen){
   const top=r.picks[0]||{c:"-",p:0};
-  const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>
-    `<div class="boatrow">${laneChip(b.lane)}
-      <span class="bname">${b.name}</span><span class="bcls">${b.cls||""}</span>
-      ${r.ex?`<span class="exv num">${r.ex[b.lane]??"-"}</span>`:""}
-      <span class="bar"><i style="width:${Math.min(100,b.wp*140)}%"></i></span>
-      <span class="bp num">${pct(b.wp)}</span></div>`).join("");
+  const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>`<div class="boatrow">${laneChip(b.lane)}<span class="bname">${b.name}</span><span class="bcls">${b.cls?`【${b.cls}】`:""}</span><span class="bp num">${pct(b.wp)}</span><span class="bst num">${(r.st&&r.st[b.lane]!=null)?r.st[b.lane]:""}</span><span class="bex num">${(r.ex&&r.ex[b.lane]!=null)?r.ex[b.lane]:""}</span></div>`).join("");
   const picks=r.picks.slice(0,5).map((p,i)=>
     `<div class="pickrow"><span class="prank num">${i+1}</span>
       <span class="honmei">${comboChips(p.c,true)}</span>
@@ -298,7 +293,7 @@ function raceCard(r,v,showVen){
       <div class="racebody">
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
         ${axisTable(r)}
-        <div class="sec">勝率予測${r.ex?" / 展示タイム":""}</div>${boats}
+        <div class="sec">勝率予測 / ST、展示タイム</div>${boats}
         <div class="sec">3連単 推奨買い目 TOP5</div>${picks}
       </div></div>`;
 }
@@ -366,7 +361,7 @@ function renderToday(){
   const m=$("#main");
   const P=viewPred||pred;
   if(!P){m.innerHTML='<div class="spin"></div>';return}
-  setHeader(P);{const _tm=document.getElementById("todayMeta");if(_tm){if(todayMode==='time'&&P.venues&&P.venues.length){let _rn=0,_dec=0,_hit=0;P.venues.forEach(v=>(v.races||[]).forEach(r=>{_rn++;if(r.result&&!r.result.status){_dec++;if(t5hit(r))_hit++;}}));const _rate=_dec?(_hit/_dec*100).toFixed(1)+"％":"ー％";_tm.innerHTML=`<span class="tml">R　数：</span><span class="tmv">${_dec}R</span><span class="tmn">（${_rn}）</span><span class="tml">的中率：</span><span class="tmv">${_rate}</span><span class="tmn">（${_hit}/${_dec}）</span>`;}else{_tm.innerHTML="";}}}
+  setHeader(P);{const _tm=document.getElementById("todayMeta");if(_tm){if(todayMode==='time'&&P.venues&&P.venues.length){let _rn=0,_dec=0,_hit=0;P.venues.forEach(v=>(v.races||[]).forEach(r=>{_rn++;if(r.result&&!r.result.status){_dec++;if(t5hit(r))_hit++;}}));const _rate=_dec?(_hit/_dec*100).toFixed(1)+"％":"ー％";_tm.innerHTML=`<span class="tml">R　数：</span><span class="tmv">${_dec}R</span><span class="tmn">（${_rn}）</span><span class="tml">的中率：</span><span class="tmv">${_rate}</span><span class="tmn">（${_hit}）</span>`;}else{_tm.innerHTML="";}}}
   renderDateNav(P);
   if(!P.venues||!P.venues.length){
     m.innerHTML=`<div class="note">${P.note||"この日の開催データがありません。"}</div>`;
