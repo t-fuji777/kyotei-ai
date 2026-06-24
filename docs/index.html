@@ -158,7 +158,7 @@ th:first-child,td:first-child{text-align:left}.acctbl th,.acctbl td{text-align:c
 .kv span:first-child{color:var(--dim)}
 .warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
   color:var(--dim);font-size:11px;line-height:1.7}
-#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:13px;line-height:1.42;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}
+#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:13px;line-height:1.42;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}#todayMeta{position:absolute;right:16px;bottom:5px;margin:0;font-size:13px;line-height:1.42;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:0;align-items:baseline;color:var(--dim)}#todayMeta .tml{justify-self:end;color:var(--dim);font-weight:300}#todayMeta .tmd{justify-self:start;white-space:nowrap}#todayMeta .tmv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#todayMeta .tmn{color:var(--dim);font-weight:300;font-size:11px}#todayMeta:empty{display:none}
 .spin{width:28px;height:28px;border:3px solid var(--surface2);border-top-color:var(--accent);
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -170,7 +170,7 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
 <body>
 <div id="app">
   <header>
-    <div class="hdrtop"><h1>艇<span>AI</span> 競艇予測</h1><span id="dateNav"></span><span id="senCount" class="num"></span></div>
+    <div class="hdrtop"><h1>艇<span>AI</span> 競艇予測</h1><span id="dateNav"></span><span id="senCount" class="num"></span><span id="todayMeta" class="num"></span></div>
     <div id="hdrDate" class="num" hidden></div>
     <div id="hdrMeta" class="num"><span id="hdrMetaTxt"></span><div id="hdrChips"></div></div>
   </header>
@@ -219,7 +219,7 @@ function setHeader(p){
   if(!p) return;
   const d=p.date;
   $("#hdrDate").textContent=`${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)} の予測`;
-  const mt=$("#hdrMetaTxt");if(mt){let _rn=0,_dec=0,_hit=0;(p.venues||[]).forEach(v=>(v.races||[]).forEach(r=>{_rn++;if(r.result&&!r.result.status){_dec++;if(t5hit(r))_hit++;}}));const _rate=_dec?(_hit/_dec*100).toFixed(1)+"％":"ー％";mt.textContent=`予測生成：${p.generated_at||"-"}　R数：${_rn}\n学　　習：${p.model_trained_at||"-"}　的中率：${_rate}`;}
+  const mt=$("#hdrMetaTxt");if(mt)mt.textContent=`予測生成：${p.generated_at||"-"}\n学　　習：${p.model_trained_at||"-"}`;
   const _h=document.querySelector("header");if(_h)document.documentElement.style.setProperty("--hh",_h.offsetHeight+"px");
 }
 
@@ -366,7 +366,7 @@ function renderToday(){
   const m=$("#main");
   const P=viewPred||pred;
   if(!P){m.innerHTML='<div class="spin"></div>';return}
-  setHeader(P);
+  setHeader(P);{const _tm=document.getElementById("todayMeta");if(_tm){if(todayMode==='time'&&P.venues&&P.venues.length){let _rn=0,_dec=0,_hit=0;P.venues.forEach(v=>(v.races||[]).forEach(r=>{_rn++;if(r.result&&!r.result.status){_dec++;if(t5hit(r))_hit++;}}));const _vn=P.venues.length;const _rate=_dec?(_hit/_dec*100).toFixed(1)+"％":"ー％";_tm.innerHTML=`<span class="tml">R　数：</span><span class="tmd"><span class="tmv">${_rn}R</span><span class="tmn">（${_vn}場×12の全レース）</span></span><span class="tml">的中率：</span><span class="tmd"><span class="tmv">${_rate}</span><span class="tmn">（${_hit}/${_dec}）</span></span>`;}else{_tm.innerHTML="";}}}
   renderDateNav(P);
   if(!P.venues||!P.venues.length){
     m.innerHTML=`<div class="note">${P.note||"この日の開催データがありません。"}</div>`;
@@ -472,7 +472,7 @@ function renderModel(rep){
 
 async function show(tab){
   cur=tab;
-  {const hc=document.getElementById("hdrChips");if(hc)hc.innerHTML="";const sc=document.getElementById("senCount");if(sc)sc.textContent="";const dn=document.getElementById("dateNav");if(dn)dn.innerHTML="";}
+  {const hc=document.getElementById("hdrChips");if(hc)hc.innerHTML="";const sc=document.getElementById("senCount");if(sc)sc.textContent="";const dn=document.getElementById("dateNav");if(dn)dn.innerHTML="";const _tm=document.getElementById("todayMeta");if(_tm)_tm.innerHTML="";}
   const map={sen:"Sen",today:"Today",acc:"Acc",model:"Model"};
   ["Sen","Today","Acc","Model"].forEach(t=>$("#tab"+t).classList.toggle("on",map[tab]===t));
   const m=$("#main");m.innerHTML='<div class="spin"></div>';
