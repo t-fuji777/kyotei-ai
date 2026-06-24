@@ -277,7 +277,7 @@ function _isOpen(r){
 }
 function raceCard(r,v,showVen){
   const top=r.picks[0]||{c:"-",p:0};
-  const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>`<div class="boatrow">${laneChip(b.lane)}<span class="bname">${b.name}</span><span class="bcls">${b.cls?`【${b.cls}】`:""}</span><span class="bp num">${pct(b.wp)}</span><span class="bst num">${(r.st&&r.st[b.lane]!=null)?r.st[b.lane]:""}</span><span class="bex num">${(r.ex&&r.ex[b.lane]!=null)?r.ex[b.lane]:""}</span></div>`).join("");
+  const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>`<div class="boatrow">${laneChip(b.lane)}<span class="bname">${b.name}</span><span class="bcls">${b.cls?`【${b.cls}】`:""}</span><span class="bp num">${pct(b.wp)}</span><span class="bst num">${(r.st_ex&&r.st_ex[b.lane]!=null)?r.st_ex[b.lane]:""}</span><span class="bex num">${(r.ex&&r.ex[b.lane]!=null)?r.ex[b.lane]:""}</span></div>`).join("");
   const picks=r.picks.slice(0,5).map((p,i)=>
     `<div class="pickrow"><span class="prank num">${i+1}</span>
       <span class="honmei">${comboChips(p.c,true)}</span>
