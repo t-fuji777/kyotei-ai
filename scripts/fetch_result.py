@@ -89,7 +89,14 @@ def parse_before(html):
         me = re.search(r'>(\d\.\d{2})<', tb)
         if me:
             ex[int(ml.group(1))] = float(me.group(1))
-    return {"ex": ex, "wind": wnum("風速"), "wave": wnum("波高")}
+    st = {}
+    m2 = re.search(r"<table[^>]*is-w238[\s\S]*?</table>", html)
+    if m2:
+        for tr in re.findall(r"<tr[\s\S]*?</tr>", m2.group(0)):
+            tm = re.search(r"is-type(\d)[\s\S]*?boatImage1Time[^>]*>\s*([F.\d]+)", tr)
+            if tm:
+                st[int(tm.group(1))] = tm.group(2)
+    return {"ex": ex, "st": st, "wind": wnum("風速"), "wave": wnum("波高")}
 
 
 def _probe_before(ymd, jcd, rno):
