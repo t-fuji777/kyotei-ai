@@ -133,6 +133,33 @@ def predict_live(ymd, meta, models, sengen):
     card = {(r["venue"], r["race_no"]): r for r in races}
     now = datetime.now(JST)
     LEAD, GRACE, CAP = 60, 4, 80
+    nbf = 0
+    for v in old["venues"]:
+        for r in v["races"]:
+            if nbf >= 25:
+                break
+            if r.get("st_ex"):
+                continue
+            mins = _mins_to_deadline(now, r.get("deadline"))
+            if mins is None or mins > LEAD:
+                continue
+            try:
+                bi = parse_before(fetch_before_html(ymd, v["code"], r["no"]))
+            except Exception:
+                continue
+            stx = bi.get("st", {})
+            if stx:
+                r["st_ex"] = {str(k): val for k, val in stx.items()}
+                if not r.get("ex") and len(bi.get("ex", {})) == 6:
+                    r["ex"] = bi["ex"]
+                nbf += 1
+            time.sleep(0.3)
+        if nbf >= 25:
+            break
+    if nbf:
+        old["live_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
+        write(old, ymd)
+        print(f"st_ex backfill: {nbf} races")
     live = {}
     targets = []
     n_fetch = 0
