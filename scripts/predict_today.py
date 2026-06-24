@@ -141,7 +141,7 @@ def predict_live(ymd, meta, models, sengen):
         for r in v["races"]:
             if r.get("result"):
                 continue
-            if r.get("live"):
+            if r.get("live") and r.get("st_ex"):
                 continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None or mins > LEAD or mins < -GRACE:
