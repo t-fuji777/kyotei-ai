@@ -134,7 +134,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .sec{font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.08em;margin:8px 0 6px}.racebody>.sec:first-child{margin-top:0}
 .boatrow{display:grid;grid-template-columns:auto minmax(0,1fr) 32px 46px 48px 32px 40px;align-items:center;column-gap:6px;padding:4px 0}
 .bname{min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bcls{justify-self:start;font-size:11px;color:var(--dim)}.bbar{height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}.bbar i{display:block;height:100%;background:var(--accent);border-radius:4px}.bst{justify-self:end;text-align:right;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}.bex{justify-self:end;text-align:right;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}.bhead{padding:1px 0 2px}.bh{justify-self:end;text-align:right;font-size:9px;color:var(--dim)}.fstart{color:#FF5252}
+.bcls{justify-self:start;font-size:11px;color:var(--dim)}.bbar{height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}.bbar i{display:block;height:100%;background:var(--accent);border-radius:4px}.bst{justify-self:end;text-align:right;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}.bex{justify-self:end;text-align:right;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}.sechead{padding:0;margin:8px 0 6px}.sectitle{grid-column:1/6;font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.08em}.bh{justify-self:end;text-align:right;font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.08em}.fstart{color:#FF5252}
 .bar{flex:0 0 96px;height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
 .bp{min-width:42px;text-align:right;font-size:12px;font-weight:700}
@@ -293,7 +293,7 @@ function raceCard(r,v,showVen){
       <div class="racebody">
         ${r.live?`<div class="sec">直前情報反映済 ${r.live_at||""} / 風 ${r.wind??"-"}m 波 ${r.wave??"-"}cm</div>`:""}
         ${axisTable(r)}
-        <div class="sec">勝率予測</div><div class="boatrow bhead"><span></span><span></span><span></span><span></span><span></span><span class="bh">ST</span><span class="bh">展示</span></div>${boats}
+        <div class="boatrow sechead"><span class="sectitle">勝率予測</span><span class="bh">ST</span><span class="bh">展示</span></div>${boats}
         <div class="sec">3連単 推奨買い目 TOP5</div>${picks}
       </div></div>`;
 }
