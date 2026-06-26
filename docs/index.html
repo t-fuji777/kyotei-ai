@@ -202,7 +202,7 @@ const laneChip=(n,s)=>`<span class="lane ${s?'s':''} l${n}">${n}</span>`;
 const comboChips=(c,s)=>c.split("-").map(n=>laneChip(n,s)).join("");
 const pct=p=>(p*100).toFixed(1)+"%";
 const wfmt=v=>v==null?"-":(Math.round(v*10)/10).toFixed(1);
-const windArrow=n=>(n==null||n>16)?"":`<span class="warr" style="transform:rotate(${(n-1)*22.5}deg)">↑</span>`;
+const windArrow=n=>(n==null||n>16)?"":` <span class="warr" style="transform:rotate(${(n-1)*22.5}deg)">↑</span>`;
 const confCls=p=>p>=0.9?"confA":p>=0.8?"confB":"confC";
 const top5p=r=>r.picks?r.picks.slice(0,5).reduce((a,p)=>a+(p.p||0),0):0;
 const cumCls=p=>p>=0.4?"confA":p>=0.35?"confB":"confC";
@@ -293,7 +293,7 @@ function raceCard(r,v,showVen){
         <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top5p(r))}">${Math.round(top5p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${(top.c===r.result.order)?"jbest":(t5hit(r)?"jhit":"jmiss")}">${(top.c===r.result.order)?"◎":(t5hit(r)?"〇":"✕")}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+r.result.status+'</span>':r.result?comboChips(r.result.order,true):(r.live?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
       </div>
       <div class="racebody">
-        ${r.weather?`<div class="sec">水面気象情報${(r.live_at||r.deadline)?" "+(r.live_at||r.deadline)+"現在":""}</div><div class="wxinfo">気温${wfmt(r.weather.temp)}℃　${r.weather.sky||""}　風速${r.weather.wspd??"-"}m ${windArrow(r.weather.wdir)}　水温${wfmt(r.weather.wtemp)}℃　波高${r.weather.wave??"-"}cm</div>`:""}
+        ${r.weather?`<div class="sec">水面気象情報${(r.live_at||r.deadline)?" "+(r.live_at||r.deadline)+"現在":""}</div><div class="wxinfo">気温${wfmt(r.weather.temp)}℃　${r.weather.sky||""}　風速${r.weather.wspd??"-"}m${windArrow(r.weather.wdir)}　水温${wfmt(r.weather.wtemp)}℃　波高${r.weather.wave??"-"}cm</div>`:""}
         ${axisTable(r)}
         <div class="boatrow sechead"><span class="sectitle">勝率予測</span><span class="bh">ST</span><span class="bh">展示</span></div>${boats}
         <div class="sec">3連単 推奨買い目 TOP5</div>${picks}
