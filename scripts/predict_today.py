@@ -138,7 +138,7 @@ def predict_live(ymd, meta, models, sengen):
         for r in v["races"]:
             if nbf >= 25:
                 break
-            if r.get("st_ex"):
+            if r.get("st_ex") and r.get("weather"):
                 continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None or mins > LEAD:
@@ -152,6 +152,8 @@ def predict_live(ymd, meta, models, sengen):
                 r["st_ex"] = {str(k): val for k, val in stx.items()}
                 if not r.get("ex") and len(bi.get("ex", {})) == 6:
                     r["ex"] = bi["ex"]
+                if bi.get("weather"):
+                    r["weather"] = bi["weather"]
                 nbf += 1
             time.sleep(0.3)
         if nbf >= 25:
@@ -215,6 +217,7 @@ def predict_live(ymd, meta, models, sengen):
                 r["st_ex"] = {str(k): val for k, val in bi.get("st", {}).items()}
                 r["wind"] = bi["wind"]
                 r["wave"] = bi["wave"]
+                r["weather"] = bi.get("weather")
                 r["live_at"] = now.strftime("%H:%M")
             n_upd += 1
     if n_upd:
