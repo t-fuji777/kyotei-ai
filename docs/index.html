@@ -485,7 +485,7 @@ async function show(tab){
       ensureDateList().then(()=>{if(cur==="today"){renderDateNav(viewPred||pred);}});
     }else if(tab==="acc"){
       if(!VIEW.acc) VIEW.acc=await fetchJSON("accuracy.json").catch(()=>null);
-      renderAcc(VIEW.acc);
+      renderAcc(VIEW.acc);window.scrollTo(0,0);
     }else{
       if(!VIEW.model) VIEW.model=await fetchJSON("model_report.json").catch(()=>null);
       renderModel(VIEW.model);
