@@ -96,7 +96,15 @@ def parse_before(html):
             tm = re.search(r"is-type(\d)[\s\S]*?boatImage1Time[^>]*>\s*([F.\d]+)", tr)
             if tm:
                 st[int(tm.group(1))] = tm.group(2)
-    return {"ex": ex, "st": st, "wind": wnum("風速"), "wave": wnum("波高")}
+    def wflt(title):
+        m = re.search(re.escape(title) + r'</span> <span class="weather1_bodyUnitLabelData">([\d.]+)', h)
+        return float(m.group(1)) if m else None
+    sky_m = re.search(r'is-weather\d+[\s\S]{0,80}?weather1_bodyUnitLabelTitle">([^<]+)<', h)
+    wdir_m = re.search(r'is-windDirection[\s\S]{0,120}?is-wind(\d+)', h)
+    weather = {"temp": wflt("気温"), "sky": sky_m.group(1).strip() if sky_m else None, "wspd": wnum("風速"), "wdir": int(wdir_m.group(1)) if wdir_m else None, "wtemp": wflt("水温"), "wave": wnum("波高")}
+    if all(v is None for v in weather.values()):
+        weather = None
+    return {"ex": ex, "st": st, "wind": wnum("風速"), "wave": wnum("波高"), "weather": weather}
 
 
 def _probe_before(ymd, jcd, rno):
