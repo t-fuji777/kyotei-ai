@@ -276,6 +276,7 @@ def _carryover(now):
 def main():
     now = datetime.now(JST)
     ymd = now.strftime("%Y%m%d")
+    results_only = "--results-only" in sys.argv
     _carryover(now)
     path = ROOT / "docs" / "predictions" / f"{ymd}.json"
     if not path.exists():
@@ -287,6 +288,12 @@ def main():
         return
 
     n_res = do_results(pred, now, ymd)
+    if results_only:
+        if n_res:
+            pred["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
+            write(pred, ymd)
+        print(f"results-only: results={n_res}")
+        return
     n_odds = do_odds(pred, now, ymd)
     n_morn = do_morning_odds(pred, now, ymd)
     n_name = do_racenames(pred, ymd)
