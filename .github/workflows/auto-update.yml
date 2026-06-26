@@ -23,28 +23,34 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
+          commit_push() {
+            git add docs/predictions
+            if git diff --cached --quiet; then echo "nothing to commit"; return; fi
+            git commit -m "$1"
+            for attempt in 1 2 3 4 5; do
+              git fetch origin main || true
+              git rebase -X theirs origin/main || { echo "rebase failed, syncing to remote"; git rebase --abort || true; git reset --hard origin/main || true; return; }
+              if git push origin HEAD:main; then echo "pushed (try $attempt)"; return; fi
+              echo "push rejected (try $attempt), retrying"
+              sleep 3
+            done
+            echo "push not completed this iteration (will retry next loop)"
+          }
           START=$(date +%s)
+          HEAVY_AT=0
           while true; do
             H=$(TZ=Asia/Tokyo date +%H)
             if [ "$H" -ge 23 ] || [ "$H" -lt 7 ]; then echo "outside active hours, exit"; exit 0; fi
-            python scripts/update_all.py || true
-            python scripts/predict_today.py --live || true
-            git add docs/predictions
-            if git diff --cached --quiet; then
-              echo "nothing to commit"
-            else
-              git commit -m "auto update"
-              pushed=0
-              for attempt in 1 2 3 4 5; do
-                git fetch origin main || true
-                git rebase -X theirs origin/main || { echo "rebase failed, syncing to remote"; git rebase --abort || true; git reset --hard origin/main || true; break; }
-                if git push origin HEAD:main; then echo "pushed (try $attempt)"; pushed=1; break; fi
-                echo "push rejected (try $attempt), retrying"
-                sleep 3
-              done
-              [ "$pushed" = 1 ] || echo "push not completed this iteration (will retry next loop)"
+            python scripts/update_all.py --results-only || true
+            commit_push "auto results"
+            NOW=$(date +%s)
+            if [ $(( NOW - HEAVY_AT )) -ge 300 ]; then
+              python scripts/update_all.py || true
+              python scripts/predict_today.py --live || true
+              commit_push "auto update"
+              HEAVY_AT=$(date +%s)
             fi
             E=$(( $(date +%s) - START ))
             if [ "$E" -ge 17400 ]; then echo "5h cap, exit for handoff"; exit 0; fi
-            sleep 300
+            sleep 90
           done
