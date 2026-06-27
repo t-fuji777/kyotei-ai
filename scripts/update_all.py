@@ -27,7 +27,7 @@ ODDS_BEFORE_MAX = 60    # only fetch odds for races within 60 min of deadline
 ODDS_AFTER = 5
 ODDS_MAX_PER_RUN = 12   # keep small so the whole run finishes in time
 # ---- morning provisional odds config ----
-MORNING_ODDS_MAX_PER_RUN = 60       # lightweight t3-only sweep, far-out races
+MORNING_ODDS_MAX_PER_RUN = 12       # lightweight t3-only sweep, far-out races
 MORNING_ODDS_FROM_HHMM = (7, 45)    # advance (zen-uri) odds appear ~7:45 JST
 SENGEN_REFETCH_MIN = 10             # re-fetch sengen candidates within N min of deadline (final 5x check)
 SENGEN_TOP5P_MIN = 0.40             # a race is a sengen candidate when top-5 cumulative prob >= this
@@ -217,7 +217,7 @@ def do_morning_odds(pred, now, ymd) -> int:
     return n
 
 
-RACENAME_MAX_PER_RUN = 60
+RACENAME_MAX_PER_RUN = 12
 
 
 def do_racenames(pred, ymd) -> int:
