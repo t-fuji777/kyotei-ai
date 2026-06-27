@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from fetch_result import fetch_result
+from fetch_result import fetch_result, fetch_before_html, parse_before
 from fetch_odds import fetch_odds, fetch_racename, fetch_t3
 
 ROOT = Path(__file__).parent.parent
@@ -273,6 +273,47 @@ def _carryover(now):
     print(f"carryover {yest}: results={ny}")
 
 
+ST_EX_LEAD = 25
+ST_EX_MAX_PER_RUN = 15
+
+
+def do_st_ex(pred, now, ymd) -> int:
+    # Lightweight exhibition (ST / lap-time / weather) backfill so the frequent
+    # results-only pass surfaces 展示反映 within ~90s instead of waiting for the
+    # slow live re-prediction pass. No ML; only beforeinfo fetches. Bounded by
+    # fetch count so it never blocks the results loop for long.
+    n = 0
+    tried = 0
+    for v in pred["venues"]:
+        for r in v["races"]:
+            if tried >= ST_EX_MAX_PER_RUN:
+                break
+            if r.get("result"):
+                continue
+            if r.get("st_ex") and r.get("weather"):
+                continue
+            mins = _mins_to_deadline(now, r.get("deadline"))
+            if mins is None or mins > ST_EX_LEAD:
+                continue
+            try:
+                bi = parse_before(fetch_before_html(ymd, v["code"], r["no"]))
+            except Exception:
+                continue
+            tried += 1
+            stx = bi.get("st", {})
+            if stx:
+                r["st_ex"] = {str(k): val for k, val in stx.items()}
+                if not r.get("ex") and len(bi.get("ex", {})) == 6:
+                    r["ex"] = bi["ex"]
+                if bi.get("weather"):
+                    r["weather"] = bi["weather"]
+                n += 1
+            time.sleep(0.3)
+        if tried >= ST_EX_MAX_PER_RUN:
+            break
+    return n
+
+
 def main():
     now = datetime.now(JST)
     ymd = now.strftime("%Y%m%d")
@@ -289,10 +330,11 @@ def main():
 
     n_res = do_results(pred, now, ymd)
     if results_only:
-        if n_res:
+        n_stx = do_st_ex(pred, now, ymd)
+        if n_res or n_stx:
             pred["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
             write(pred, ymd)
-        print(f"results-only: results={n_res}")
+        print(f"results-only: results={n_res} st_ex={n_stx}")
         return
     n_odds = do_odds(pred, now, ymd)
     n_morn = do_morning_odds(pred, now, ymd)
