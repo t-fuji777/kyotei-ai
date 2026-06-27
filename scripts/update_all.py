@@ -25,7 +25,7 @@ RESULT_MAX_PER_RUN = 150
 # ---- odds config ----
 ODDS_BEFORE_MAX = 60    # only fetch odds for races within 60 min of deadline
 ODDS_AFTER = 5
-ODDS_MAX_PER_RUN = 12   # keep small so the whole run finishes in time
+ODDS_MAX_PER_RUN = 8   # keep small so the whole run finishes in time
 # ---- morning provisional odds config ----
 MORNING_ODDS_MAX_PER_RUN = 12       # lightweight t3-only sweep, far-out races
 MORNING_ODDS_FROM_HHMM = (7, 45)    # advance (zen-uri) odds appear ~7:45 JST
