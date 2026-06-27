@@ -132,7 +132,7 @@ def predict_live(ymd, meta, models, sengen):
     races = parse_b(btxt, ymd)
     card = {(r["venue"], r["race_no"]): r for r in races}
     now = datetime.now(JST)
-    LEAD, GRACE, CAP = 60, 4, 80
+    LEAD, GRACE, CAP = 20, 4, 80
     nbf = 0
     for v in old["venues"]:
         for r in v["races"]:
