@@ -44,7 +44,7 @@ jobs:
             python scripts/update_all.py --results-only || true
             commit_push "auto results"
             NOW=$(date +%s)
-            if [ $(( NOW - HEAVY_AT )) -ge 300 ]; then
+            if [ $(( NOW - HEAVY_AT )) -ge 600 ]; then
               python scripts/update_all.py || true
               python scripts/predict_today.py --live || true
               commit_push "auto update"
@@ -52,5 +52,5 @@ jobs:
             fi
             E=$(( $(date +%s) - START ))
             if [ "$E" -ge 17400 ]; then echo "5h cap, exit for handoff"; exit 0; fi
-            sleep 90
+            sleep 60
           done
