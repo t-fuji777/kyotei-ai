@@ -43,7 +43,7 @@ except Exception:
     _SESS = None
 
 
-def http_get(url: str, timeout=30, retries=3, sleep=2.0) -> bytes:
+def http_get(url: str, timeout=12, retries=2, sleep=1.0) -> bytes:
     last = None
     for i in range(retries):
         try:
