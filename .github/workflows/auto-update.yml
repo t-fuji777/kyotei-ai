@@ -46,7 +46,10 @@ jobs:
             NOW=$(date +%s)
             if [ $(( NOW - HEAVY_AT )) -ge 600 ]; then
               python scripts/update_all.py || true
+              python scripts/update_all.py --results-only || true
+              commit_push "auto results"
               python scripts/predict_today.py --live || true
+              python scripts/update_all.py --results-only || true
               commit_push "auto update"
               HEAVY_AT=$(date +%s)
             fi
