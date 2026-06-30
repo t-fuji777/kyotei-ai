@@ -40,7 +40,9 @@ jobs:
           HEAVY_AT=0
           while true; do
             H=$(TZ=Asia/Tokyo date +%H)
-            if [ "$H" -ge 23 ] || [ "$H" -lt 7 ]; then echo "outside active hours, exit"; exit 0; fi
+            M=$(TZ=Asia/Tokyo date +%M)
+            HM=$((10#$H*60 + 10#$M))
+            if [ "$HM" -ge 1410 ] || [ "$HM" -lt 420 ]; then echo "outside active hours, exit"; exit 0; fi
             python scripts/update_all.py --results-only || true
             commit_push "auto results"
             NOW=$(date +%s)
