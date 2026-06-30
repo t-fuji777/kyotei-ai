@@ -41,6 +41,14 @@ def _mins_to_deadline(now, dl):
     return (t - now).total_seconds() / 60
 
 
+def _mins_to_deadline_on(now, dl, ymd):
+    if not dl or ":" not in dl:
+        return None
+    h, m = map(int, dl.split(":"))
+    base = datetime(int(ymd[:4]), int(ymd[4:6]), int(ymd[6:8]), h, m, tzinfo=now.tzinfo)
+    return (base - now).total_seconds() / 60
+
+
 def write(obj, ymd):
     d = ROOT / "docs" / "predictions"
     d.mkdir(parents=True, exist_ok=True)
@@ -80,7 +88,7 @@ def do_results(pred, now, ymd) -> int:
         for r in v["races"]:
             if r.get("result"):
                 continue
-            mins = _mins_to_deadline(now, r.get("deadline"))
+            mins = _mins_to_deadline_on(now, r.get("deadline"), ymd)
             if mins is None or mins > -GRACE_MIN:
                 continue
             if tried >= RESULT_MAX_PER_RUN:
