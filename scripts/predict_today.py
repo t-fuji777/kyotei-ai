@@ -4,6 +4,7 @@
 import argparse
 import glob
 import json
+import os
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -32,7 +33,10 @@ def load_models():
     meta = json.loads((ROOT / "data" / "model" / "meta.json").read_text())
     models = {t: lgb.Booster(model_file=str(ROOT / "data" / "model" / f"model_{t}.txt"))
               for t in ("win", "top2", "top3")}
-    sengen = {"p2_min": 0.89, "venues": list(range(1, 25)), **meta.get("sengen", {})}
+    # sengen(厳選)判定: 3連単上位5点の合算確率(top5p) >= top5_min。
+    # UI(docs/index.html top5p/sengenOk)・accuracy(update_results.py)・
+    # オッズ再取得(fetch_odds_only.py)と同一定義。
+    sengen = {"top5_min": 0.40, "venues": list(range(1, 25)), **meta.get("sengen", {})}
     return meta, models, sengen
 
 
@@ -89,7 +93,10 @@ def predict_races(tgt: pd.DataFrame, hist, fan, models, sengen):
                  for (a, b, c), v in ranked]
         fav = int(np.argmax(pw))
         fav_p2 = float(g["p_top2"].to_numpy()[fav])
-        is_sen = bool(fav_p2 >= sengen["p2_min"] and int(venue) in sengen["venues"])
+        # is_sen(厳選)は UI(top5p)/accuracy/オッズ再取得と同じ定義に統一:
+        # 3連単上位5点(picks先頭5件)の合算確率 >= sengen["top5_min"]
+        top5p = sum(p["p"] for p in picks[:5])
+        is_sen = bool(top5p >= sengen["top5_min"] and int(venue) in sengen["venues"])
         n_sengen += int(is_sen)
         boats = []
         for _, x in g.iterrows():
@@ -145,7 +152,9 @@ def predict_live(ymd, meta, models, sengen):
                 continue
             try:
                 bi = parse_before(fetch_before_html(ymd, v["code"], r["no"]))
-            except Exception:
+            except Exception as e:
+                print(f"live st_ex {v['code']}-{r['no']}R fail: {e}")
+                time.sleep(0.3)
                 continue
             stx = bi.get("st", {})
             if stx:
@@ -268,6 +277,19 @@ def _merge_existing(out, ymd):
             out[k] = old[k]
 
 
+def _existing_has_venues(ymd) -> bool:
+    """既存の{ymd}.jsonがvenuesを持つか確認(朝から蓄積した予測·結果·オッズの
+    全損防止用)。読めない/存在しない場合はFalse。"""
+    fp = ROOT / "docs" / "predictions" / f"{ymd}.json"
+    if not fp.exists():
+        return False
+    try:
+        existing = json.loads(fp.read_text())
+    except Exception:
+        return False
+    return bool(existing.get("venues"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=datetime.now(JST).strftime("%Y%m%d"))
@@ -286,15 +308,21 @@ def main():
     out = {"date": ymd,
            "generated_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M JST"),
            "model_trained_at": meta["trained_at"],
-           "sengen_cfg": {"p2_min": sengen["p2_min"], "venues": sengen["venues"]},
+           "sengen_cfg": {"top5_min": sengen["top5_min"], "venues": sengen["venues"]},
            "venues": []}
     if btxt is None:
+        if _existing_has_venues(ymd):
+            print(f"live: B(番組表)取得不可だが既存の{ymd}.jsonにvenuesあり; 上書きせずskip")
+            return
         out["note"] = "本日の番組表が取得できませんでした(開催なし or 未公開)"
         write(out, ymd)
         return
 
     races = parse_b(btxt, ymd)
     if not races:
+        if _existing_has_venues(ymd):
+            print(f"live: 番組表の解析結果が空だが既存の{ymd}.jsonにvenuesあり; 上書きせずskip")
+            return
         out["note"] = "番組表の解析結果が空でした"
         write(out, ymd)
         return
@@ -320,17 +348,26 @@ def main():
           f"races={sum(len(v['races']) for v in out['venues'])} sengen={n_sengen}")
 
 
+def _atomic_write_text(path: Path, txt: str) -> None:
+    """一時ファイルに書いてos.replaceで差し替える原子化write。
+    途中クラッシュで破損ファイルが残ることを防ぐ(エンコーディング挙動は
+    write_text無指定のまま変更しない)。"""
+    tmp = path.with_suffix(path.suffix + f".tmp{os.getpid()}")
+    tmp.write_text(txt)
+    os.replace(tmp, path)
+
+
 def write(obj, ymd, is_today=None):
     d = ROOT / "docs" / "predictions"
     d.mkdir(parents=True, exist_ok=True)
     txt = json.dumps(obj, ensure_ascii=False)
-    (d / f"{ymd}.json").write_text(txt)
+    _atomic_write_text(d / f"{ymd}.json", txt)
     # latest.json must only ever hold today's file; writing it for a past-date
     # (re)generation would roll the live site back to that day.
     if is_today is None:
         is_today = (ymd == datetime.now(JST).strftime("%Y%m%d"))
     if is_today:
-        (d / "latest.json").write_text(txt)
+        _atomic_write_text(d / "latest.json", txt)
 
 
 if __name__ == "__main__":
