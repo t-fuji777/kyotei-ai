@@ -192,6 +192,8 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
 </nav>
 <script>
 const $=s=>document.querySelector(s);
+// 厳選: モデル信頼度が高く水面が安定した会場の3連単。閾値/除外会場は過去実績のtrain/test検証で決定(scripts/common.py とミラー)。
+const SENGEN_TOP5P_MIN=0.42, SENGEN_EXCLUDE=[3,4,14];
 const VIEW={today:null,acc:null,model:null};
 let cur="today", pred=null, selVenue=null, todayMode="time";
 let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false;
@@ -228,7 +230,7 @@ function setHeader(p){
 }
 
 function axisTable(r){ return ""; }
-function sengenOk(r){if(top5p(r)<0.40)return false;if(r.odds&&r.odds.prov)return true;return r.picks.slice(0,5).every(function(p){var o=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;return o==null||o>=5.0;});}
+function sengenOk(r,vcode){return top5p(r)>=SENGEN_TOP5P_MIN && SENGEN_EXCLUDE.indexOf(vcode)<0;}
 function fitRtype(){document.querySelectorAll(".rtype").forEach(el=>{el.style.fontSize="";let fs=12,g=0;while(el.scrollWidth>el.clientWidth+0.5&&fs>8&&g<24){fs-=0.5;el.style.fontSize=fs+"px";g++;}});}
 function renderSengen(){
   const m=$("#main");
@@ -236,11 +238,11 @@ function renderSengen(){
   setHeader();
   const cfg=pred.sengen_cfg||{};
   const list=[];
-  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(sengenOk(r))list.push({v,r})}));
+  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(sengenOk(r,v.code))list.push({v,r})}));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   {const sc=$("#senCount");if(sc){const dec=list.filter(x=>x.r.result&&!x.r.result.status).length;const hit=list.filter(x=>t5hit(x.r)).length;const rate=dec?(hit/dec*100).toFixed(1)+'％':'ー％';sc.innerHTML=`<span class="ssl"><span class="ssk">本日</span>：</span><span class="ssv">${list.length}件</span><span class="ssl"><span class="ssk">的中</span>：</span><span class="ssv">${hit}件</span><span class="ssl"><span class="ssk">的中率</span>：</span><span class="ssv">${rate}</span>`;}}
   if(!list.length){
-    m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>条件(3連単 上位5点の的中率40%以上)を満たすレースのみ表示します。</div>`;
+    m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>モデル信頼度が高く水面が安定した会場の3連単のみを厳選しています。</div>`;
     return;
   }
   const _cf=({v,r})=>{
@@ -417,7 +419,7 @@ function todayStats(){
     n++;if(x.hit_win)w++;const p5=top5p(r);tp+=p5;
     if(r.picks&&r.picks[0]&&r.picks[0].c===x.order)t1++;
     if(t5hit(r)){t6++;rt+=(x.pay3t||0)}st+=500;
-    if(sengenOk(r)){sn++;sp+=p5;if(t5hit(r))sh++}}
+    if(sengenOk(r,v.code)){sn++;sp+=p5;if(t5hit(r))sh++}}
   if(!n) return null;
   const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
   const row=`<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
@@ -462,7 +464,7 @@ function renderModel(rep){
     <div class="kv"><span>学習日時</span><span class="num">${rep.trained_at||"-"}</span></div>
     <div class="kv"><span>学習期間</span><span class="num">${(rep.period||[]).join(" - ")}</span></div>
     <div class="kv"><span>学習行数</span><span class="num">${(rep.rows_train||0).toLocaleString()}</span></div>
-    <div class="kv"><span>厳選条件</span><span class="num">3連単 上位5点の的中率${rep.sengen&&rep.sengen.top5_min!=null?Math.round(rep.sengen.top5_min*100):"-"}%以上</span></div>
+    <div class="kv"><span>厳選条件</span><span class="num">信頼度上位(top5p≥${Math.round(SENGEN_TOP5P_MIN*100)}%)かつ安定水面の3連単</span></div>
     <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
     <div class="kv"><span>1着的中率</span><span class="num">${pct(tm.win_hit_rate||0)} (基準 ${pct(bm.win_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 予測</span><span class="num">${pct(tm.top1_hit_rate||0)} (基準 ${pct(bm.top1_hit_rate||0)})</span></div>

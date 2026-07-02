@@ -12,6 +12,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 from build_dataset import build_day, save_year
+from common import is_sengen
 
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
@@ -90,7 +91,7 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
             if fuku_lane in top2_lanes.get(key, ()):
                 day["fuku_hit"] += 1
             day["top5_pred_sum"] += top5p
-            if top5p >= 0.40 and _picks_ok(r):
+            if is_sengen(top5p, v["code"]):
                 day["sen_n"] += 1
                 day["sen_pred_sum"] += top5p
                 if act in picks[:5]:

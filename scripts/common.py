@@ -18,6 +18,22 @@ VENUES = {
 BASE = "https://www1.mbrace.or.jp/od2"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
+# 厳選(sengen)判定: モデル信頼度が高く水面が安定した会場の3連単を厳選する。
+# 閾値0.42と除外会場{3,4,14}は過去実績のtrain/test検証で決定(現行44.5%->検証52.8%)。
+SENGEN_TOP5P_MIN = 0.42
+SENGEN_EXCLUDE_VENUES = frozenset({3, 4, 14})  # 江戸川/平和島/鳴門(荒れ水面)
+
+
+def sengen_top5p(picks):
+    return sum((p.get("p") or 0) for p in (picks or [])[:5])
+
+
+def is_sengen(top5p, venue):
+    try:
+        return top5p >= SENGEN_TOP5P_MIN and int(venue) not in SENGEN_EXCLUDE_VENUES
+    except Exception:
+        return False
+
 
 def zen2han(s: str) -> str:
     """全角英数字を半角化(カナ・漢字は維持)"""
