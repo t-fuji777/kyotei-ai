@@ -435,11 +435,11 @@ function renderAcc(acc){
   const m=$("#main");
   const td=todayStats();
   const accRow=(label,X,st)=>{
-    const R=X.races||0,t1=X.top1_hit||0,t5=X.top5_hit||0,sn=X.sen_n||0,sh=X.sen_hit||0;
+    const R=X.races||0,t1=X.top1_hit||0,t5=X.top5_hit||0,sn=X.sen_n||0,sh=X.sen_hit||0,sn2=X.super_n||0,sh2=X.super_hit||0;
     const roi=X.stake5?Math.round((X.return5||0)/X.stake5*100):0;
     const cell=(num,den)=>den?`${num}<br><span style="color:var(--dim);font-size:11px">(${(num/den*100).toFixed(1)}%)</span>`:"-";
     const scell=(h,n)=>n?`${h}/${n}<br><span style="color:var(--dim);font-size:11px">(${(h/n*100).toFixed(1)}%)</span>`:"-";
-    return `<tr${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t1,R)}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${roi}%</td></tr>`;
+    return `<tr${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t1,R)}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${scell(sh2,sn2)}</td><td class="num">${roi}%</td></tr>`;
   };
   const days=(acc&&acc.days)?acc.days:[];
   const t0=(acc&&acc.total)?acc.total:null;
@@ -464,7 +464,7 @@ function renderAcc(acc){
       ${tierLine('超厳選',tt.super_hit||0,tt.super_n||0)}
     </div>`;
   m.innerHTML=`${summary}<div class="pad"><table class="acctbl">
-      <tr><th>日付</th><th>R数</th><th>3連単</th><th>TOP5</th><th>厳選</th><th>回収率</th></tr>${totalRow}${todayRow}${dayRows}
+      <tr><th>日付</th><th>R数</th><th>3連単</th><th>TOP5</th><th>厳選</th><th>超厳選</th><th>回収率</th></tr>${totalRow}${todayRow}${dayRows}
     </table></div>`;
 }
 
