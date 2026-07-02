@@ -19,8 +19,11 @@ BASE = "https://www1.mbrace.or.jp/od2"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 # 厳選(sengen)判定: モデル信頼度が高く水面が安定した会場の3連単を厳選する。
-# 閾値0.42と除外会場{3,4,14}は過去実績のtrain/test検証で決定(現行44.5%->検証52.8%)。
-SENGEN_TOP5P_MIN = 0.42
+# 閾値と除外会場は2021-2026全レースのtrain/valid/test検証で決定(valid選定→test検証)。
+# 大規模バックテスト(test約27000レース)で外部条件(天気/風/時間/会場/級別/季節/曜日)は
+# 上乗せ信号にならず、唯一効くのはモデル自身の信頼度top5p。0.48でtest的中約60.7%(約3R/日)。
+# 閾値を上げると的中↑件数↓(0.45:58%/6R, 0.50:62%/1.6R, 0.55:71%/0.4R)。
+SENGEN_TOP5P_MIN = 0.48
 SENGEN_EXCLUDE_VENUES = frozenset({3, 4, 14})  # 江戸川/平和島/鳴門(荒れ水面)
 
 
