@@ -28,12 +28,15 @@ jobs:
           python-version: "3.12"
       - run: pip install lhafile pandas requests
       - name: build year
+        env:
+          IN_START: ${{ github.event.inputs.start }}
+          IN_END: ${{ github.event.inputs.end }}
         run: |
           python - << 'PY'
-          import subprocess
+          import os, subprocess
           y = int("${{ matrix.year }}")
-          s = "${{ github.event.inputs.start }}"
-          e = "${{ github.event.inputs.end }}"
+          s = os.environ["IN_START"]
+          e = os.environ["IN_END"]
           cs = max(int(s), int(f"{y}0101"))
           ce = min(int(e), int(f"{y}1231"))
           if cs > ce:
@@ -65,10 +68,13 @@ jobs:
       - name: fetch fan data
         run: python scripts/fetch_fan.py --start ${{ github.event.inputs.start }}
       - name: commit
+        env:
+          IN_START: ${{ github.event.inputs.start }}
+          IN_END: ${{ github.event.inputs.end }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add data/races data/fan
-          git diff --cached --quiet || git commit -m "backfill ${{ github.event.inputs.start }}-${{ github.event.inputs.end }}"
+          git diff --cached --quiet || git commit -m "backfill $IN_START-$IN_END"
           git pull --rebase
           git push

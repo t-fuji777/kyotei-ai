@@ -21,13 +21,15 @@ jobs:
           python-version: "3.12"
       - run: pip install lhafile
       - name: fetch raw files
+        env:
+          IN_DATES: ${{ github.event.inputs.dates }}
         run: |
           mkdir -p sample_raw
           python - << 'PY'
-          import sys, time
+          import os, sys, time
           sys.path.insert(0, "scripts")
           from common import download_day
-          dates = "${{ github.event.inputs.dates }}".split(",")
+          dates = os.environ["IN_DATES"].split(",")
           for ymd in dates:
               ymd = ymd.strip()
               for kind in ("B", "K"):

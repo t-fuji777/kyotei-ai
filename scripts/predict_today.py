@@ -226,6 +226,48 @@ def predict_live(ymd, meta, models, sengen):
     print(f"live update: fetched={n_fetch} ready={len(targets)} updated={n_upd}")
 
 
+# race-level fields holding observed data (results/odds/exhibition), attached by
+# the update loop -- these must survive a same-day regeneration (daily's retrain).
+_OBSERVED_FIELDS = ("result", "odds", "st_ex", "ex", "weather", "wind", "wave")
+# model-output fields; never re-issue them for a race already gone live
+# (exhibition-based) or finished (its result was scored against those picks).
+_PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "live", "live_at")
+
+
+def _merge_existing(out, ymd):
+    """Carry accumulated per-race data forward from an existing same-day file so
+    regenerating today's prediction (daily's 2nd/3rd run or the retrained model)
+    never discards results/odds/exhibition the update loop attached, nor
+    retroactively rewrites picks a finished/live race was already scored on."""
+    fp = ROOT / "docs" / "predictions" / f"{ymd}.json"
+    if not fp.exists():
+        return
+    try:
+        old = json.loads(fp.read_text())
+    except Exception:
+        return
+    idx = {(v["code"], r["no"]): r
+           for v in old.get("venues", []) for r in v.get("races", [])}
+    for v in out["venues"]:
+        for r in v["races"]:
+            o = idx.get((v["code"], r["no"]))
+            if not o:
+                continue
+            for k in _OBSERVED_FIELDS:
+                if k in o:
+                    r[k] = o[k]
+            if o.get("rn_full"):
+                r["type"] = o.get("type", r["type"])
+                r["rn_full"] = True
+            if o.get("live") or o.get("result"):
+                for k in _PICK_FIELDS:
+                    if k in o:
+                        r[k] = o[k]
+    for k in ("results_updated_at", "odds_updated_at", "live_updated_at"):
+        if k in old:
+            out[k] = old[k]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=datetime.now(JST).strftime("%Y%m%d"))
@@ -272,17 +314,23 @@ def main():
         out["venues"].append({"code": vcode, "name": VENUES[vcode],
                               "day_n": day_n, "is_final": is_final,
                               "races": vraces})
+    _merge_existing(out, ymd)
     write(out, ymd)
     print(f"predicted: venues={len(out['venues'])} "
           f"races={sum(len(v['races']) for v in out['venues'])} sengen={n_sengen}")
 
 
-def write(obj, ymd):
+def write(obj, ymd, is_today=None):
     d = ROOT / "docs" / "predictions"
     d.mkdir(parents=True, exist_ok=True)
     txt = json.dumps(obj, ensure_ascii=False)
     (d / f"{ymd}.json").write_text(txt)
-    (d / "latest.json").write_text(txt)
+    # latest.json must only ever hold today's file; writing it for a past-date
+    # (re)generation would roll the live site back to that day.
+    if is_today is None:
+        is_today = (ymd == datetime.now(JST).strftime("%Y%m%d"))
+    if is_today:
+        (d / "latest.json").write_text(txt)
 
 
 if __name__ == "__main__":

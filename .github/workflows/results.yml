@@ -22,7 +22,13 @@ jobs:
           python-version: "3.12"
       - run: pip install requests lhafile pandas numpy lightgbm
       - name: results update
-        run: python scripts/fetch_results_only.py ${{ inputs.date }}
+        env:
+          IN_DATE: ${{ inputs.date }}
+        run: |
+          if [ -n "$IN_DATE" ] && ! [[ "$IN_DATE" =~ ^[0-9]{8}$ ]]; then
+            echo "invalid date '$IN_DATE' (expected YYYYMMDD)"; exit 1
+          fi
+          python scripts/fetch_results_only.py "$IN_DATE"
       - name: live re-predict (tenji)
         continue-on-error: true
         run: python scripts/predict_today.py --live
