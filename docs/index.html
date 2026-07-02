@@ -193,7 +193,7 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
 <script>
 const $=s=>document.querySelector(s);
 // 厳選: モデル信頼度が高く水面が安定した会場の3連単。閾値/除外会場は過去実績のtrain/test検証で決定(scripts/common.py とミラー)。
-const SENGEN_TOP5P_MIN=0.48, SENGEN_EXCLUDE=[3,4,14];
+const SENGEN_TOP5P_MIN=0.55, SENGEN_EXCLUDE=[3,4,14];
 const VIEW={today:null,acc:null,model:null};
 let cur="today", pred=null, selVenue=null, todayMode="time";
 let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false;
