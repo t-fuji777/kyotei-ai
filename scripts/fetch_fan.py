@@ -40,6 +40,9 @@ def periods_between(start_ymd: str, end_ymd: str):
     return out
 
 
+MIN_ROWS = 1000  # 全国選手数は通常1600台。これを大きく下回る=レイアウト崩れ等の異常とみなす
+
+
 def fetch_one(name: str, year: int, ki: int, outdir: Path) -> bool:
     dst = outdir / f"fan_{name[3:]}.csv.gz"
     if dst.exists():
@@ -50,10 +53,19 @@ def fetch_one(name: str, year: int, ki: int, outdir: Path) -> bool:
     except Exception as e:
         print(f"{name}: download failed ({e})")
         return False
-    import lhafile
-    f = lhafile.Lhafile(io.BytesIO(data))
-    raw = f.read(f.infolist()[0].filename)
-    rows = parse_file(raw)
+    try:
+        import lhafile
+        f = lhafile.Lhafile(io.BytesIO(data))
+        raw = f.read(f.infolist()[0].filename)
+        rows = parse_file(raw)
+    except Exception as e:
+        print(f"{name}: extract/parse failed ({e})")
+        return False
+    if len(rows) < MIN_ROWS:
+        # rows不足(レイアウト変更等)。ヘッダのみのcsvを保存すると次回以降 dst.exists() で
+        # 永久スキップされてしまうため、保存せず失敗扱いにして次回再取得を可能にする。
+        print(f"{name}: too few rows ({len(rows)} < {MIN_ROWS}), not saving")
+        return False
     cols = [n for n, _, _ in LAYOUT]
     with gzip.open(dst, "wt", encoding="utf-8", newline="") as fp:
         w = csv.writer(fp)

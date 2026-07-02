@@ -194,13 +194,20 @@ def update_results(pred, now, ymd) -> int:
             if not res:
                 print(f"  result {v['code']}-{r['no']}R: not fixed yet")
                 continue
+            if "order" not in res:
+                r["result"] = res
+                n_res += 1
+                print(f"  result {v['code']}-{r['no']}R: {res.get('status', '?')}")
+                continue
             order = res["order"]
             top2 = set(map(int, order.split("-")[:2]))
             fuku_lane = r.get("fuku", {}).get("lane")
             picks = [p["c"] for p in r.get("picks", [])]
             boats = r.get("boats", [])
-            top_boat = max(boats, key=lambda b: b["wp"])["lane"] if boats else None
-            res["hit_win"] = top_boat == int(order.split("-")[0])
+            # 本命は保存済みの非丸めargmax(fuku.lane)で統一(do_results/evaluateと同一基準)。
+            top_boat = fuku_lane if fuku_lane is not None else (
+                max(boats, key=lambda b: b["wp"])["lane"] if boats else None)
+            res["hit_win"] = top_boat is not None and top_boat == int(order.split("-")[0])
             res["hit_fuku"] = fuku_lane in top2
             res["hit_t1"] = bool(picks) and picks[0] == order
             res["hit_t6"] = order in picks[:6]
