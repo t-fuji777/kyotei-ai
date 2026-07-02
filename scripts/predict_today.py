@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import download_day, parse_b, VENUES, is_sengen, SENGEN_TOP5P_MIN, SENGEN_EXCLUDE_VENUES
+from common import download_day, parse_b, VENUES, is_sengen, SENGEN_TOP5P_MIN, SENGEN_EXCLUDE_VENUES, is_super_sengen, SENGEN_SUPER_MIN
 from features import add_features, load_fan, FEATURES
 from train import trifecta_probs
 from fetch_result import fetch_before_html, parse_before
@@ -93,10 +93,12 @@ def predict_races(tgt: pd.DataFrame, hist, fan, models, sengen):
                  for (a, b, c), v in ranked]
         fav = int(np.argmax(pw))
         fav_p2 = float(g["p_top2"].to_numpy()[fav])
-        # is_sen(厳選)は common.is_sengen()に統一:
-        # 3連単上位5点(picks先頭5件)の合算確率 >= SENGEN_TOP5P_MIN かつ除外会場でない
+        # is_sen(厳選)/is_super(超厳選)は common.is_sengen()/is_super_sengen()に統一:
+        # 3連単上位5点(picks先頭5件)の合算確率 >= 閾値 かつ除外会場でない
+        # (超厳選は通常厳選の部分集合)
         top5p = sum(p["p"] for p in picks[:5])
         is_sen = is_sengen(top5p, venue)
+        is_super = is_super_sengen(top5p, venue)
         n_sengen += int(is_sen)
         boats = []
         for _, x in g.iterrows():
@@ -110,7 +112,7 @@ def predict_races(tgt: pd.DataFrame, hist, fan, models, sengen):
                     "conf": confidence(picks[0]["p"]),
                     "fuku": {"lane": int(g["lane"].to_numpy()[fav]),
                              "p": round(fav_p2, 3)},
-                    "sengen": is_sen}
+                    "sengen": is_sen, "super": is_super}
         by_venue.setdefault(int(venue), []).append(race_obj)
     return by_venue, n_sengen
 
@@ -219,6 +221,7 @@ def predict_live(ymd, meta, models, sengen):
             r["conf"] = nr["conf"]
             r["fuku"] = nr["fuku"]
             r["sengen"] = nr["sengen"]
+            r["super"] = nr["super"]
             r["live"] = True
             bi = live.get((vc2, nr["no"]))
             if bi:
@@ -240,7 +243,7 @@ def predict_live(ymd, meta, models, sengen):
 _OBSERVED_FIELDS = ("result", "odds", "st_ex", "ex", "weather", "wind", "wave")
 # model-output fields; never re-issue them for a race already gone live
 # (exhibition-based) or finished (its result was scored against those picks).
-_PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "live", "live_at")
+_PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "super", "live", "live_at")
 
 
 def _merge_existing(out, ymd):
@@ -308,7 +311,8 @@ def main():
     out = {"date": ymd,
            "generated_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M JST"),
            "model_trained_at": meta["trained_at"],
-           "sengen_cfg": {"top5_min": SENGEN_TOP5P_MIN, "exclude_venues": sorted(SENGEN_EXCLUDE_VENUES)},
+           "sengen_cfg": {"top5_min": SENGEN_TOP5P_MIN, "super_min": SENGEN_SUPER_MIN,
+                          "exclude_venues": sorted(SENGEN_EXCLUDE_VENUES)},
            "venues": []}
     if btxt is None:
         if _existing_has_venues(ymd):
@@ -332,6 +336,7 @@ def main():
     fan = load_fan(ROOT / "data" / "fan")
     print(f"hist rows={len(hist)}, fan={len(fan)}, target races={len(races)}", flush=True)
     by_venue, n_sengen = predict_races(tgt, hist, fan, models, sengen)
+    n_super = sum(int(r.get("super", False)) for vraces in by_venue.values() for r in vraces)
 
     yusho = "\u512a\u52dd"  # 優勝 (championship final)
     for vcode in sorted(by_venue):
@@ -345,7 +350,7 @@ def main():
     _merge_existing(out, ymd)
     write(out, ymd)
     print(f"predicted: venues={len(out['venues'])} "
-          f"races={sum(len(v['races']) for v in out['venues'])} sengen={n_sengen}")
+          f"races={sum(len(v['races']) for v in out['venues'])} sengen={n_sengen} super={n_super}")
 
 
 def _atomic_write_text(path: Path, txt: str) -> None:
