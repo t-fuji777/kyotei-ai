@@ -7,6 +7,7 @@ Why unified: odds fetching is slow (~10-15s/race from Actions IPs), and while it
 runs a separate results workflow would commit the same latest.json, causing
 merge conflicts on push. Doing both here and committing once avoids that."""
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone, timedelta
@@ -49,12 +50,20 @@ def _mins_to_deadline_on(now, dl, ymd):
     return (base - now).total_seconds() / 60
 
 
+def _atomic_write_text(path: Path, txt: str) -> None:
+    """Write text to path atomically via a temp file + os.replace, so a mid-write
+    crash never leaves a truncated/corrupt file behind."""
+    tmp = path.with_suffix(path.suffix + f".tmp{os.getpid()}")
+    tmp.write_text(txt)
+    os.replace(tmp, path)
+
+
 def write(obj, ymd):
     d = ROOT / "docs" / "predictions"
     d.mkdir(parents=True, exist_ok=True)
     txt = json.dumps(obj, ensure_ascii=False)
-    (d / f"{ymd}.json").write_text(txt)
-    (d / "latest.json").write_text(txt)
+    _atomic_write_text(d / f"{ymd}.json", txt)
+    _atomic_write_text(d / "latest.json", txt)
 
 
 def _axis_from_odds(nr, odds):
@@ -81,7 +90,7 @@ def _axis_from_odds(nr, odds):
     }
 
 
-def do_results(pred, now, ymd) -> int:
+def do_results(pred, now, ymd, max_fetch=RESULT_MAX_PER_RUN) -> int:
     n = 0
     tried = 0
     for v in pred["venues"]:
@@ -91,7 +100,7 @@ def do_results(pred, now, ymd) -> int:
             mins = _mins_to_deadline_on(now, r.get("deadline"), ymd)
             if mins is None or mins > -GRACE_MIN:
                 continue
-            if tried >= RESULT_MAX_PER_RUN:
+            if tried >= max_fetch:
                 break
             tried += 1
             res = fetch_result(ymd, v["code"], r["no"])
@@ -108,8 +117,11 @@ def do_results(pred, now, ymd) -> int:
             fuku_lane = r.get("fuku", {}).get("lane")
             picks = [p["c"] for p in r.get("picks", [])]
             boats = r.get("boats", [])
-            top_boat = max(boats, key=lambda b: b["wp"])["lane"] if boats else None
-            res["hit_win"] = top_boat == int(order.split("-")[0])
+            # 本命は保存済みの非丸めargmax(fuku.lane)を使う。boats.wp(3桁丸め)からの
+            # 再計算はしない(丸め同値時に若い枠番優先バイアスが生じ複勝判定とも食い違うため)。
+            top_boat = fuku_lane if fuku_lane is not None else (
+                max(boats, key=lambda b: b["wp"])["lane"] if boats else None)
+            res["hit_win"] = top_boat is not None and top_boat == int(order.split("-")[0])
             res["hit_fuku"] = fuku_lane in top2
             res["hit_t1"] = bool(picks) and picks[0] == order
             res["hit_t6"] = order in picks[:6]
@@ -136,6 +148,8 @@ def do_odds(pred, now, ymd) -> int:
     targets = []
     for v in pred["venues"]:
         for r in v["races"]:
+            if r.get("result"):
+                continue
             o = r.get("odds") or {}
             if o.get("final"):
                 continue
@@ -256,34 +270,54 @@ def do_racenames(pred, ymd) -> int:
     return updated
 
 
-def _carryover(now):
-    yest = (now - timedelta(days=1)).strftime("%Y%m%d")
+CARRYOVER_DAYS = 3                  # look back this many days (excluding today) for stale results
+CARRYOVER_MAX_PER_RUN = RESULT_MAX_PER_RUN  # total fetches across all carryover days this run
+
+
+def _carryover_one(now, ymd, budget):
+    """Backfill missing results for a single past day by reusing do_results
+    (which anchors deadlines to `ymd`), bounded by `budget` fetches. Returns
+    the number of results fetched."""
     d = ROOT / "docs" / "predictions"
-    yp = d / f"{yest}.json"
-    if not yp.exists():
-        return
+    yp = d / f"{ymd}.json"
+    if not yp.exists() or budget <= 0:
+        return 0
     try:
         py = json.loads(yp.read_text())
     except Exception:
-        return
+        return 0
     if not py.get("venues"):
-        return
+        return 0
     if not any(not r.get("result") for v in py["venues"] for r in v.get("races", [])):
-        return
-    ny = do_results(py, now, yest)
-    if not ny:
-        return
+        return 0
+    n = do_results(py, now, ymd, max_fetch=budget)
+    if not n:
+        return 0
     py["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
     txt = json.dumps(py, ensure_ascii=False)
-    yp.write_text(txt)
+    _atomic_write_text(yp, txt)
     lp = d / "latest.json"
     if lp.exists():
         try:
-            if json.loads(lp.read_text()).get("date") == yest:
-                lp.write_text(txt)
+            if json.loads(lp.read_text()).get("date") == ymd:
+                _atomic_write_text(lp, txt)
         except Exception:
             pass
-    print(f"carryover {yest}: results={ny}")
+    print(f"carryover {ymd}: results={n}")
+    return n
+
+
+def _carryover(now):
+    """Backfill missing results for the last CARRYOVER_DAYS days (excluding
+    today, which the main pass handles). Shares a single fetch budget across
+    all days so overall load stays within the existing RESULT_MAX_PER_RUN
+    envelope even when several past days still have gaps."""
+    budget = CARRYOVER_MAX_PER_RUN
+    for back in range(1, CARRYOVER_DAYS + 1):
+        if budget <= 0:
+            break
+        ymd = (now - timedelta(days=back)).strftime("%Y%m%d")
+        budget -= _carryover_one(now, ymd, budget)
 
 
 ST_EX_LEAD = 25
@@ -297,6 +331,7 @@ def do_st_ex(pred, now, ymd) -> int:
     # fetch count so it never blocks the results loop for long.
     n = 0
     tried = 0
+    consec_fail = 0
     for v in pred["venues"]:
         for r in v["races"]:
             if tried >= ST_EX_MAX_PER_RUN:
@@ -308,11 +343,18 @@ def do_st_ex(pred, now, ymd) -> int:
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None or mins > ST_EX_LEAD:
                 continue
+            tried += 1
             try:
                 bi = parse_before(fetch_before_html(ymd, v["code"], r["no"]))
-            except Exception:
+            except Exception as e:
+                print(f"  st_ex {v['code']}-{r['no']}R fail: {e}")
+                consec_fail += 1
+                time.sleep(0.3)
+                if consec_fail >= 5:
+                    print("st_ex: 5 consecutive failures; aborting pass")
+                    return n
                 continue
-            tried += 1
+            consec_fail = 0
             stx = bi.get("st", {})
             if stx:
                 r["st_ex"] = {str(k): val for k, val in stx.items()}

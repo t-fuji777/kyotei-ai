@@ -1,4 +1,4 @@
-const CACHE = "kyotei-ai-v57";
+const CACHE = "kyotei-ai-v64";
 
 self.addEventListener("install", e => {
   self.skipWaiting();
@@ -20,10 +20,14 @@ self.addEventListener("fetch", e => {
   e.respondWith(
     fresh
       .then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
+        if (res.ok) {
+          const copy = res.clone();
+          const u = new URL(e.request.url);
+          u.search = "";
+          caches.open(CACHE).then(c => c.put(new Request(u), copy));
+        }
         return res;
       })
-      .catch(() => caches.match(e.request))
+      .catch(() => caches.match(e.request, { ignoreSearch: true }))
   );
 });

@@ -28,15 +28,29 @@ def parse_result(html: str) -> dict | None:
             continue
         pos = zen2han(tds[0]).strip()
         if pos.isdigit() and tds[1].isdigit():
-            pos2lane[int(pos)] = int(tds[1])
-    if not all(k in pos2lane for k in (1, 2, 3)):
+            pos2lane.setdefault(int(pos), []).append(int(tds[1]))
+    # 同着(デッドヒート)対応: 同一着順に複数艇、次着順は欠番になり得る。
+    # 上位3着分の艇を着順→艇番昇順で並べ、決定的にtop3を確定する。
+    top3 = []
+    dead_heat = False
+    for pos in sorted(pos2lane):
+        lanes = sorted(pos2lane[pos])
+        if len(lanes) > 1:
+            dead_heat = True
+        top3.extend(lanes)
+        if len(top3) >= 3:
+            break
+    if len(top3) < 3:
         if "不成立" in h:
             return {"status": "不成立", "ninki": None}
         return None  # 未確定
-    order = f"{pos2lane[1]}-{pos2lane[2]}-{pos2lane[3]}"
+    top3 = top3[:3]
+    order = f"{top3[0]}-{top3[1]}-{top3[2]}"
 
     km = re.search(r"決まり手[\s\S]{0,400}?>(逃げ|差し|まくり差し|まくり|抜き|恵まれ)<", h)
     res = {"order": order, "kimarite": km.group(1) if km else None, "ninki": None}
+    if dead_heat:
+        res["dead_heat"] = True
 
     p3 = re.search(r"3連単([\s\S]{0,1200}?)</tbody>", h)
     if p3:

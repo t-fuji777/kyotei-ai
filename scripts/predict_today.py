@@ -4,6 +4,7 @@
 import argparse
 import glob
 import json
+import os
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -13,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import download_day, parse_b, VENUES
+from common import download_day, parse_b, VENUES, is_sengen, SENGEN_TOP5P_MIN, SENGEN_EXCLUDE_VENUES, is_super_sengen, SENGEN_SUPER_MIN
 from features import add_features, load_fan, FEATURES
 from train import trifecta_probs
 from fetch_result import fetch_before_html, parse_before
@@ -32,7 +33,10 @@ def load_models():
     meta = json.loads((ROOT / "data" / "model" / "meta.json").read_text())
     models = {t: lgb.Booster(model_file=str(ROOT / "data" / "model" / f"model_{t}.txt"))
               for t in ("win", "top2", "top3")}
-    sengen = {"p2_min": 0.89, "venues": list(range(1, 25)), **meta.get("sengen", {})}
+    # sengen(厳選)判定は common.is_sengen()に統一(top5p閾値+除外会場)。
+    # ここで組み立てるsengen dictはload_models呼び出し元との互換のため残すが、
+    # is_senの判定自体には使わない(meta由来のvenues許可リストは廃止)。
+    sengen = {"top5_min": 0.40, "venues": list(range(1, 25)), **meta.get("sengen", {})}
     return meta, models, sengen
 
 
@@ -89,7 +93,12 @@ def predict_races(tgt: pd.DataFrame, hist, fan, models, sengen):
                  for (a, b, c), v in ranked]
         fav = int(np.argmax(pw))
         fav_p2 = float(g["p_top2"].to_numpy()[fav])
-        is_sen = bool(fav_p2 >= sengen["p2_min"] and int(venue) in sengen["venues"])
+        # is_sen(厳選)/is_super(超厳選)は common.is_sengen()/is_super_sengen()に統一:
+        # 3連単上位5点(picks先頭5件)の合算確率 >= 閾値 かつ除外会場でない
+        # (超厳選は通常厳選の部分集合)
+        top5p = sum(p["p"] for p in picks[:5])
+        is_sen = is_sengen(top5p, venue)
+        is_super = is_super_sengen(top5p, venue)
         n_sengen += int(is_sen)
         boats = []
         for _, x in g.iterrows():
@@ -103,7 +112,7 @@ def predict_races(tgt: pd.DataFrame, hist, fan, models, sengen):
                     "conf": confidence(picks[0]["p"]),
                     "fuku": {"lane": int(g["lane"].to_numpy()[fav]),
                              "p": round(fav_p2, 3)},
-                    "sengen": is_sen}
+                    "sengen": is_sen, "super": is_super}
         by_venue.setdefault(int(venue), []).append(race_obj)
     return by_venue, n_sengen
 
@@ -145,7 +154,9 @@ def predict_live(ymd, meta, models, sengen):
                 continue
             try:
                 bi = parse_before(fetch_before_html(ymd, v["code"], r["no"]))
-            except Exception:
+            except Exception as e:
+                print(f"live st_ex {v['code']}-{r['no']}R fail: {e}")
+                time.sleep(0.3)
                 continue
             stx = bi.get("st", {})
             if stx:
@@ -210,6 +221,7 @@ def predict_live(ymd, meta, models, sengen):
             r["conf"] = nr["conf"]
             r["fuku"] = nr["fuku"]
             r["sengen"] = nr["sengen"]
+            r["super"] = nr["super"]
             r["live"] = True
             bi = live.get((vc2, nr["no"]))
             if bi:
@@ -224,6 +236,61 @@ def predict_live(ymd, meta, models, sengen):
         old["live_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
         write(old, ymd)
     print(f"live update: fetched={n_fetch} ready={len(targets)} updated={n_upd}")
+
+
+# race-level fields holding observed data (results/odds/exhibition), attached by
+# the update loop -- these must survive a same-day regeneration (daily's retrain).
+_OBSERVED_FIELDS = ("result", "odds", "st_ex", "ex", "weather", "wind", "wave")
+# model-output fields; never re-issue them for a race already gone live
+# (exhibition-based) or finished (its result was scored against those picks).
+_PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "super", "live", "live_at")
+
+
+def _merge_existing(out, ymd):
+    """Carry accumulated per-race data forward from an existing same-day file so
+    regenerating today's prediction (daily's 2nd/3rd run or the retrained model)
+    never discards results/odds/exhibition the update loop attached, nor
+    retroactively rewrites picks a finished/live race was already scored on."""
+    fp = ROOT / "docs" / "predictions" / f"{ymd}.json"
+    if not fp.exists():
+        return
+    try:
+        old = json.loads(fp.read_text())
+    except Exception:
+        return
+    idx = {(v["code"], r["no"]): r
+           for v in old.get("venues", []) for r in v.get("races", [])}
+    for v in out["venues"]:
+        for r in v["races"]:
+            o = idx.get((v["code"], r["no"]))
+            if not o:
+                continue
+            for k in _OBSERVED_FIELDS:
+                if k in o:
+                    r[k] = o[k]
+            if o.get("rn_full"):
+                r["type"] = o.get("type", r["type"])
+                r["rn_full"] = True
+            if o.get("live") or o.get("result"):
+                for k in _PICK_FIELDS:
+                    if k in o:
+                        r[k] = o[k]
+    for k in ("results_updated_at", "odds_updated_at", "live_updated_at"):
+        if k in old:
+            out[k] = old[k]
+
+
+def _existing_has_venues(ymd) -> bool:
+    """既存の{ymd}.jsonがvenuesを持つか確認(朝から蓄積した予測·結果·オッズの
+    全損防止用)。読めない/存在しない場合はFalse。"""
+    fp = ROOT / "docs" / "predictions" / f"{ymd}.json"
+    if not fp.exists():
+        return False
+    try:
+        existing = json.loads(fp.read_text())
+    except Exception:
+        return False
+    return bool(existing.get("venues"))
 
 
 def main():
@@ -244,15 +311,22 @@ def main():
     out = {"date": ymd,
            "generated_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M JST"),
            "model_trained_at": meta["trained_at"],
-           "sengen_cfg": {"p2_min": sengen["p2_min"], "venues": sengen["venues"]},
+           "sengen_cfg": {"top5_min": SENGEN_TOP5P_MIN, "super_min": SENGEN_SUPER_MIN,
+                          "exclude_venues": sorted(SENGEN_EXCLUDE_VENUES)},
            "venues": []}
     if btxt is None:
+        if _existing_has_venues(ymd):
+            print(f"live: B(番組表)取得不可だが既存の{ymd}.jsonにvenuesあり; 上書きせずskip")
+            return
         out["note"] = "本日の番組表が取得できませんでした(開催なし or 未公開)"
         write(out, ymd)
         return
 
     races = parse_b(btxt, ymd)
     if not races:
+        if _existing_has_venues(ymd):
+            print(f"live: 番組表の解析結果が空だが既存の{ymd}.jsonにvenuesあり; 上書きせずskip")
+            return
         out["note"] = "番組表の解析結果が空でした"
         write(out, ymd)
         return
@@ -262,6 +336,7 @@ def main():
     fan = load_fan(ROOT / "data" / "fan")
     print(f"hist rows={len(hist)}, fan={len(fan)}, target races={len(races)}", flush=True)
     by_venue, n_sengen = predict_races(tgt, hist, fan, models, sengen)
+    n_super = sum(int(r.get("super", False)) for vraces in by_venue.values() for r in vraces)
 
     yusho = "\u512a\u52dd"  # 優勝 (championship final)
     for vcode in sorted(by_venue):
@@ -272,17 +347,32 @@ def main():
         out["venues"].append({"code": vcode, "name": VENUES[vcode],
                               "day_n": day_n, "is_final": is_final,
                               "races": vraces})
+    _merge_existing(out, ymd)
     write(out, ymd)
     print(f"predicted: venues={len(out['venues'])} "
-          f"races={sum(len(v['races']) for v in out['venues'])} sengen={n_sengen}")
+          f"races={sum(len(v['races']) for v in out['venues'])} sengen={n_sengen} super={n_super}")
 
 
-def write(obj, ymd):
+def _atomic_write_text(path: Path, txt: str) -> None:
+    """一時ファイルに書いてos.replaceで差し替える原子化write。
+    途中クラッシュで破損ファイルが残ることを防ぐ(エンコーディング挙動は
+    write_text無指定のまま変更しない)。"""
+    tmp = path.with_suffix(path.suffix + f".tmp{os.getpid()}")
+    tmp.write_text(txt)
+    os.replace(tmp, path)
+
+
+def write(obj, ymd, is_today=None):
     d = ROOT / "docs" / "predictions"
     d.mkdir(parents=True, exist_ok=True)
     txt = json.dumps(obj, ensure_ascii=False)
-    (d / f"{ymd}.json").write_text(txt)
-    (d / "latest.json").write_text(txt)
+    _atomic_write_text(d / f"{ymd}.json", txt)
+    # latest.json must only ever hold today's file; writing it for a past-date
+    # (re)generation would roll the live site back to that day.
+    if is_today is None:
+        is_today = (ymd == datetime.now(JST).strftime("%Y%m%d"))
+    if is_today:
+        _atomic_write_text(d / "latest.json", txt)
 
 
 if __name__ == "__main__":

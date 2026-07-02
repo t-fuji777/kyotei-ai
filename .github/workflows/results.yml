@@ -22,7 +22,13 @@ jobs:
           python-version: "3.12"
       - run: pip install requests lhafile pandas numpy lightgbm
       - name: results update
-        run: python scripts/fetch_results_only.py ${{ inputs.date }}
+        env:
+          IN_DATE: ${{ inputs.date }}
+        run: |
+          if [ -n "$IN_DATE" ] && ! [[ "$IN_DATE" =~ ^[0-9]{8}$ ]]; then
+            echo "invalid date '$IN_DATE' (expected YYYYMMDD)"; exit 1
+          fi
+          python scripts/fetch_results_only.py "$IN_DATE"
       - name: live re-predict (tenji)
         continue-on-error: true
         run: python scripts/predict_today.py --live
@@ -31,6 +37,14 @@ jobs:
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add docs/predictions
-          git diff --cached --quiet || git commit -m "results update"
-          git pull --rebase --autostash
-          git push
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "results update"
+          for attempt in 1 2 3; do
+            git fetch origin main || true
+            git rebase -X theirs origin/main || { echo "rebase failed"; exit 1; }
+            if git push origin HEAD:main; then echo "pushed (try $attempt)"; exit 0; fi
+            echo "push rejected (try $attempt), retrying"
+            sleep 3
+          done
+          echo "push failed after retries"
+          exit 1

@@ -4,6 +4,7 @@ passed) whose result is not yet stored, and attach hit flags. Deliberately does
 NOT fetch odds or exhibition data, so it never blocks on the slow odds pages.
 Runs every few minutes via GitHub Actions (results.yml)."""
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone, timedelta
@@ -18,13 +19,30 @@ GRACE_MIN = 3            # ignore races until this many min past deadline
 RESULT_MAX_PER_RUN = 150  # cap fetches per cycle; backlog drains over runs
 
 
+def _atomic_write_text(path: Path, text: str):
+    """同一ディレクトリのtmpファイルに書いてからos.replaceで差し替える(破損防止)。"""
+    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
 def write(obj, ymd, is_today=True):
     d = ROOT / "docs" / "predictions"
     d.mkdir(parents=True, exist_ok=True)
     txt = json.dumps(obj, ensure_ascii=False)
-    (d / f"{ymd}.json").write_text(txt)
+    _atomic_write_text(d / f"{ymd}.json", txt)
     if is_today:
-        (d / "latest.json").write_text(txt)
+        _atomic_write_text(d / "latest.json", txt)
+    else:
+        # backfill(過去日)更新時、latest.jsonがまだ同じymdを指している場合は
+        # 結果未反映のまま取り残されないよう同内容で同期する(update_all._carryoverと同じ不変条件)。
+        lp = d / "latest.json"
+        if lp.exists():
+            try:
+                if json.loads(lp.read_text()).get("date") == ymd:
+                    _atomic_write_text(lp, txt)
+            except Exception:
+                pass
 
 
 def _mins_to_deadline(now, dl):

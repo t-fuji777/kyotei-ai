@@ -18,6 +18,35 @@ VENUES = {
 BASE = "https://www1.mbrace.or.jp/od2"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
+# 厳選(sengen)判定: モデル信頼度が高く水面が安定した会場の3連単を厳選する。2段構成。
+# 閾値と除外会場は2021-2026全レースのtrain/valid/test検証で決定(valid選定→test検証)。
+# 大規模バックテスト(test約27000レース)で外部条件(天気/風/時間/会場/級別/季節/曜日)は
+# 上乗せ信号にならず、唯一効くのはモデル自身の信頼度top5p。
+# 閾値を上げると的中↑件数↓(0.45:58%/6R, 0.48:61%/3R, 0.50:62%/1.6R, 0.55:71%/0.4R)。
+# 通常厳選は0.48(的中約61%/3R日)、超厳選は0.58(的中約76%/週1-2件)を採用。
+# 80%到達は3連単では不可能(モデルのtop5p最大値が約0.65のため)。
+SENGEN_TOP5P_MIN = 0.48
+SENGEN_SUPER_MIN = 0.58
+SENGEN_EXCLUDE_VENUES = frozenset({3, 4, 14})  # 江戸川/平和島/鳴門(荒れ水面)
+
+
+def sengen_top5p(picks):
+    return sum((p.get("p") or 0) for p in (picks or [])[:5])
+
+
+def is_sengen(top5p, venue):
+    try:
+        return top5p >= SENGEN_TOP5P_MIN and int(venue) not in SENGEN_EXCLUDE_VENUES
+    except Exception:
+        return False
+
+
+def is_super_sengen(top5p, venue):
+    try:
+        return top5p >= SENGEN_SUPER_MIN and int(venue) not in SENGEN_EXCLUDE_VENUES
+    except Exception:
+        return False
+
 
 def zen2han(s: str) -> str:
     """全角英数字を半角化(カナ・漢字は維持)"""

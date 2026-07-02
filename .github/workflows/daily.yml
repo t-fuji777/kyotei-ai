@@ -36,9 +36,14 @@ jobs:
         run: python scripts/train.py
         continue-on-error: true
       - name: predict today
+        env:
+          IN_DATE: ${{ github.event.inputs.date }}
         run: |
-          if [ -n "${{ github.event.inputs.date }}" ]; then
-            python scripts/predict_today.py --date ${{ github.event.inputs.date }}
+          if [ -n "$IN_DATE" ]; then
+            if ! [[ "$IN_DATE" =~ ^[0-9]{8}$ ]]; then
+              echo "invalid date '$IN_DATE' (expected YYYYMMDD)"; exit 1
+            fi
+            python scripts/predict_today.py --date "$IN_DATE"
           else
             python scripts/predict_today.py
           fi

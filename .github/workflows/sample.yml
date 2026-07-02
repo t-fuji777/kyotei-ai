@@ -14,6 +14,7 @@ permissions:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,13 +22,15 @@ jobs:
           python-version: "3.12"
       - run: pip install lhafile
       - name: fetch raw files
+        env:
+          IN_DATES: ${{ github.event.inputs.dates }}
         run: |
           mkdir -p sample_raw
           python - << 'PY'
-          import sys, time
+          import os, sys, time
           sys.path.insert(0, "scripts")
           from common import download_day
-          dates = "${{ github.event.inputs.dates }}".split(",")
+          dates = os.environ["IN_DATES"].split(",")
           for ymd in dates:
               ymd = ymd.strip()
               for kind in ("B", "K"):
@@ -45,4 +48,6 @@ jobs:
           git config user.email github-actions@github.com
           git add sample_raw
           git diff --cached --quiet || git commit -m "sample raw files"
+          git fetch origin main
+          git pull --rebase origin main
           git push

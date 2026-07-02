@@ -42,12 +42,16 @@ jobs:
             fi
           done
       - name: fetch fan data
-        run: python scripts/fetch_fan.py --start ${{ github.event.inputs.start }}
+        env:
+          IN_START: ${{ github.event.inputs.start }}
+        run: python scripts/fetch_fan.py --start "$IN_START"
       - name: commit
+        env:
+          IN_RUN_ID: ${{ github.event.inputs.run_id }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add data/races data/fan
-          git diff --cached --quiet || git commit -m "backfill data (run ${{ github.event.inputs.run_id }}, per-year pick)"
+          git diff --cached --quiet || git commit -m "backfill data (run $IN_RUN_ID, per-year pick)"
           git pull --rebase
           git push
