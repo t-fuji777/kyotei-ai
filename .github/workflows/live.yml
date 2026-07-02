@@ -24,9 +24,20 @@ jobs:
           while true; do
             python scripts/update_live.py || true
             git add docs/predictions
-            git diff --cached --quiet || git commit -m "live update"
-            git pull --rebase --autostash || (git rebase --abort || true; git pull --rebase --autostash) || true
-            git push || true
+            if git diff --cached --quiet; then
+              echo "nothing to commit"
+            else
+              git commit -m "live update"
+              PUSHED=0
+              for attempt in 1 2 3; do
+                git fetch origin main || true
+                git rebase -X theirs origin/main || { echo "rebase failed"; git rebase --abort || true; break; }
+                if git push origin HEAD:main; then echo "pushed (try $attempt)"; PUSHED=1; break; fi
+                echo "push rejected (try $attempt), retrying"
+                sleep 3
+              done
+              if [ "$PUSHED" -ne 1 ]; then echo "push failed after retries"; exit 1; fi
+            fi
             if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then exit 0; fi
             H=$(TZ=Asia/Tokyo date +%H)
             if [ "$H" -ge 22 ]; then exit 0; fi
