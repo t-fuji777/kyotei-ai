@@ -66,7 +66,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .racelist{padding:0 16px}.racelist>.race:first-child{margin-top:7px}
 .race{background:var(--surface);border:1px solid var(--line);border-radius:12px;
   margin-bottom:7px;overflow:hidden}
-.racehead{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}.racelist.sengen .racehead{cursor:default}.racelist.sengen .racehead{padding-top:19px}
+.racehead{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}.racelist.sengen .racehead{cursor:default}.racelist.sengen .race.super .racehead{padding-top:19px}
 .rno{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;font-size:16px;font-weight:800;min-width:34px}
 .rven{font-size:10px;font-weight:600;color:var(--dim);line-height:1.1;margin-top:2px;letter-spacing:.02em}
 .rno.jump{cursor:pointer;border-radius:8px;padding:2px 6px;margin:-2px -6px;transition:background .15s}
@@ -162,7 +162,7 @@ th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fi
 .kv span:first-child{color:var(--dim)}
 .warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
   color:var(--dim);font-size:11px;line-height:1.7}
-#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:11px;line-height:1.55;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;align-items:baseline;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}#todayMeta{position:absolute;right:0;top:0;margin:0;font-size:11px;line-height:16.5px;font-weight:400;display:grid;grid-template-columns:auto auto auto;column-gap:0;align-items:baseline;color:var(--dim)}#todayMeta .tml{justify-self:end;color:var(--dim);font-weight:400}#todayMeta .tmv{justify-self:end;color:var(--confA);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap}#todayMeta .tmn{justify-self:start;color:var(--dim);font-weight:400;white-space:nowrap}#todayMeta:empty{display:none}
+#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:12px;line-height:1.5;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;align-items:baseline;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}#todayMeta{position:absolute;right:0;top:0;margin:0;font-size:11px;line-height:16.5px;font-weight:400;display:grid;grid-template-columns:auto auto auto;column-gap:0;align-items:baseline;color:var(--dim)}#todayMeta .tml{justify-self:end;color:var(--dim);font-weight:400}#todayMeta .tmv{justify-self:end;color:var(--confA);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap}#todayMeta .tmn{justify-self:start;color:var(--dim);font-weight:400;white-space:nowrap}#todayMeta:empty{display:none}
 .spin{width:28px;height:28px;border:3px solid var(--surface2);border-top-color:var(--accent);
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -263,7 +263,7 @@ function renderSengen(){
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
         <span class="bp num">${pct(p.p)}</span>${(r.odds&&r.odds.t3&&r.odds.t3[p.c]!=null)?`<span class="oddv num">${r.odds.t3[p.c]}倍</span>`:""}</div>`).join("");
-    return `<div class="race open">
+    return `<div class="race open${superOk(r,v.code)?' super':''}">
       <div class="racehead">
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}">${superOk(r,v.code)?'<span class="superbadge">超厳選</span>':""}${r.no}R<span class="rven">${esc(v.name)}</span></span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span><br>
