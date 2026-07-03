@@ -155,12 +155,14 @@ th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
 th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:7px 3px;overflow-wrap:break-word}.acctbl th:first-child,.acctbl td:first-child{width:15%}.acctbl th:not(:first-child),.acctbl td:not(:first-child){width:14.1667%}
 .pad{padding:0 16px}
+.accwrap{padding:0 4px}
+.accwrap .acctbl td>br+span{white-space:nowrap}
 .note{color:var(--dim);font-size:13px;padding:32px 24px;text-align:center;line-height:1.8}.race.gap{opacity:.55}.gapnote{margin-left:auto;color:var(--dim);font-size:12px}.venopt.off{opacity:.4;color:var(--dim);cursor:default;pointer-events:none}
 .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
 .kv span:first-child{color:var(--dim)}
 .warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
   color:var(--dim);font-size:11px;line-height:1.7}
-#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:11px;line-height:1.55;font-weight:700;display:grid;grid-template-columns:auto auto auto;column-gap:4px;justify-items:end;align-items:baseline;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount .ssr{justify-self:start;color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:10px}#senCount:empty{display:none}#todayMeta{position:absolute;right:0;top:0;margin:0;font-size:11px;line-height:16.5px;font-weight:400;display:grid;grid-template-columns:auto auto auto;column-gap:0;align-items:baseline;color:var(--dim)}#todayMeta .tml{justify-self:end;color:var(--dim);font-weight:400}#todayMeta .tmv{justify-self:end;color:var(--confA);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap}#todayMeta .tmn{justify-self:start;color:var(--dim);font-weight:400;white-space:nowrap}#todayMeta:empty{display:none}
+#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:11px;line-height:1.55;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;align-items:baseline;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}#todayMeta{position:absolute;right:0;top:0;margin:0;font-size:11px;line-height:16.5px;font-weight:400;display:grid;grid-template-columns:auto auto auto;column-gap:0;align-items:baseline;color:var(--dim)}#todayMeta .tml{justify-self:end;color:var(--dim);font-weight:400}#todayMeta .tmv{justify-self:end;color:var(--confA);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap}#todayMeta .tmn{justify-self:start;color:var(--dim);font-weight:400;white-space:nowrap}#todayMeta:empty{display:none}
 .spin{width:28px;height:28px;border:3px solid var(--surface2);border-top-color:var(--accent);
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -246,7 +248,7 @@ function renderSengen(){
   {const sc=$("#senCount");if(sc){
     const dec=list.filter(x=>x.r.result&&!x.r.result.status).length;const hit=list.filter(x=>t5hit(x.r)).length;const rate=dec?(hit/dec*100).toFixed(1)+'％':'ー％';
     const superL=list.filter(x=>superOk(x.r,x.v.code));const sDec=superL.filter(x=>x.r.result&&!x.r.result.status).length;const sHit=superL.filter(x=>t5hit(x.r)).length;const sRate=sDec?(sHit/sDec*100).toFixed(1)+'％':'ー％';
-    sc.innerHTML=`<span class="ssl"><span class="ssk">本　日</span>：</span><span class="ssv">${list.length}件</span><span class="ssr"></span><span class="ssl"><span class="ssk">厳　選</span>：</span><span class="ssv">${hit}件</span><span class="ssr">（${rate}）</span><span class="ssl"><span class="ssk">超厳選</span>：</span><span class="ssv">${superL.length}件</span><span class="ssr">（${sRate}）</span>`;
+    sc.innerHTML=`<span class="ssl"><span class="ssk">本　日</span>：</span><span class="ssv">${list.length}件</span><span class="ssl"><span class="ssk">厳　選</span>：</span><span class="ssv">${hit}件</span><span class="ssl"><span class="ssk">超厳選</span>：</span><span class="ssv">${superL.length}件</span>`;
   }}
   if(!list.length){
     m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>モデル信頼度が高く水面が安定した会場の3連単のみを厳選しています。</div>`;
@@ -457,7 +459,7 @@ function renderAcc(acc){
   const dayRows=days.slice().reverse().slice(0,60).map(d=>accRow('<span style="color:var(--dim);font-size:8px;white-space:nowrap">'+d.date.slice(2,4)+'年('+['日','月','火','水','木','金','土'][new Date(+d.date.slice(0,4),+d.date.slice(4,6)-1,+d.date.slice(6,8)).getDay()]+')</span><br>'+d.date.slice(4,6)+"/"+d.date.slice(6,8),d)).join("");
   const todayRow=tj?accRow('本日<br><span style="color:var(--dim);font-size:9px">速報</span>',tj):"";
   const totalRow=days.length?accRow('累計',tt,'font-weight:700'):"";
-  m.innerHTML=`<div class="pad"><table class="acctbl">
+  m.innerHTML=`<div class="accwrap"><table class="acctbl">
       <tr><th>日付</th><th>R数</th><th>3連単</th><th>TOP5</th><th>厳選</th><th>超厳選</th><th>回収率</th></tr>${totalRow}${todayRow}${dayRows}
     </table></div>`;
 }
