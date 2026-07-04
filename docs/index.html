@@ -534,19 +534,23 @@ async function refreshLatest(){
     const fresh=await fetchJSON("predictions/latest.json");
     sortVenues(fresh);
     const changed=!pred||pred.generated_at!==fresh.generated_at||pred.results_updated_at!==fresh.results_updated_at;
-    if(!changed) return;
-    const wasCurrentDate=!pred||!viewPred||viewPred.date===pred.date;
-    pred=fresh;
-    latestDate=pred.date;
-    PREDS[pred.date]=pred;
-    if(wasCurrentDate) viewPred=null;
-    if(cur==="sen"){
-      renderSengen();
-    }else if(cur==="today"&&wasCurrentDate){
-      renderToday();
-    }else if(cur==="acc"){
-      renderAcc(VIEW.acc);
+    if(changed){
+      const wasCurrentDate=!pred||!viewPred||viewPred.date===pred.date;
+      pred=fresh;
+      latestDate=pred.date;
+      PREDS[pred.date]=pred;
+      if(wasCurrentDate) viewPred=null;
+      if(cur==="sen") renderSengen();
+      else if(cur==="today"&&wasCurrentDate) renderToday();
     }
+    // 的中実績(accuracy.json)も更新し、実績タブを自動反映(リロード不要)
+    try{
+      const fa=await fetchJSON("accuracy.json");
+      if(!VIEW.acc||JSON.stringify(VIEW.acc.total||null)!==JSON.stringify(fa.total||null)){
+        VIEW.acc=fa;
+        if(cur==="acc") renderAcc(VIEW.acc);
+      }
+    }catch(_){}
   }catch(_){
     /* オフライン等は無視し、次回タイミングで再試行 */
   }finally{
