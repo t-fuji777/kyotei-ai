@@ -234,8 +234,8 @@ function setHeader(p){
 }
 
 function axisTable(r){ return ""; }
-function sengenOk(r,vcode){return top5p(r)>=SENGEN_TOP5P_MIN && SENGEN_EXCLUDE.indexOf(vcode)<0;}
-function superOk(r,vcode){return top5p(r)>=SENGEN_SUPER_MIN && SENGEN_EXCLUDE.indexOf(vcode)<0;}
+function sengenOk(r,vcode){if(top5p(r)<SENGEN_TOP5P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;if(r.odds&&r.odds.prov)return true;return r.picks.slice(0,5).every(function(p){var o=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;return o==null||o>=5.0;});}
+function superOk(r,vcode){return sengenOk(r,vcode)&&top5p(r)>=SENGEN_SUPER_MIN;}
 function fitRtype(){document.querySelectorAll(".rtype").forEach(el=>{el.style.fontSize="";let fs=12,g=0;while(el.scrollWidth>el.clientWidth+0.5&&fs>8&&g<24){fs-=0.5;el.style.fontSize=fs+"px";g++;}});}
 function renderSengen(){
   const m=$("#main");

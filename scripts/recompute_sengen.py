@@ -41,12 +41,16 @@ def recompute_day(pred: dict):
                 continue  # 未確定 or 中止/不成立(orderなし)
             top5p = sengen_top5p(r.get("picks"))
             picks = [p["c"] for p in (r.get("picks") or [])]
-            if is_sengen(top5p, v.get("code")):
+            # 価値フィルタ: 上位5点にオッズ5倍未満が含まれる場合は厳選から除外
+            # (500円ボックスで的中しても損になるため。UI sengenOk と同一条件)。
+            t3 = (r.get("odds") or {}).get("t3") or {}
+            picks_ok = all((t3.get(c) is None or t3.get(c) >= 5.0) for c in picks[:5])
+            if is_sengen(top5p, v.get("code")) and picks_ok:
                 sen_n += 1
                 sen_pred_sum += top5p
                 if res["order"] in picks[:5]:
                     sen_hit += 1
-            if is_super_sengen(top5p, v.get("code")):
+            if is_super_sengen(top5p, v.get("code")) and picks_ok:
                 super_n += 1
                 super_pred_sum += top5p
                 if res["order"] in picks[:5]:
