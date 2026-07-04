@@ -92,12 +92,12 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
             if fuku_lane in top2_lanes.get(key, ()):
                 day["fuku_hit"] += 1
             day["top5_pred_sum"] += top5p
-            if is_sengen(top5p, v["code"]):
+            if is_sengen(top5p, v["code"]) and _picks_ok(r):
                 day["sen_n"] += 1
                 day["sen_pred_sum"] += top5p
                 if act in picks[:5]:
                     day["sen_hit"] += 1
-            if is_super_sengen(top5p, v["code"]):
+            if is_super_sengen(top5p, v["code"]) and _picks_ok(r):
                 day["super_n"] += 1
                 day["super_pred_sum"] += top5p
                 if act in picks[:5]:
