@@ -44,7 +44,7 @@ def recompute_day(pred: dict):
             # 価値フィルタ: 上位5点にオッズ5倍未満が含まれる場合は厳選から除外
             # (500円ボックスで的中しても損になるため。UI sengenOk と同一条件)。
             t3 = (r.get("odds") or {}).get("t3") or {}
-            picks_ok = all((t3.get(c) is None or t3.get(c) >= 5.0) for c in picks[:5])
+            picks_ok = all((t3.get(c) is None or t3.get(c) >= 5.1) for c in picks[:5])
             if is_sengen(top5p, v.get("code")) and picks_ok:
                 sen_n += 1
                 sen_pred_sum += top5p
