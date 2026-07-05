@@ -524,7 +524,15 @@ $("#tabToday").onclick=()=>show("today");
 $("#tabAcc").onclick=()=>show("acc");
 $("#tabModel").onclick=()=>show("model");
 show("sen");
-if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js");
+  // 新SWが有効化しコントローラが切替=新版が反映可能な瞬間に1回だけリロード。
+  // これで古いindex.htmlがキャッシュに残っていても自動で新版に切り替わる。
+  let _swReloading=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{
+    if(_swReloading) return; _swReloading=true; location.reload();
+  });
+}
 
 let refreshBusy=false;
 async function refreshLatest(){
