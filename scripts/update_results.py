@@ -29,7 +29,7 @@ def _picks_ok(r):
     t3 = (r.get("odds") or {}).get("t3") or {}
     for p in r["picks"][:5]:
         o = t3.get(p["c"])
-        if o is not None and o < 5.0:
+        if o is not None and o < 5.1:
             return False
     return True
 
