@@ -201,7 +201,7 @@ const SENGEN_TOP5P_MIN=0.48, SENGEN_SUPER_MIN=0.58, SENGEN_EXCLUDE=[3,4,14];
 const VIEW={today:null,acc:null,model:null};
 let cur="today", pred=null, selVenue=null, todayMode="time";
 let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false;
-let showGen=0;
+let showGen=0,autoRefreshing=false;
 const PREDS={};
 const _WD=["日","月","火","水","木","金","土"];
 
@@ -234,7 +234,7 @@ function setHeader(p){
 }
 
 function axisTable(r){ return ""; }
-function sengenOk(r,vcode){if(top5p(r)<SENGEN_TOP5P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;if(r.odds&&r.odds.prov)return true;return r.picks.slice(0,5).every(function(p){var o=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;return o==null||o>=5.1;});}
+function sengenOk(r,vcode){if(top5p(r)<SENGEN_TOP5P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;return r.picks.slice(0,5).every(function(p){var o=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;return o==null||o>=5.1;});}
 function superOk(r,vcode){return sengenOk(r,vcode)&&top5p(r)>=SENGEN_SUPER_MIN;}
 function fitRtype(){document.querySelectorAll(".rtype").forEach(el=>{el.style.fontSize="";let fs=12,g=0;while(el.scrollWidth>el.clientWidth+0.5&&fs>8&&g<24){fs-=0.5;el.style.fontSize=fs+"px";g++;}});}
 function renderSengen(){
@@ -279,7 +279,7 @@ function renderSengen(){
   m.innerHTML=`
     <div class="racelist sengen">${cards}</div>`;
   requestAnimationFrame(fitRtype);
-  if(openL.length&&doneL.length){const _ot=document.getElementById("openTop");if(_ot){const _hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const _at=window.scrollY+_ot.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,_at-_hh-7));}}
+  if(!autoRefreshing&&openL.length&&doneL.length){const _ot=document.getElementById("openTop");if(_ot){const _hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const _at=window.scrollY+_ot.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,_at-_hh-7));}}
   m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();selVenue=+el.dataset.vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
 }
 
@@ -397,7 +397,7 @@ function renderToday(){
     m.innerHTML=_todayTog()+`<div class="racelist">${body||'<div class="note">レースがありません。</div>'}</div>`;
     _wireTodayTog(m);
     m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
-    if(openL.length&&doneL.length){const el=document.getElementById("openTop");if(el){const hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const tg=m.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=window.scrollY+el.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,at-hh-th-7));}}else if(!openL.length){window.scrollTo(0,0);}
+    if(!autoRefreshing){if(openL.length&&doneL.length){const el=document.getElementById("openTop");if(el){const hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const tg=m.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=window.scrollY+el.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,at-hh-th-7));}}else if(!openL.length){window.scrollTo(0,0);}}
     requestAnimationFrame(fitRtype);
     return;
   }
@@ -415,7 +415,7 @@ function renderToday(){
   document.getElementById("hdrChips").innerHTML=`<button id="venSel">${venue?_disp(venue):""}<span class="car">▾</span></button><div id="venMenu" hidden>${chips}</div>`;
   m.innerHTML=_todayTog()+`<div class="racelist">${races}</div>`;
   _wireTodayTog(m);
-  if(!P.venues.some(v=>v.races.some(r=>_isOpen(r,P.date))))window.scrollTo(0,0);
+  if(!autoRefreshing&&!P.venues.some(v=>v.races.some(r=>_isOpen(r,P.date))))window.scrollTo(0,0);
   {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const _dm=document.getElementById("dMenu");if(_dm)_dm.hidden=true;const _on=menu.querySelector(".venopt.on");if(_on)_on.scrollIntoView({block:"center"});}};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});document.addEventListener("click",function _c(ev){if(!document.getElementById("venMenu"))return document.removeEventListener("click",_c);if(!ev.target.closest("#hdrChips")){const mm=document.getElementById("venMenu");if(mm)mm.hidden=true;}});}}
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
   requestAnimationFrame(fitRtype);
@@ -525,12 +525,13 @@ $("#tabAcc").onclick=()=>show("acc");
 $("#tabModel").onclick=()=>show("model");
 show("sen");
 if("serviceWorker" in navigator){
+  // 既にSWが制御していた=更新の場合のみ、新SW有効化時に1回だけリロード。
+  // 初回訪問(controller無し)のclaimでは発火してもリロードしない(不要な二重読込を防止)。
+  var _hadCtrl=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js");
-  // 新SWが有効化しコントローラが切替=新版が反映可能な瞬間に1回だけリロード。
-  // これで古いindex.htmlがキャッシュに残っていても自動で新版に切り替わる。
   let _swReloading=false;
   navigator.serviceWorker.addEventListener("controllerchange",()=>{
-    if(_swReloading) return; _swReloading=true; location.reload();
+    if(!_hadCtrl||_swReloading) return; _swReloading=true; location.reload();
   });
 }
 
@@ -548,8 +549,15 @@ async function refreshLatest(){
       latestDate=pred.date;
       PREDS[pred.date]=pred;
       if(wasCurrentDate) viewPred=null;
+      // 自動更新の再描画で展開カード/スクロール位置を壊さない: 退避→再描画→復元
+      const _sy=window.scrollY;
+      const _open=[].slice.call(document.querySelectorAll(".racelist .race.open")).map(e=>e.getAttribute("data-r")).filter(Boolean);
+      autoRefreshing=true;
       if(cur==="sen") renderSengen();
       else if(cur==="today"&&wasCurrentDate) renderToday();
+      autoRefreshing=false;
+      if(cur==="today"){_open.forEach(rn=>{const el=document.querySelector('.racelist .race[data-r="'+rn+'"]');if(el)el.classList.add("open");});}
+      window.scrollTo(0,_sy);
     }
     // 的中実績(accuracy.json)も更新し、実績タブを自動反映(リロード不要)
     try{
@@ -562,6 +570,7 @@ async function refreshLatest(){
   }catch(_){
     /* オフライン等は無視し、次回タイミングで再試行 */
   }finally{
+    autoRefreshing=false;
     refreshBusy=false;
   }
 }
