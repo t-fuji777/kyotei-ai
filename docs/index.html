@@ -237,6 +237,13 @@ function axisTable(r){ return ""; }
 function sengenOk(r,vcode){if(top5p(r)<SENGEN_TOP5P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;return r.picks.slice(0,5).every(function(p){var o=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;return o==null||o>=5.1;});}
 function superOk(r,vcode){return sengenOk(r,vcode)&&top5p(r)>=SENGEN_SUPER_MIN;}
 function fitRtype(){document.querySelectorAll(".rtype").forEach(el=>{el.style.fontSize="";let fs=12,g=0;while(el.scrollWidth>el.clientWidth+0.5&&fs>8&&g<24){fs-=0.5;el.style.fontSize=fs+"px";g++;}});}
+// 買い目の表示オッズ: 確定済みレース(中止除く)の的中買い目は、暫定オッズ(prov)が
+// 最終に更新されず残る場合があるため、実配当(pay3t/100)を優先して表示する。
+// それ以外(未確定/外れ買い目)は取得済みt3オッズを使う。
+function pickOdds(r,c){
+  if(r.result&&!r.result.status&&r.result.pay3t!=null&&c===r.result.order){return Math.round(r.result.pay3t/10)/10;}
+  return (r.odds&&r.odds.t3)?r.odds.t3[c]:null;
+}
 function renderSengen(){
   const m=$("#main");
   if(!pred){m.innerHTML='<div class="spin"></div>';return}
@@ -262,7 +269,7 @@ function renderSengen(){
       `<div class="pickrow"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
-        <span class="bp num">${pct(p.p)}</span>${(r.odds&&r.odds.t3&&r.odds.t3[p.c]!=null)?`<span class="oddv num">${r.odds.t3[p.c]}倍</span>`:""}</div>`).join("");
+        <span class="bp num">${pct(p.p)}</span>${(pickOdds(r,p.c)!=null)?`<span class="oddv num">${pickOdds(r,p.c)}倍</span>`:""}</div>`).join("");
     return `<div class="race open${superOk(r,v.code)?' super':''}">
       <div class="racehead">
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
@@ -301,7 +308,7 @@ function raceCard(r,v,showVen){
     `<div class="pickrow"><span class="prank num">${i+1}</span>
       <span class="honmei">${comboChips(p.c,true)}</span>
       <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
-      <span class="bp num">${pct(p.p)}</span>${(r.odds&&r.odds.t3&&r.odds.t3[p.c]!=null)?`<span class="oddv num">${r.odds.t3[p.c]}倍</span>`:""}</div>`).join("");
+      <span class="bp num">${pct(p.p)}</span>${(pickOdds(r,p.c)!=null)?`<span class="oddv num">${pickOdds(r,p.c)}倍</span>`:""}</div>`).join("");
   return `<div class="race" data-r="${r.no}">
       <div class="racehead">
         <span class="rno num">${r.no}R${showVen&&v?`<span class="rven">${esc(v.name)}</span>`:""}</span>
