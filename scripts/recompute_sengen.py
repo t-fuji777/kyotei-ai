@@ -41,10 +41,21 @@ def recompute_day(pred: dict):
                 continue  # 未確定 or 中止/不成立(orderなし)
             top5p = sengen_top5p(r.get("picks"))
             picks = [p["c"] for p in (r.get("picks") or [])]
-            # 価値フィルタ: 上位5点にオッズ5倍未満が含まれる場合は厳選から除外
-            # (500円ボックスで的中しても損になるため。UI sengenOk と同一条件)。
+            # 価値フィルタ: 上位5点にオッズ5.1倍未満が含まれる場合は厳選から除外
+            # (500円ボックスで的中しても損になるため。UI sengenOk / pickOdds と同一条件)。
+            # 的中買い目は暫定オッズが最終に更新されず残ることがあるため、確定した
+            # 実配当(pay3t/100)を優先して判定する。
             t3 = (r.get("odds") or {}).get("t3") or {}
-            picks_ok = all((t3.get(c) is None or t3.get(c) >= 5.1) for c in picks[:5])
+            _order = res.get("order")
+            _pay = res.get("pay3t")
+            _status = res.get("status")
+
+            def _eff(c):
+                if _order and not _status and _pay and c == _order:
+                    return _pay / 100.0
+                return t3.get(c)
+
+            picks_ok = all((_eff(c) is None or _eff(c) >= 5.1) for c in picks[:5])
             if is_sengen(top5p, v.get("code")) and picks_ok:
                 sen_n += 1
                 sen_pred_sum += top5p
