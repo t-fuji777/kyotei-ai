@@ -234,14 +234,15 @@ function setHeader(p){
 }
 
 function axisTable(r){ return ""; }
-function sengenOk(r,vcode){if(top5p(r)<SENGEN_TOP5P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;return r.picks.slice(0,5).every(function(p){var o=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;return o==null||o>=5.1;});}
+function sengenOk(r,vcode){if(top5p(r)<SENGEN_TOP5P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;return r.picks.slice(0,5).every(function(p){var o=pickOdds(r,p.c);return o==null||o>=5.1;});}
 function superOk(r,vcode){return sengenOk(r,vcode)&&top5p(r)>=SENGEN_SUPER_MIN;}
 function fitRtype(){document.querySelectorAll(".rtype").forEach(el=>{el.style.fontSize="";let fs=12,g=0;while(el.scrollWidth>el.clientWidth+0.5&&fs>8&&g<24){fs-=0.5;el.style.fontSize=fs+"px";g++;}});}
-// 買い目の表示オッズ: 確定済みレース(中止除く)の的中買い目は、暫定オッズ(prov)が
-// 最終に更新されず残る場合があるため、実配当(pay3t/100)を優先して表示する。
-// それ以外(未確定/外れ買い目)は取得済みt3オッズを使う。
+// 買い目の実効オッズ(表示・厳選の価値判定の共通基準): 確定済みレース(中止除く)の
+// 的中買い目は、暫定オッズ(prov)が最終に更新されず残る場合があるため、実配当(pay3t/100)を
+// 優先する。それ以外(未確定/外れ買い目)は取得済みt3オッズを使う。sengenOk はこの値で
+// 5.1倍未満を除外するため、実配当が5.1倍未満だった的中は厳選から自動的に外れる。
 function pickOdds(r,c){
-  if(r.result&&!r.result.status&&r.result.pay3t!=null&&c===r.result.order){return Math.round(r.result.pay3t/10)/10;}
+  if(r.result&&!r.result.status&&r.result.pay3t>0&&c===r.result.order){return Math.round(r.result.pay3t/10)/10;}
   return (r.odds&&r.odds.t3)?r.odds.t3[c]:null;
 }
 function renderSengen(){

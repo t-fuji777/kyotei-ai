@@ -25,10 +25,17 @@ def _atomic_write_text(path: Path, text: str):
     os.replace(tmp, path)
 
 
-def _picks_ok(r):
+def _picks_ok(r, act=None, pay=None):
+    """価値フィルタ: 上位5点にオッズ5.1倍未満が含まれれば厳選対象外(500円ボックスで
+    的中しても損になるため)。的中買い目(c==act)は暫定オッズが最終に更新されず残る
+    ことがあるため、確定した実配当(pay/100)を優先して判定する(UI pickOdds と同一)。"""
     t3 = (r.get("odds") or {}).get("t3") or {}
     for p in r["picks"][:5]:
-        o = t3.get(p["c"])
+        c = p["c"]
+        if act is not None and pay and c == act:
+            o = pay / 100.0
+        else:
+            o = t3.get(c)
         if o is not None and o < 5.1:
             return False
     return True
@@ -92,12 +99,13 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
             if fuku_lane in top2_lanes.get(key, ()):
                 day["fuku_hit"] += 1
             day["top5_pred_sum"] += top5p
-            if is_sengen(top5p, v["code"]) and _picks_ok(r):
+            _pay = pays.get(key)
+            if is_sengen(top5p, v["code"]) and _picks_ok(r, act, _pay):
                 day["sen_n"] += 1
                 day["sen_pred_sum"] += top5p
                 if act in picks[:5]:
                     day["sen_hit"] += 1
-            if is_super_sengen(top5p, v["code"]) and _picks_ok(r):
+            if is_super_sengen(top5p, v["code"]) and _picks_ok(r, act, _pay):
                 day["super_n"] += 1
                 day["super_pred_sum"] += top5p
                 if act in picks[:5]:
