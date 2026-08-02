@@ -1,6 +1,15 @@
-const CACHE = "kyotei-ai-v79";
+const CACHE = "kyotei-ai-v80";
 
 self.addEventListener("install", e => {
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.addAll([
+      "./",
+      "index.html",
+      "manifest.json",
+      "icon-192.png",
+      "icon-512.png"
+    ]))
+  );
   self.skipWaiting();
 });
 
