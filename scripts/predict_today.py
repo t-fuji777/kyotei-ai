@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import download_day, parse_b, VENUES, is_sengen, SENGEN_TOP5P_MIN, SENGEN_EXCLUDE_VENUES, is_super_sengen, SENGEN_SUPER_MIN
+from common import download_day, parse_b, VENUES, is_sengen, SENGEN_TOP3P_MIN, SENGEN_MIN_ODDS, SENGEN_EXCLUDE_VENUES
 from features import add_features, load_fan, FEATURES
 from train import trifecta_probs
 from fetch_result import fetch_before_html, parse_before
@@ -33,7 +33,7 @@ def load_models():
     meta = json.loads((ROOT / "data" / "model" / "meta.json").read_text())
     models = {t: lgb.Booster(model_file=str(ROOT / "data" / "model" / f"model_{t}.txt"))
               for t in ("win", "top2", "top3")}
-    # sengen(厳選)判定は common.is_sengen()に統一(top5p閾値+除外会場)。
+    # sengen(厳選)判定は common.is_sengen()に統一(top3p閾値+除外会場)。
     # ここで組み立てるsengen dictはload_models呼び出し元との互換のため残すが、
     # is_senの判定自体には使わない(meta由来のvenues許可リストは廃止)。
     sengen = {"top5_min": 0.40, "venues": list(range(1, 25)), **meta.get("sengen", {})}
@@ -93,12 +93,10 @@ def predict_races(tgt: pd.DataFrame, hist, fan, models, sengen):
                  for (a, b, c), v in ranked]
         fav = int(np.argmax(pw))
         fav_p2 = float(g["p_top2"].to_numpy()[fav])
-        # is_sen(厳選)/is_super(超厳選)は common.is_sengen()/is_super_sengen()に統一:
-        # 3連単上位5点(picks先頭5件)の合算確率 >= 閾値 かつ除外会場でない
-        # (超厳選は通常厳選の部分集合)
-        top5p = sum(p["p"] for p in picks[:5])
-        is_sen = is_sengen(top5p, venue)
-        is_super = is_super_sengen(top5p, venue)
+        # is_sen(厳選)は common.is_sengen()に統一:
+        # 3連単上位3点(picks先頭3件, 買い目そのもの)の合算確率 >= 閾値 かつ除外会場でない
+        top3p = sum(p["p"] for p in picks[:3])
+        is_sen = is_sengen(top3p, venue)
         n_sengen += int(is_sen)
         boats = []
         for _, x in g.iterrows():
@@ -112,7 +110,7 @@ def predict_races(tgt: pd.DataFrame, hist, fan, models, sengen):
                     "conf": confidence(picks[0]["p"]),
                     "fuku": {"lane": int(g["lane"].to_numpy()[fav]),
                              "p": round(fav_p2, 3)},
-                    "sengen": is_sen, "super": is_super}
+                    "sengen": is_sen}
         by_venue.setdefault(int(venue), []).append(race_obj)
     return by_venue, n_sengen
 
@@ -221,7 +219,6 @@ def predict_live(ymd, meta, models, sengen):
             r["conf"] = nr["conf"]
             r["fuku"] = nr["fuku"]
             r["sengen"] = nr["sengen"]
-            r["super"] = nr["super"]
             r["live"] = True
             bi = live.get((vc2, nr["no"]))
             if bi:
@@ -243,7 +240,7 @@ def predict_live(ymd, meta, models, sengen):
 _OBSERVED_FIELDS = ("result", "odds", "st_ex", "ex", "weather", "wind", "wave")
 # model-output fields; never re-issue them for a race already gone live
 # (exhibition-based) or finished (its result was scored against those picks).
-_PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "super", "live", "live_at")
+_PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "live", "live_at")
 
 
 def _merge_existing(out, ymd):
@@ -311,7 +308,7 @@ def main():
     out = {"date": ymd,
            "generated_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M JST"),
            "model_trained_at": meta["trained_at"],
-           "sengen_cfg": {"top5_min": SENGEN_TOP5P_MIN, "super_min": SENGEN_SUPER_MIN,
+           "sengen_cfg": {"top3p_min": SENGEN_TOP3P_MIN, "min_odds": SENGEN_MIN_ODDS,
                           "exclude_venues": sorted(SENGEN_EXCLUDE_VENUES)},
            "venues": []}
     if btxt is None:
@@ -336,7 +333,6 @@ def main():
     fan = load_fan(ROOT / "data" / "fan")
     print(f"hist rows={len(hist)}, fan={len(fan)}, target races={len(races)}", flush=True)
     by_venue, n_sengen = predict_races(tgt, hist, fan, models, sengen)
-    n_super = sum(int(r.get("super", False)) for vraces in by_venue.values() for r in vraces)
 
     yusho = "\u512a\u52dd"  # 優勝 (championship final)
     for vcode in sorted(by_venue):
@@ -350,7 +346,7 @@ def main():
     _merge_existing(out, ymd)
     write(out, ymd)
     print(f"predicted: venues={len(out['venues'])} "
-          f"races={sum(len(v['races']) for v in out['venues'])} sengen={n_sengen} super={n_super}")
+          f"races={sum(len(v['races']) for v in out['venues'])} sengen={n_sengen}")
 
 
 def _atomic_write_text(path: Path, txt: str) -> None:
