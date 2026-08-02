@@ -204,7 +204,7 @@ const SENGEN_TOP3P_MIN=0.36, SENGEN_MIN_ODDS=3.1, SENGEN_EXCLUDE=[3,4,14];
 const MATSU_TOP4P_MIN=0.36, MATSU_MIN_ODDS=4.1, MATSU_MAX_ODDS=10;
 const VIEW={today:null,acc:null,model:null};
 let cur="today", pred=null, selVenue=null, todayMode="time";
-let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false;
+let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false, venDocBound=false;
 let showGen=0,autoRefreshing=false;
 const PREDS={};
 const _WD=["日","月","火","水","木","金","土"];
@@ -302,7 +302,7 @@ function renderSengen(){
     <div class="racelist sengen">${cards}</div>`;
   requestAnimationFrame(fitRtype);
   if(!autoRefreshing&&openL.length&&doneL.length){const _ot=document.getElementById("openTop");if(_ot){const _hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const _at=window.scrollY+_ot.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,_at-_hh-7));}}
-  m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();selVenue=+el.dataset.vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
+  m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
 }
 
 function _isOpen(r,dateStr){
@@ -324,7 +324,7 @@ function raceCard(r,v,showVen){
       <span class="honmei">${comboChips(p.c,true)}</span>
       <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
       <span class="bp num">${pct(p.p)}</span>${(pickOdds(r,p.c)!=null)?`<span class="oddv num">${pickOdds(r,p.c)}倍</span>`:""}</div>`).join("");
-  return `<div class="race" data-r="${r.no}">
+  return `<div class="race" data-r="${v.code}-${r.no}">
       <div class="racehead">
         <span class="rno num">${r.no}R${showVen&&v?`<span class="rven">${esc(v.name)}</span>`:""}</span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span><br>
@@ -429,16 +429,16 @@ function renderToday(){
   const venue=P.venues.find(v=>v.code===selVenue);
   const _have={};venue.races.forEach(rr=>{_have[rr.no]=rr;});
   const _maxNo=Math.max(12,...venue.races.map(rr=>rr.no));
-  const _full=[];for(let _n=1;_n<=_maxNo;_n++){_full.push(_have[_n]||{no:_n,_gap:true});}
+  const _full=[];for(let _n=1;_n<=_maxNo;_n++){_full.push((_have[_n]&&_have[_n].picks&&_have[_n].picks.length)?_have[_n]:{no:_n,_gap:true});}
   const races=_full.map(r=>{
-    if(r._gap)return `<div class="race gap" data-r="${r.no}"><div class="racehead"><span class="rno num">${r.no}R</span><span class="gapnote">予測対象外</span></div></div>`;
+    if(r._gap)return `<div class="race gap" data-r="${venue.code}-${r.no}"><div class="racehead"><span class="rno num">${r.no}R</span><span class="gapnote">予測対象外</span></div></div>`;
     return raceCard(r,venue,false);
   }).join("");
   document.getElementById("hdrChips").innerHTML=`<button id="venSel">${venue?_disp(venue):""}<span class="car">▾</span></button><div id="venMenu" hidden>${chips}</div>`;
   m.innerHTML=_todayTog()+`<div class="racelist">${races}</div>`;
   _wireTodayTog(m);
   if(!autoRefreshing&&!P.venues.some(v=>v.races.some(r=>_isOpen(r,P.date))))window.scrollTo(0,0);
-  {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const _dm=document.getElementById("dMenu");if(_dm)_dm.hidden=true;const _on=menu.querySelector(".venopt.on");if(_on)_on.scrollIntoView({block:"center"});}};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});document.addEventListener("click",function _c(ev){if(!document.getElementById("venMenu"))return document.removeEventListener("click",_c);if(!ev.target.closest("#hdrChips")){const mm=document.getElementById("venMenu");if(mm)mm.hidden=true;}});}}
+  {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const _dm=document.getElementById("dMenu");if(_dm)_dm.hidden=true;const _on=menu.querySelector(".venopt.on");if(_on)_on.scrollIntoView({block:"center"});}};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});if(!venDocBound){venDocBound=true;document.addEventListener("click",ev=>{const mm=document.getElementById("venMenu");if(mm&&!ev.target.closest("#hdrChips"))mm.hidden=true;});}}}
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
   requestAnimationFrame(fitRtype);
 }
@@ -524,7 +524,7 @@ async function show(tab){
       viewPred=null;
       if(!pred) pred=await fetchJSON("predictions/latest.json");sortVenues(pred);
       if(token!==showGen) return;
-      if(pred){latestDate=pred.date;if(!PREDS[pred.date])PREDS[pred.date]=pred;}
+      if(pred){latestDate=pred.date;if(!PREDS[pred.date])PREDS[pred.date]=pred;if(dateList&&dateList.indexOf(pred.date)<0){dateList.push(pred.date);dateList.sort();}}
       renderToday();
       ensureDateList().then(()=>{if(token===showGen&&cur==="today"){renderDateNav(viewPred||pred);}});
     }else if(tab==="acc"){
@@ -564,12 +564,13 @@ async function refreshLatest(){
   try{
     const fresh=await fetchJSON("predictions/latest.json");
     sortVenues(fresh);
-    const changed=!pred||pred.generated_at!==fresh.generated_at||pred.results_updated_at!==fresh.results_updated_at;
+    const changed=!pred||["generated_at","results_updated_at","odds_updated_at","live_updated_at"].some(k=>pred[k]!==fresh[k]);
     if(changed){
       const wasCurrentDate=!pred||!viewPred||viewPred.date===pred.date;
       pred=fresh;
       latestDate=pred.date;
       PREDS[pred.date]=pred;
+      if(dateList&&dateList.indexOf(pred.date)<0){dateList.push(pred.date);dateList.sort();}
       if(wasCurrentDate) viewPred=null;
       // 自動更新の再描画で展開カード/スクロール位置を壊さない: 退避→再描画→復元
       const _sy=window.scrollY;

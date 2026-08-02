@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -73,25 +74,49 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
     top2_lanes = {}
     abnormal_lanes = {}
     for (venue, rno), g_all in day_df.groupby(["venue", "race_no"]):
-        # F/L等の異常艇(pos欠損かつabnormalあり)のlaneを記録しておく(返還舟券の判定に使う)。
-        ab = g_all.loc[g_all["pos"].isna() & g_all["abnormal"].notna(), "lane"]
-        abnormal_lanes[(int(venue), int(rno))] = set(int(x) for x in ab)
+        key = (int(venue), int(rno))
+        # F/L/K(スタート事故・欠場)のみ返還対象、S(失格)は舟券没収のため対象外
+        # (pos欠損かつabnormalがF/L/Kで始まる艇のlaneを記録し、返還舟券の判定に使う)。
+        _abn = g_all["abnormal"].astype(str)
+        ab = g_all.loc[g_all["pos"].isna() & g_all["abnormal"].notna()
+                       & _abn.str.startswith(("F", "L", "K")), "lane"]
+        abnormal_lanes[key] = set(int(x) for x in ab)
+
+        # 公式配当(pay3t_combo)の組番を正として採用する。K行の脱落(例: 2文字名の
+        # 選手行が正規表現に不一致)でposが欠けていても、払戻情報自体は別行から
+        # パースできているため、pos再構成より信頼できる。
+        combo_s = g_all["pay3t_combo"].dropna()
+        combo_top3 = None
+        if len(combo_s):
+            cm = re.match(r"^([1-6])-([1-6])-([1-6])$", str(combo_s.iloc[0]))
+            if cm:
+                combo_top3 = [int(cm.group(1)), int(cm.group(2)), int(cm.group(3))]
+
+        # posからの再構成はcomboフォールバック時のみ使う。同着(デッドヒート)対応:
+        # 同一着順に複数艇、次着順が欠番になり得るため、posの若い順→艇番昇順で
+        # 並べ、上位3艇を決定的に確定する(欠番/重複はIndexErrorにしない)。
         g = g_all.dropna(subset=["pos"])
-        # 同着(デッドヒート)対応: 同一着順に複数艇、次着順が欠番になり得るため
-        # posの若い順→艇番昇順で並べ、上位3艇を決定的に確定する(欠番/重複はIndexErrorにしない)。
-        top3 = []
+        pos_top3 = []
         for pos in sorted(g["pos"].unique()):
             lanes = sorted(int(x) for x in g.loc[g["pos"] == pos, "lane"])
-            top3.extend(lanes)
-            if len(top3) >= 3:
+            pos_top3.extend(lanes)
+            if len(pos_top3) >= 3:
                 break
-        if len(top3) < 3:
+
+        if combo_top3 is not None:
+            if len(pos_top3) >= 3 and pos_top3[:3] != combo_top3:
+                print(f"WARN actual mismatch {key}: pos={pos_top3[:3]} combo={combo_top3}; using combo")
+            top3 = combo_top3
+        elif len(pos_top3) >= 3:
+            top3 = pos_top3[:3]
+        else:
             continue
+
         a, b, c = top3[0], top3[1], top3[2]
-        actual[(int(venue), int(rno))] = f"{a}-{b}-{c}"
-        top2_lanes[(int(venue), int(rno))] = (a, b)
-        pay = g["pay3t_amount"].dropna()
-        pays[(int(venue), int(rno))] = float(pay.iloc[0]) if len(pay) else 0.0
+        actual[key] = f"{a}-{b}-{c}"
+        top2_lanes[key] = (a, b)
+        pay = g_all["pay3t_amount"].dropna()
+        pays[key] = float(pay.iloc[0]) if len(pay) else 0.0
 
     day = {"date": ymd, "races": 0, "win_hit": 0,
            "top1_hit": 0, "top5_hit": 0, "top6_hit": 0, "top10_hit": 0,

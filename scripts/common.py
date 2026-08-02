@@ -241,7 +241,9 @@ RE_K_HEAD = re.compile(r"^\s*(\d{1,2})R\s+(\S+)")
 RE_K_ROW = re.compile(
     r"^\s*(0[1-6]|F|L[01]?|K[01]|S[0-2])\s+"   # 着順/異常コード
     r"([1-6])\s+(\d{4})\s+"                      # 艇番 登番
-    r"(\S+(?:\s{1,4}\S+)*?)\s+"                       # 選手名(空白含む可能性, 非貪欲)
+    r"(\S+(?:\s{1,6}\S+)*?)\s+"                  # 選手名(姓/名それぞれ均等割付パディングされており,
+                                                   # 姓名とも1文字(例:堤/昇)だと姓名間に最大6文字分の
+                                                   # 全角空白が入るため\s{1,4}では取りこぼす。非貪欲)
     r"(\d{1,3})\s+(\d{1,3})\s+"                  # モーター ボート
     r"(\d\.\d\d|\.)\s+"                          # 展示タイム
     r"([1-6])\s+"                                 # 進入コース
@@ -308,6 +310,9 @@ def parse_k(text: str, ymd: str):
                     })
                 if len(rows) == 6:
                     break
+            if len(rows) < 6:
+                _cand = [ln[:24] for ln in block[1:] if re.match(r"^\s*(\d{2}|[FLKS]\S?)\s", ln)]
+                print(f'PARSE_K_DROP {vcode}-{rno}R rows={len(rows)}/6 cand={_cand!r}', flush=True)
             blob = "\n".join(block)
             p3t = RE_PAY_3T.search(blob)
             p2t = RE_PAY_2T.search(blob)

@@ -150,10 +150,13 @@ def do_odds(pred, now, ymd) -> int:
     targets = []
     for v in pred["venues"]:
         for r in v["races"]:
-            if r.get("result"):
-                continue
             o = r.get("odds") or {}
             if o.get("final"):
+                continue
+            # 結果が付いていても、t3が未取得 or 暫定(prov)のままなら暫定オッズ放置に
+            # ならないよう取得対象に残す。確定t3(prov無し)が既にあればここでスキップ
+            # (finalは上のo.get("final")で既に判定済み)。
+            if r.get("result") and o.get("t3") and not o.get("prov"):
                 continue
             _p4 = sum((pk.get("p") or 0) for pk in (r.get("picks") or [])[:4])
             if o.get("t3") and not o.get("prov"):
