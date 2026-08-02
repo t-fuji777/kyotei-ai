@@ -12,7 +12,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 from build_dataset import build_day, save_year
-from common import is_sengen, sengen_top3p, SENGEN_MIN_ODDS
+from common import (is_sengen, sengen_top3p, SENGEN_MIN_ODDS,
+                     is_matsu, matsu_top4p, MATSU_MIN_ODDS, MATSU_MAX_ODDS)
 
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
@@ -37,6 +38,26 @@ def _picks_ok(r, act=None, pay=None):
         else:
             o = t3.get(c)
         if o is not None and o < SENGEN_MIN_ODDS:
+            return False
+    return True
+
+
+def _matsu_ok(r, act=None, pay=None):
+    """プレミアの価値フィルタ: 上位4点は全点オッズ取得済みが前提(1つでもNoneなら対象外。
+    厳選と異なりオッズ必須。オッズ帯=市場の同意が選定シグナルのため)。上限(10.0倍)判定は
+    常に取得オッズそのままで行う(実配当で事後に外さない)。下限(4.1倍)判定のみ、的中買い目
+    (c==act)は暫定オッズが最終に更新されず残ることがあるため、確定した実配当(pay/100)を
+    優先して判定する(_picks_okと同一の流儀)。"""
+    t3 = (r.get("odds") or {}).get("t3") or {}
+    for p in r["picks"][:4]:
+        c = p["c"]
+        o = t3.get(c)
+        if o is None:
+            return False
+        if o > MATSU_MAX_ODDS:
+            return False
+        o_min = pay / 100.0 if (act is not None and pay and c == act) else o
+        if o_min < MATSU_MIN_ODDS:
             return False
     return True
 
@@ -76,7 +97,8 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
            "top1_hit": 0, "top5_hit": 0, "top6_hit": 0, "top10_hit": 0,
            "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
            "fuku_hit": 0, "sen_n": 0, "sen_hit": 0,
-           "sen_pred_sum": 0.0, "top5_pred_sum": 0.0}
+           "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
+           "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0}
     for v in pred.get("venues", []):
         for r in v["races"]:
             key = (v["code"], r["no"])
@@ -94,6 +116,7 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
             fuku_lane = top_boat
             top5p = sum(p.get("p", 0) for p in r["picks"][:5])
             top3p = sum(p.get("p", 0) for p in r["picks"][:3])
+            top4p = sum(p.get("p", 0) for p in r["picks"][:4])
             if top_boat is not None and top_boat == win_lane:
                 day["win_hit"] += 1
             if fuku_lane in top2_lanes.get(key, ()):
@@ -105,6 +128,11 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 day["sen_pred_sum"] += top3p
                 if act in picks[:3]:
                     day["sen_hit"] += 1
+            if is_matsu(top4p, v["code"]) and _matsu_ok(r, act, _pay):
+                day["prm_n"] += 1
+                day["prm_pred_sum"] += top4p
+                if act in picks[:4]:
+                    day["prm_hit"] += 1
             if picks and picks[0] == act:
                 day["top1_hit"] += 1
             # F/L等の異常艇が絡む組番は全額返還されるため、実投入額(返還されない点数)のみを
@@ -153,7 +181,8 @@ def main():
         acc["days"] = acc["days"][-365:]
         t = {"races": 0, "win_hit": 0, "top1_hit": 0, "top5_hit": 0, "top6_hit": 0,
              "top10_hit": 0, "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
-             "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0}
+             "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
+             "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0}
         for d in acc["days"]:
             for k in t:
                 t[k] += d.get(k, 0)

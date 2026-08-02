@@ -73,6 +73,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 .rno.jump:active{background:rgba(91,192,222,.26)}
 @keyframes flashbg{0%{background:rgba(91,192,222,.30)}100%{background:transparent}}
 .race.flash{animation:flashbg 1.5s ease}
+.race.prm .rno .rnum{background:var(--confA);color:#1A1200;border-radius:6px;padding:1px 6px;line-height:1.2}
 .rmeta{flex:1;min-width:0}
 .rtype{font-size:12px;color:var(--dim);display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;vertical-align:bottom}
 .rdl{font-size:11px;color:var(--dim)}
@@ -151,7 +152,7 @@ nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
-th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:7px 3px;overflow-wrap:break-word}.acctbl th:first-child,.acctbl td:first-child{width:15%}.acctbl th:not(:first-child),.acctbl td:not(:first-child){width:17%}
+th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:7px 3px;overflow-wrap:break-word}.acctbl th:first-child,.acctbl td:first-child{width:15%}.acctbl th:not(:first-child),.acctbl td:not(:first-child){width:14.1667%}
 .pad{padding:0 16px}
 .accwrap{padding:0 4px}
 .accwrap .acctbl td>br+span{white-space:nowrap}
@@ -197,6 +198,10 @@ const $=s=>document.querySelector(s);
 // 厳選: 3連単TOP3の3点(300円)買い。TOP3合計確率が高く・除外会場でなく・上位3点のオッズが一定以上の
 // 水面が安定したレースのみを厳選する。閾値/除外会場は過去実績のtrain/test検証で決定(scripts/common.py とミラー)。
 const SENGEN_TOP3P_MIN=0.36, SENGEN_MIN_ODDS=3.1, SENGEN_EXCLUDE=[3,4,14];
+// プレミア: 厳選の上位ティア。3連単TOP4の4点(400円)買い。TOP4合計確率が高く・除外会場でなく・
+// 上位4点全てのオッズが取得済みで4.1〜10.0倍の帯(市場の同意)に収まるレースのみを対象とする。
+// 7,339レースのバックテスト+時系列分割検証で確定した閾値(scripts/common.py とミラー)。
+const MATSU_TOP4P_MIN=0.36, MATSU_MIN_ODDS=4.1, MATSU_MAX_ODDS=10;
 const VIEW={today:null,acc:null,model:null};
 let cur="today", pred=null, selVenue=null, todayMode="time";
 let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false;
@@ -213,9 +218,11 @@ const windArrow=n=>(n==null||n>16)?"":` <span class="warr" style="transform:rota
 const confCls=p=>p>=0.9?"confA":p>=0.8?"confB":"confC";
 const top5p=r=>r.picks?r.picks.slice(0,5).reduce((a,p)=>a+(p.p||0),0):0;
 const top3p=r=>r.picks?r.picks.slice(0,3).reduce((a,p)=>a+(p.p||0),0):0;
+const top4p=r=>r.picks?r.picks.slice(0,4).reduce((a,p)=>a+(p.p||0),0):0;
 const cumCls=p=>p>=0.4?"confA":p>=0.35?"confB":"confC";
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
 const t3hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,3).some(p=>p.c===r.result.order));
+const t4hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,4).some(p=>p.c===r.result.order));
 
 function dayLabel(v){if(!v)return "";if(v.is_final)return " \u00b7 \u6700\u7d42\u65e5";if(v.day_n===1)return " \u00b7 \u521d\u65e5";if(v.day_n>1)return " \u00b7 "+v.day_n+"\u65e5\u76ee";return "";}
 function sortVenues(p){if(p&&Array.isArray(p.venues))p.venues.sort((a,b)=>(a.code||0)-(b.code||0));return p;}
@@ -236,6 +243,11 @@ function setHeader(p){
 
 function axisTable(r){ return ""; }
 function sengenOk(r,vcode){if(top3p(r)<SENGEN_TOP3P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;return r.picks.slice(0,3).every(function(p){var o=pickOdds(r,p.c);return o==null||o>=SENGEN_MIN_ODDS;});}
+// プレミア判定: 厳選と異なりオッズ必須(未取得=対象外)。上限(10.0)は取得オッズそのままで判定し、
+// 下限(4.1)のみ確定レースの的中買い目に限り実配当を優先する(pickOdds と同じ流儀)。
+function matsuOk(r,vcode){if(top4p(r)<MATSU_TOP4P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;
+  return r.picks.slice(0,4).every(function(p){var raw=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;
+    if(raw==null||raw>MATSU_MAX_ODDS)return false;var o=pickOdds(r,p.c);return o>=MATSU_MIN_ODDS;});}
 function fitRtype(){document.querySelectorAll(".rtype").forEach(el=>{el.style.fontSize="";let fs=12,g=0;while(el.scrollWidth>el.clientWidth+0.5&&fs>8&&g<24){fs-=0.5;el.style.fontSize=fs+"px";g++;}});}
 // 買い目の実効オッズ(表示・厳選の価値判定の共通基準): 確定済みレース(中止除く)の
 // 的中買い目は、暫定オッズ(prov)が最終に更新されず残る場合があるため、実配当(pay3t/100)を
@@ -250,31 +262,35 @@ function renderSengen(){
   if(!pred){m.innerHTML='<div class="spin"></div>';return}
   setHeader();
   const list=[];
-  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(sengenOk(r,v.code))list.push({v,r})}));
+  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(sengenOk(r,v.code)||matsuOk(r,v.code))list.push({v,r})}));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   {const sc=$("#senCount");if(sc){
-    const dec=list.filter(x=>x.r.result&&!x.r.result.status).length;const hit=list.filter(x=>t3hit(x.r)).length;const rate=dec?(hit/dec*100).toFixed(1)+'％':'ー％';
-    sc.innerHTML=`<span class="ssl"><span class="ssk">本　日</span>：</span><span class="ssv">${list.length}件</span><span class="ssl"><span class="ssk">厳　選</span>：</span><span class="ssv">${hit}件</span>`;
+    const senHit=list.filter(x=>sengenOk(x.r,x.v.code)&&t3hit(x.r)).length;
+    const prmHit=list.filter(x=>matsuOk(x.r,x.v.code)&&t4hit(x.r)).length;
+    sc.innerHTML=`<span class="ssl"><span class="ssk">本　日</span>：</span><span class="ssv">${list.length}件</span><span class="ssl">竹プラン：</span><span class="ssv">${senHit}件</span><span class="ssl">松プラン：</span><span class="ssv">${prmHit}件</span>`;
   }}
   if(!list.length){
     m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>3連単上位3点の合計確率が高く、水面が安定した会場のみを厳選しています。</div>`;
     return;
   }
   const _cf=({v,r})=>{
+    const isP=matsuOk(r,v.code);
+    const cp=isP?top4p(r):top3p(r);
+    const hit=isP?t4hit(r):t3hit(r);
     const fav=r.fuku||{};
     const fb=r.boats.find(b=>b.lane===fav.lane)||{};
     const top=r.picks[0]||{c:"-",p:0};
-    const picks=r.picks.slice(0,3).map((p,i)=>
+    const picks=r.picks.slice(0,isP?4:3).map((p,i)=>
       `<div class="pickrow"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
         <span class="bp num">${pct(p.p)}</span>${(pickOdds(r,p.c)!=null)?`<span class="oddv num">${pickOdds(r,p.c)}倍</span>`:""}</div>`).join("");
-    return `<div class="race open">
+    return `<div class="race open${isP?' prm':''}">
       <div class="racehead">
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(top3p(r))}">${Math.round(top3p(r)*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${(top.c===r.result.order)?"jbest":(t3hit(r)?"jhit":"jmiss")}">${(top.c===r.result.order)?"◎":(t3hit(r)?"〇":"✕")}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(cp)}">${Math.round(cp*100)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${(top.c===r.result.order)?"jbest":(hit?"jhit":"jmiss")}">${(top.c===r.result.order)?"◎":(hit?"〇":"✕")}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
       </div>
       <div class="racebody">
         ${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
@@ -429,43 +445,44 @@ function renderToday(){
 
 function todayStats(){
   if(!pred||!pred.venues) return null;
-  let n=0,w=0,t1=0,t6=0,sn=0,sh=0,st=0,rt=0,sp=0,tp=0;
+  let n=0,w=0,t1=0,t6=0,sn=0,sh=0,st=0,rt=0,sp=0,tp=0,mn=0,mh=0,mp=0;
   for(const v of pred.venues)for(const r of v.races){const x=r.result;if(!x||x.status)continue;
     n++;if(x.hit_win)w++;const p5=top5p(r);tp+=p5;
     if(r.picks&&r.picks[0]&&r.picks[0].c===x.order)t1++;
     if(t5hit(r)){t6++;rt+=(x.pay3t||0)}st+=500;
-    if(sengenOk(r,v.code)){sn++;sp+=top3p(r);if(t3hit(r))sh++}}
+    if(sengenOk(r,v.code)){sn++;sp+=top3p(r);if(t3hit(r))sh++}
+    if(matsuOk(r,v.code)){mn++;mp+=top4p(r);if(t4hit(r))mh++}}
   if(!n) return null;
   const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
   const row=`<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
     <td class="num">${n}</td><td class="num">${Math.round(w/n*100)}%</td>
     <td class="num">${Math.round(t6/n*100)}%</td><td class="num">${sen}</td>
     <td class="num">${st?Math.round(rt/st*100):0}%</td></tr>`;
-  return {row,n,win_hit:w,top1_hit:t1,top5_hit:t6,sen_n:sn,sen_hit:sh,sen_pred_sum:sp,top5_pred_sum:tp,stake5:st,return5:rt};
+  return {row,n,win_hit:w,top1_hit:t1,top5_hit:t6,sen_n:sn,sen_hit:sh,sen_pred_sum:sp,top5_pred_sum:tp,prm_n:mn,prm_hit:mh,prm_pred_sum:mp,stake5:st,return5:rt};
 }
 function renderAcc(acc){
   const m=$("#main");
   const td=todayStats();
   const accRow=(label,X,st)=>{
-    const R=X.races||0,t1=X.top1_hit||0,t5=X.top5_hit||0,sn=X.sen_n||0,sh=X.sen_hit||0;
+    const R=X.races||0,t1=X.top1_hit||0,t5=X.top5_hit||0,sn=X.sen_n||0,sh=X.sen_hit||0,pn=X.prm_n||0,ph=X.prm_hit||0;
     const roi=X.stake5?Math.round((X.return5||0)/X.stake5*100):0;
     const cell=(num,den)=>den?`${num}<br><span style="color:var(--dim);font-size:11px">(${(num/den*100).toFixed(1)}%)</span>`:"-";
     const scell=(h,n)=>n?`${h}/${n}<br><span style="color:var(--dim);font-size:11px">(${(h/n*100).toFixed(1)}%)</span>`:"-";
-    return `<tr${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t1,R)}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${roi}%</td></tr>`;
+    return `<tr${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t1,R)}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${scell(ph,pn)}</td><td class="num">${roi}%</td></tr>`;
   };
   const days=(acc&&acc.days)?acc.days:[];
   const t0=(acc&&acc.total)?acc.total:null;
   const dup=pred&&days.some(d=>String(d.date)===String(pred.date));
-  const tj=(td&&!dup)?{races:td.n,top1_hit:td.top1_hit,top5_hit:td.top5_hit,sen_n:td.sen_n,sen_hit:td.sen_hit,stake5:td.stake5,return5:td.return5}:null;
+  const tj=(td&&!dup)?{races:td.n,top1_hit:td.top1_hit,top5_hit:td.top5_hit,sen_n:td.sen_n,sen_hit:td.sen_hit,prm_n:td.prm_n,prm_hit:td.prm_hit,stake5:td.stake5,return5:td.return5}:null;
   let tt=t0;
-  if(t0&&tj)tt={races:(t0.races||0)+tj.races,top1_hit:(t0.top1_hit||0)+tj.top1_hit,top5_hit:(t0.top5_hit||0)+tj.top5_hit,sen_n:(t0.sen_n||0)+tj.sen_n,sen_hit:(t0.sen_hit||0)+tj.sen_hit,stake5:(t0.stake5||0)+tj.stake5,return5:(t0.return5||0)+tj.return5};
+  if(t0&&tj)tt={races:(t0.races||0)+tj.races,top1_hit:(t0.top1_hit||0)+tj.top1_hit,top5_hit:(t0.top5_hit||0)+tj.top5_hit,sen_n:(t0.sen_n||0)+tj.sen_n,sen_hit:(t0.sen_hit||0)+tj.sen_hit,prm_n:(t0.prm_n||0)+(tj.prm_n||0),prm_hit:(t0.prm_hit||0)+(tj.prm_hit||0),stake5:(t0.stake5||0)+tj.stake5,return5:(t0.return5||0)+tj.return5};
   else if(!t0)tt=tj;
   if(!tt||!tt.races){m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;}
   const dayRows=days.slice().reverse().slice(0,60).map(d=>accRow('<span style="color:var(--dim);font-size:8px;white-space:nowrap">'+d.date.slice(2,4)+'年('+['日','月','火','水','木','金','土'][new Date(+d.date.slice(0,4),+d.date.slice(4,6)-1,+d.date.slice(6,8)).getDay()]+')</span><br>'+d.date.slice(4,6)+"/"+d.date.slice(6,8),d)).join("");
   const todayRow=tj?accRow('本日<br><span style="color:var(--dim);font-size:9px">速報</span>',tj):"";
   const totalRow=days.length?accRow('累計',tt,'font-weight:700'):"";
   m.innerHTML=`<div class="accwrap"><table class="acctbl">
-      <tr><th>日付</th><th>R数</th><th>3連単</th><th>TOP5</th><th>厳選</th><th>回収率</th></tr>${totalRow}${todayRow}${dayRows}
+      <tr><th>日付</th><th>R数</th><th>3連単</th><th>梅プラン</th><th>竹プラン</th><th>松プラン</th><th>回収率</th></tr>${totalRow}${todayRow}${dayRows}
     </table></div>`;
 }
 
@@ -479,7 +496,7 @@ function renderModel(rep){
     <div class="kv"><span>学習日時</span><span class="num">${rep.trained_at||"-"}</span></div>
     <div class="kv"><span>学習期間</span><span class="num">${(rep.period||[]).join(" - ")}</span></div>
     <div class="kv"><span>学習行数</span><span class="num">${(rep.rows_train||0).toLocaleString()}</span></div>
-    <div class="kv"><span>厳選条件</span><span class="num">TOP3合計確率36%以上・全3点オッズ3.1倍以上・安定水面のみ(7,339レース検証)</span></div>
+    <div class="kv"><span>プラン条件</span><span class="num">竹プラン: TOP3合計確率36%以上・全3点オッズ3.1倍以上・安定水面のみ<br>松プラン: TOP4合計確率36%以上・全4点4.1〜10倍(市場コンセンサス)<br>いずれも7,339レースのバックテストで決定</span></div>
     <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
     <div class="kv"><span>1着的中率</span><span class="num">${pct(tm.win_hit_rate||0)} (基準 ${pct(bm.win_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 予測</span><span class="num">${pct(tm.top1_hit_rate||0)} (基準 ${pct(bm.top1_hit_rate||0)})</span></div>

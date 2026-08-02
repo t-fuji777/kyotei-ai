@@ -30,8 +30,10 @@ ODDS_MAX_PER_RUN = 8   # keep small so the whole run finishes in time
 # ---- morning provisional odds config ----
 MORNING_ODDS_MAX_PER_RUN = 12       # lightweight t3-only sweep, far-out races
 MORNING_ODDS_FROM_HHMM = (7, 45)    # advance (zen-uri) odds appear ~7:45 JST
-SENGEN_REFETCH_MIN = 10             # re-fetch sengen candidates within N min of deadline (final 3.1x check)
-SENGEN_TOP3P_MIN = 0.36             # a race is a sengen candidate when top-3 cumulative prob >= this
+SENGEN_REFETCH_MIN = 10             # re-fetch sengen/premier candidates within N min of deadline (final odds check)
+CAND_TOP4P_MIN = 0.36               # top-4 cumulative prob threshold for the refetch heuristic; sengen
+                                     # (top3p>=0.36) candidates are a subset of top4p>=0.36 candidates, so
+                                     # this single top4p check covers both the sengen and premier tiers
 
 
 def _mins_to_deadline(now, dl):
@@ -153,15 +155,16 @@ def do_odds(pred, now, ymd) -> int:
             o = r.get("odds") or {}
             if o.get("final"):
                 continue
-            _p3 = sum((pk.get("p") or 0) for pk in (r.get("picks") or [])[:3])
+            _p4 = sum((pk.get("p") or 0) for pk in (r.get("picks") or [])[:4])
             if o.get("t3") and not o.get("prov"):
                 m0 = _mins_to_deadline(now, r.get("deadline"))
                 if m0 is None:
                     continue
                 # real odds stored and deadline still ahead: normally skip, but
-                # re-fetch sengen candidates in the final minutes so the >=3.1x
-                # judgment runs on near-final odds rather than the ~60-min value.
-                if m0 >= 0 and not (_p3 >= SENGEN_TOP3P_MIN and m0 <= SENGEN_REFETCH_MIN):
+                # re-fetch sengen/premier candidates in the final minutes so the
+                # final odds-band judgment runs on near-final odds rather than the
+                # ~60-min value. top4p>=0.36 covers both tiers (see CAND_TOP4P_MIN).
+                if m0 >= 0 and not (_p4 >= CAND_TOP4P_MIN and m0 <= SENGEN_REFETCH_MIN):
                     continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None:
@@ -169,7 +172,7 @@ def do_odds(pred, now, ymd) -> int:
             # too early: more than ODDS_BEFORE_MAX minutes before deadline
             if mins > ODDS_BEFORE_MAX:
                 continue
-            targets.append((_p3 < SENGEN_TOP3P_MIN, mins, v["code"], r["no"]))
+            targets.append((_p4 < CAND_TOP4P_MIN, mins, v["code"], r["no"]))
     if not targets:
         print("no races need odds")
         return 0

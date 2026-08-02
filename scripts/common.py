@@ -40,6 +40,30 @@ def is_sengen(top3p, venue):
         return False
 
 
+# プレミア(matsu)判定: 厳選のさらに上位ティア。買い目は3連単TOP4の4点(400円)。
+# 条件は (a) picks上位4点のp合計(top4p) >= MATSU_TOP4P_MIN
+#        (b) 除外会場でない(厳選と共通のSENGEN_EXCLUDE_VENUES)
+#        (c) 上位4点すべてオッズ取得済み(Noneが1つでもあれば対象外。厳選と異なりオッズは必須。
+#            オッズ帯=市場の同意 が選定シグナルそのものであるため)
+#        (d) 全4点のオッズが4.1倍以上10.0倍以下の帯に収まる(モデルの確信と市場の評価が
+#            一致する水準=コンセンサス)。
+# 7339レースのバックテスト+時系列分割検証で決定した固定閾値(検証期正解率52〜58%)。
+MATSU_TOP4P_MIN = 0.36
+MATSU_MIN_ODDS = 4.1
+MATSU_MAX_ODDS = 10.0
+
+
+def matsu_top4p(picks):
+    return sum((p.get("p") or 0) for p in (picks or [])[:4])
+
+
+def is_matsu(top4p, venue):
+    try:
+        return top4p >= MATSU_TOP4P_MIN and int(venue) not in SENGEN_EXCLUDE_VENUES
+    except Exception:
+        return False
+
+
 def zen2han(s: str) -> str:
     """全角英数字を半角化(カナ・漢字は維持)"""
     out = []
