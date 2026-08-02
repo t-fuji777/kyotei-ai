@@ -12,7 +12,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 from build_dataset import build_day, save_year
-from common import is_sengen, is_super_sengen
+from common import is_sengen, sengen_top3p, SENGEN_MIN_ODDS
 
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
@@ -26,17 +26,17 @@ def _atomic_write_text(path: Path, text: str):
 
 
 def _picks_ok(r, act=None, pay=None):
-    """価値フィルタ: 上位5点にオッズ5.1倍未満が含まれれば厳選対象外(500円ボックスで
+    """価値フィルタ: 上位3点にオッズ3.1倍未満が含まれれば厳選対象外(300円ボックスで
     的中しても損になるため)。的中買い目(c==act)は暫定オッズが最終に更新されず残る
     ことがあるため、確定した実配当(pay/100)を優先して判定する(UI pickOdds と同一)。"""
     t3 = (r.get("odds") or {}).get("t3") or {}
-    for p in r["picks"][:5]:
+    for p in r["picks"][:3]:
         c = p["c"]
         if act is not None and pay and c == act:
             o = pay / 100.0
         else:
             o = t3.get(c)
-        if o is not None and o < 5.1:
+        if o is not None and o < SENGEN_MIN_ODDS:
             return False
     return True
 
@@ -76,8 +76,7 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
            "top1_hit": 0, "top5_hit": 0, "top6_hit": 0, "top10_hit": 0,
            "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
            "fuku_hit": 0, "sen_n": 0, "sen_hit": 0,
-           "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
-           "super_n": 0, "super_hit": 0, "super_pred_sum": 0.0}
+           "sen_pred_sum": 0.0, "top5_pred_sum": 0.0}
     for v in pred.get("venues", []):
         for r in v["races"]:
             key = (v["code"], r["no"])
@@ -94,22 +93,18 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 top_boat = max(r["boats"], key=lambda b: b["wp"])["lane"]
             fuku_lane = top_boat
             top5p = sum(p.get("p", 0) for p in r["picks"][:5])
+            top3p = sum(p.get("p", 0) for p in r["picks"][:3])
             if top_boat is not None and top_boat == win_lane:
                 day["win_hit"] += 1
             if fuku_lane in top2_lanes.get(key, ()):
                 day["fuku_hit"] += 1
             day["top5_pred_sum"] += top5p
             _pay = pays.get(key)
-            if is_sengen(top5p, v["code"]) and _picks_ok(r, act, _pay):
+            if is_sengen(top3p, v["code"]) and _picks_ok(r, act, _pay):
                 day["sen_n"] += 1
-                day["sen_pred_sum"] += top5p
-                if act in picks[:5]:
+                day["sen_pred_sum"] += top3p
+                if act in picks[:3]:
                     day["sen_hit"] += 1
-            if is_super_sengen(top5p, v["code"]) and _picks_ok(r, act, _pay):
-                day["super_n"] += 1
-                day["super_pred_sum"] += top5p
-                if act in picks[:5]:
-                    day["super_hit"] += 1
             if picks and picks[0] == act:
                 day["top1_hit"] += 1
             # F/L等の異常艇が絡む組番は全額返還されるため、実投入額(返還されない点数)のみを
@@ -158,8 +153,7 @@ def main():
         acc["days"] = acc["days"][-365:]
         t = {"races": 0, "win_hit": 0, "top1_hit": 0, "top5_hit": 0, "top6_hit": 0,
              "top10_hit": 0, "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
-             "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
-             "super_n": 0, "super_hit": 0, "super_pred_sum": 0.0}
+             "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0}
         for d in acc["days"]:
             for k in t:
                 t[k] += d.get(k, 0)
