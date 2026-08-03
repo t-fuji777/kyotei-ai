@@ -167,7 +167,9 @@ def do_odds(pred, now, ymd) -> int:
                 # re-fetch sengen/premier candidates in the final minutes so the
                 # final odds-band judgment runs on near-final odds rather than the
                 # ~60-min value. top4p>=0.36 covers both tiers (see CAND_TOP4P_MIN).
-                if m0 >= 0 and not (_p4 >= CAND_TOP4P_MIN and m0 <= SENGEN_REFETCH_MIN):
+                # races 1-4 are excluded from both tiers (5R以降のみ対象), so they
+                # never qualify for this final-minutes re-fetch either.
+                if m0 >= 0 and not (_p4 >= CAND_TOP4P_MIN and r["no"] >= 5 and m0 <= SENGEN_REFETCH_MIN):
                     continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None:

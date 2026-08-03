@@ -21,21 +21,25 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like 
 # 厳選(sengen)判定: 買い目は3連単TOP3の3点(300円)に一本化。
 # 条件は (a) picks上位3点のp合計(top3p) >= SENGEN_TOP3P_MIN
 #        (b) 除外会場でない
-#        (c) 上位3点すべてオッズ >= SENGEN_MIN_ODDS(300円買っても損にならない水準)。
+#        (c) 上位3点すべてオッズ >= SENGEN_MIN_ODDS(300円買っても損にならない水準)
+#        (d) レース番号 >= SENGEN_MIN_RNO(5R以降。1-4Rはモデルの高確率帯が信用できない
+#            ことが較正で実証されているため、竹・松ともに対象外)。
 # 7339レースのバックテストで決定した固定閾値。かつての2段構成(通常0.48/超厳選0.58、
 # 5点買い基準)は検証の結果廃止し、3点買いのtop3p基準に一本化した。
 SENGEN_TOP3P_MIN = 0.36
 SENGEN_MIN_ODDS = 3.1
 SENGEN_EXCLUDE_VENUES = frozenset({3, 4, 14})  # 江戸川/平和島/鳴門(荒れ水面)
+SENGEN_MIN_RNO = 5  # 1-4Rはモデル過大評価のため両プラン(竹/松)対象外
 
 
 def sengen_top3p(picks):
     return sum((p.get("p") or 0) for p in (picks or [])[:3])
 
 
-def is_sengen(top3p, venue):
+def is_sengen(top3p, venue, rno):
     try:
-        return top3p >= SENGEN_TOP3P_MIN and int(venue) not in SENGEN_EXCLUDE_VENUES
+        return (top3p >= SENGEN_TOP3P_MIN and int(venue) not in SENGEN_EXCLUDE_VENUES
+                and int(rno) >= SENGEN_MIN_RNO)
     except Exception:
         return False
 
@@ -46,7 +50,8 @@ def is_sengen(top3p, venue):
 #        (c) 上位4点すべてオッズ取得済み(Noneが1つでもあれば対象外。厳選と異なりオッズは必須。
 #            オッズ帯=市場の同意 が選定シグナルそのものであるため)
 #        (d) 全4点のオッズが4.1倍以上10.0倍以下の帯に収まる(モデルの確信と市場の評価が
-#            一致する水準=コンセンサス)。
+#            一致する水準=コンセンサス)
+#        (e) レース番号 >= SENGEN_MIN_RNO(5R以降。厳選と共通の理由で1-4Rは対象外)。
 # 7339レースのバックテスト+時系列分割検証で決定した固定閾値(検証期正解率52〜58%)。
 MATSU_TOP4P_MIN = 0.36
 MATSU_MIN_ODDS = 4.1
@@ -57,9 +62,10 @@ def matsu_top4p(picks):
     return sum((p.get("p") or 0) for p in (picks or [])[:4])
 
 
-def is_matsu(top4p, venue):
+def is_matsu(top4p, venue, rno):
     try:
-        return top4p >= MATSU_TOP4P_MIN and int(venue) not in SENGEN_EXCLUDE_VENUES
+        return (top4p >= MATSU_TOP4P_MIN and int(venue) not in SENGEN_EXCLUDE_VENUES
+                and int(rno) >= SENGEN_MIN_RNO)
     except Exception:
         return False
 
