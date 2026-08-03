@@ -155,7 +155,7 @@ th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
 th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:2px 3px;line-height:1.35;overflow-wrap:break-word;border-bottom:0}.acctbl tr.stkrow:first-child th{padding:6px 3px 4px}.acctbl tr.blast>th,.acctbl tr.blast>td{box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.dcell{vertical-align:middle;text-align:center;box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.plab{color:var(--dim);font-weight:700}
 .acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background:var(--bg);border-bottom:0}.acctbl tr.mrow{cursor:pointer}
-.accnote{font-size:9px;color:var(--dim);padding:2px 8px 5px;line-height:1.5;text-align:right}
+#senCount .anote{grid-column:1/-1;text-align:right;font-size:8px;line-height:1.45;font-weight:400;color:var(--dim);white-space:nowrap}
 .pad{padding:0 16px}
 .accwrap{padding:0 4px}
 .accwrap .acctbl td>br+span{white-space:nowrap}
@@ -224,7 +224,8 @@ const confCls=p=>p>=0.9?"confA":p>=0.8?"confB":"confC";
 const top5p=r=>r.picks?r.picks.slice(0,5).reduce((a,p)=>a+(p.p||0),0):0;
 const top3p=r=>r.picks?r.picks.slice(0,3).reduce((a,p)=>a+(p.p||0),0):0;
 const top4p=r=>r.picks?r.picks.slice(0,4).reduce((a,p)=>a+(p.p||0),0):0;
-const cumCls=p=>p>=0.4?"confA":p>=0.35?"confB":"confC";
+// バッジ色分け(較正後の実測確率基準): 金=50%以上(半分以上当たる帯のみ)/青=40〜49%/灰=それ未満
+const cumCls=p=>p>=0.5?"confA":p>=0.4?"confB":"confC";
 // 的中率バッジの較正: モデル確率(表示%)を過去8,418レースの実測的中率へ写像(区分線形)。
 // モデルは中〜高確率帯で控えめなため、表示値を実測に合わせて補正する。
 // 選定ロジック(生のtop3p/top4p閾値)には一切使わず、バッジ表示のみに適用。2026-08-03算出。
@@ -553,7 +554,9 @@ function renderAcc(acc){
     const dayRows=open?g.list.map(d=>blockRows(dlab2(d.date),d,{})).join(""):"";
     return mrows+dayRows;
   }).join("");
-  m.innerHTML=`<div class="accwrap"><div class="accnote">※梅=全レース・上位5点(500円)<br>竹=上位3点・オッズ3.1倍以上(300円)<br>松=上位4点・4.1〜10倍(400円)</div><table class="acctbl">
+  // プラン説明はヘッダ右の空き枠(旧カウンタ位置 #senCount)に表示し、表の上に新しい帯は作らない
+  {const sc=$("#senCount");if(sc)sc.innerHTML='<span class="anote">※梅=全レース・上位5点(500円)<br>竹=上位3点・オッズ3.1倍以上(300円)<br>松=上位4点・4.1〜10倍(400円)</span>';}
+  m.innerHTML=`<div class="accwrap"><table class="acctbl">
       <colgroup><col style="width:20%"><col style="width:12%"><col style="width:26%"><col style="width:21%"><col style="width:21%"></colgroup>
       ${headRow}${totalRows}${curMonthRows}${todayRows}${curDayRows}${pastRows}
     </table></div>`;
