@@ -154,7 +154,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
 th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:7px 3px;overflow-wrap:break-word}.acctbl th:first-child,.acctbl td:first-child{width:15%}.acctbl th:not(:first-child),.acctbl td:not(:first-child){width:17%}.acctbl tr.pdesc th{padding:0 1px 6px;vertical-align:top}.pdescbox{display:inline-block;font-size:8px;font-weight:400;color:var(--dim);line-height:1.35;white-space:nowrap}
-.acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background:var(--bg)}.acctbl tr.mrow{cursor:pointer}
+.acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background:var(--bg);border-bottom:0;box-shadow:inset 0 -1px 0 var(--line)}.acctbl tr.mrow{cursor:pointer}
 .pad{padding:0 16px}
 .accwrap{padding:0 4px}
 .accwrap .acctbl td>br+span{white-space:nowrap}
@@ -506,7 +506,7 @@ function renderAcc(acc){
   });
   const monthLabel=(key,open)=>{
     const yy=key.slice(2,4),mm=+key.slice(4,6);
-    return '<span style="color:var(--dim);font-size:8px;white-space:nowrap">'+yy+'年</span><br><span style="white-space:nowrap">'+mm+'月 <span style="color:var(--dim);font-size:8px">'+(open?'▲':'▼')+'</span></span>';
+    return '<span style="white-space:nowrap"><span style="color:var(--dim);font-size:8px">'+yy+'年</span>'+mm+'月<span style="color:var(--dim);font-size:8px">'+(open?'▲':'▼')+'</span></span>';
   };
   const sumMonth=list=>{
     const s={races:0,top5_hit:0,sen_n:0,sen_hit:0,prm_n:0,prm_hit:0,stake5:0,return5:0};
@@ -524,7 +524,7 @@ function renderAcc(acc){
   const totalRow=days.length?accRow('累計',tt,'font-weight:700',' class="stkrow"'):"";
   m.innerHTML=`<div class="accwrap"><table class="acctbl">
       <tr class="stkrow"><th>日付</th><th>レース数</th><th>梅プラン</th><th>竹プラン</th><th>松プラン</th><th>回収率</th></tr>
-      <tr class="pdesc stkrow"><th></th><th><span class="pdescbox">全場の<br>確定レース</span></th><th><span class="pdescbox">全レース<br>上位5点</span></th><th><span class="pdescbox">上位3点<br>3.1倍以上</span></th><th><span class="pdescbox">上位4点<br>4.1〜10倍</span></th><th><span class="pdescbox">梅プラン<br>500円買い</span></th></tr>${totalRow}${todayRow}${groupRows}
+      <tr class="pdesc stkrow"><th><span class="pdescbox">※</span></th><th><span class="pdescbox">全場の<br>確定レース</span></th><th><span class="pdescbox">全レース<br>上位5点</span></th><th><span class="pdescbox">上位3点<br>3.1倍以上</span></th><th><span class="pdescbox">上位4点<br>4.1〜10倍</span></th><th><span class="pdescbox">梅プラン<br>500円買い</span></th></tr>${totalRow}${todayRow}${groupRows}
     </table></div>`;
   m.querySelectorAll(".acctbl tr.mrow").forEach(tr=>tr.onclick=()=>{const k=tr.getAttribute("data-m");accOpenM[k]=!accOpenM[k];renderAcc(acc);});
   requestAnimationFrame(positionAccSticky);
@@ -534,10 +534,12 @@ function positionAccSticky(){
   const tbl=document.querySelector(".acctbl");
   if(!tbl)return;
   const header=document.querySelector("header");
-  let top=header?header.offsetHeight:0;
+  // 高さは小数精度(getBoundingClientRect)で累積する。整数丸め(offsetHeight)だと
+  // 固定行の間にサブピクセルの隙間ができ、スクロール内容が透けて見えるため。
+  let top=header?header.getBoundingClientRect().height:0;
   tbl.querySelectorAll("tr.stkrow").forEach(tr=>{
     Array.prototype.forEach.call(tr.children,cell=>{cell.style.top=top+"px";});
-    top+=tr.offsetHeight;
+    top+=tr.getBoundingClientRect().height;
   });
 }
 if(!accResizeBound){accResizeBound=true;window.addEventListener("resize",()=>{if(cur==="acc")positionAccSticky();});}
