@@ -53,6 +53,7 @@ nav button{flex:1;background:none;border:none;color:var(--dim);
 nav button.on{color:var(--accent)}
 nav button svg{display:block;margin:0 auto 3px;width:20px;height:20px;
   stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.navsub{display:block;font-size:8.5px;font-weight:600;margin-top:1px;white-space:nowrap;letter-spacing:0}
 
 .hdrtop{display:flex;align-items:center;gap:10px}.hdrtop h1{flex:0 0 auto;margin:0}#hdrChips{position:absolute;top:0;right:0;display:flex;justify-content:flex-end}#hdrChips:empty{display:none}#venSel{display:flex;justify-content:space-between;width:148px;height:25px;margin-top:8px;align-self:center;align-items:center;gap:2px;max-width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:2px 5px 2px 12px;font-size:14px;font-weight:700;line-height:1.2;cursor:pointer;white-space:nowrap}#venSel .car{color:var(--dim);font-size:20px}#venMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:152px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}#venMenu[hidden]{display:none}.venopt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:14px;border-radius:6px;cursor:pointer;white-space:nowrap}.venopt:hover{background:var(--surface)}.venopt.on{background:var(--accent);color:#06121E;font-weight:700}
   .chips{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;
@@ -161,7 +162,7 @@ th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fi
 .kv span:first-child{color:var(--dim)}
 .warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
   color:var(--dim);font-size:11px;line-height:1.7}
-#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:15px;line-height:1.35;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;align-items:baseline;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}#todayMeta{position:absolute;right:0;top:0;margin:0;font-size:11px;line-height:16.5px;font-weight:400;display:grid;grid-template-columns:auto auto auto;column-gap:0;align-items:baseline;color:var(--dim)}#todayMeta .tml{justify-self:end;color:var(--dim);font-weight:400}#todayMeta .tmv{justify-self:end;color:var(--confA);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap}#todayMeta .tmn{justify-self:start;color:var(--dim);font-weight:400;white-space:nowrap}#todayMeta:empty{display:none}
+#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:15px;line-height:1.35;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;align-items:baseline;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}.tiersw{grid-column:1/-1;display:flex;gap:4px;margin-top:2px}.tswb{background:var(--surface);border:1px solid var(--line);color:var(--dim);border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer}.tswb.on{background:var(--confA);border-color:var(--confA);color:#1A1200}#todayMeta{position:absolute;right:0;top:0;margin:0;font-size:11px;line-height:16.5px;font-weight:400;display:grid;grid-template-columns:auto auto auto;column-gap:0;align-items:baseline;color:var(--dim)}#todayMeta .tml{justify-self:end;color:var(--dim);font-weight:400}#todayMeta .tmv{justify-self:end;color:var(--confA);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap}#todayMeta .tmn{justify-self:start;color:var(--dim);font-weight:400;white-space:nowrap}#todayMeta:empty{display:none}
 .spin{width:28px;height:28px;border:3px solid var(--surface2);border-top-color:var(--accent);
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -180,12 +181,12 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
   <main id="main"><div class="spin"></div></main>
 </div>
 <nav>
-  <button id="tabSen">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
-    厳選</button>
   <button id="tabToday" class="on">
     <svg viewBox="0 0 24 24"><path d="M3 14c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M3 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M6 11l5-7 7 5-2 3"/></svg>
-    本日予測</button>
+    本日予測<span class="navsub">（梅プラン）</span></button>
+  <button id="tabSen">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+    厳選<span class="navsub">（竹＆松）</span></button>
   <button id="tabAcc">
     <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>
     的中実績</button>
@@ -206,6 +207,7 @@ const VIEW={today:null,acc:null,model:null};
 let cur="today", pred=null, selVenue=null, todayMode="time";
 let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false, venDocBound=false;
 let showGen=0,autoRefreshing=false;
+let sengenTier="take";
 const PREDS={};
 const _WD=["日","月","火","水","木","金","土"];
 
@@ -262,19 +264,26 @@ function renderSengen(){
   if(!pred){m.innerHTML='<div class="spin"></div>';return}
   setHeader();
   const list=[];
-  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{if(sengenOk(r,v.code)||matsuOk(r,v.code))list.push({v,r})}));
+  (pred.venues||[]).forEach(v=>v.races.forEach(r=>{
+    const ok=sengenTier==="matsu"?matsuOk(r,v.code):sengenOk(r,v.code);
+    if(ok)list.push({v,r});
+  }));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   {const sc=$("#senCount");if(sc){
-    const senHit=list.filter(x=>sengenOk(x.r,x.v.code)&&t3hit(x.r)).length;
-    const prmHit=list.filter(x=>matsuOk(x.r,x.v.code)&&t4hit(x.r)).length;
-    sc.innerHTML=`<span class="ssl"><span class="ssk">本　日</span>：</span><span class="ssv">${list.length}件</span><span class="ssl">竹プラン：</span><span class="ssv">${senHit}件</span><span class="ssl">松プラン：</span><span class="ssv">${prmHit}件</span>`;
+    const hit=list.filter(x=>sengenTier==="matsu"?t4hit(x.r):t3hit(x.r)).length;
+    const tierSw=`<span class="tiersw"><button class="tswb ${sengenTier==="take"?"on":""}" data-t="take">竹プラン</button><button class="tswb ${sengenTier==="matsu"?"on":""}" data-t="matsu">松プラン</button></span>`;
+    sc.innerHTML=`<span class="ssl"><span class="ssk">本　日</span>：</span><span class="ssv">${list.length}件</span><span class="ssl"><span class="ssk">的　中</span>：</span><span class="ssv">${hit}件</span>${tierSw}`;
+    sc.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
   }}
   if(!list.length){
-    m.innerHTML=`<div class="note">本日の厳選レースはありません。<br>3連単上位3点の合計確率が高く、水面が安定した会場のみを厳選しています。</div>`;
+    const note=sengenTier==="matsu"
+      ?"本日の松プラン対象レースはありません。<br>AIの予測と市場のオッズが一致したレースのみを選定しています。"
+      :"本日の竹プラン対象レースはありません。<br>3連単上位3点の合計確率が高く、水面が安定した会場のみを厳選しています。";
+    m.innerHTML=`<div class="note">${note}</div>`;
     return;
   }
   const _cf=({v,r})=>{
-    const isP=matsuOk(r,v.code);
+    const isP=(sengenTier==="matsu");
     const cp=isP?top4p(r):top3p(r);
     const hit=isP?t4hit(r):t3hit(r);
     const fav=r.fuku||{};
