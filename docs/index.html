@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0B1B2B">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>艇AI - 競艇予測</title>
+<title>アリテイ | 競艇AI予測</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
@@ -91,7 +91,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 .resv{font-size:12px;font-weight:600;color:#7dd3fc;background:rgba(56,189,248,.12);padding:1px 7px;border-radius:5px}
 .vlabel{font-size:11px;color:var(--mut,#8FA3B8);display:block}
 .confC{background:var(--confC);color:#0B1B2B}
-.actS{background:#1FB97A;color:#04150C}.actR{background:#8E7CFF;color:#140A33}.actM{background:#26384A;color:#8FA6BA}
+.actR{background:#8E7CFF;color:#140A33}.actM{background:#26384A;color:#8FA6BA}
 .lane{display:inline-flex;align-items:center;justify-content:center;
   width:22px;height:22px;border-radius:5px;font-size:13px;font-weight:800;
   font-variant-numeric:tabular-nums}
@@ -176,7 +176,7 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
 <body>
 <div id="app">
   <header>
-    <div class="hdrtop"><h1>艇<span>AI</span> 競艇予測</h1><span id="dateNav"></span><span id="senCount" class="num"></span></div>
+    <div class="hdrtop"><h1>アリ<span>テイ</span></h1><span id="dateNav"></span><span id="senCount" class="num"></span></div>
     <div id="hdrDate" class="num" hidden></div>
     <div id="hdrMeta" class="num"><span id="hdrMetaTxt"></span><div id="hdrChips"></div><span id="todayMeta" class="num"></span></div>
   </header>
@@ -243,12 +243,12 @@ const _CAL_FALLBACK={t5e:CAL_T5E,t5l:CAL_T5L,t3e:CAL_T3E,t3l:CAL_T3L,t4e:CAL_T4E
 const _tb=k=>(CALIB&&CALIB[k]&&CALIB[k].length)?CALIB[k]:_CAL_FALLBACK[k];
 function calPct(p,tbl){const x=p*100;if(x<=tbl[0][0])return Math.round(tbl[0][1]*x/tbl[0][0]);for(let i=1;i<tbl.length;i++){if(x<=tbl[i][0]){const a=tbl[i-1],b=tbl[i];return Math.round(a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]));}}return Math.round(tbl[tbl.length-1][1]);}
 const calT5=r=>calPct(top5p(r),_tb(r.no<=4?"t5e":"t5l"));
-// 梅(当日予測)のバッジは「予測の自信」でなく「行動の推奨」を3段階で表示する。
-// 勝負=竹/松の選定条件を満たす(厳選そのもの) / 参考=較正40%以上だが厳選外 / 見送り=それ以外。
-// 外れても表示が約束にならず、1日約140レース中「勝負」は数件だけという誠実な設計。
-const actLbl=(r,vc)=>(sengenOk(r,vc)||matsuOk(r,vc))?"勝負":calT5(r)>=40?"参考":"見送り";
-// 梅バッジ専用配色(竹松の%バッジの金/青/灰と混同しないよう別系統): 勝負=緑/参考=紫/見送り=沈色
-const actCls=v=>v==="勝負"?"actS":v==="参考"?"actR":"actM";
+// 梅(当日予測)のバッジは「行動の推奨」を2段階で表示する。
+// 検討=較正40%以上(買うか検討する価値) / 参考=それ以外(参考程度)。
+// 旧「勝負」(竹松条件そのもの)は有料プランの選定を無料タブに漏らすため廃止。
+const actLbl=r=>calT5(r)>=40?"検討":"参考";
+// 梅バッジ専用配色(竹松の%バッジの金/青/灰と混同しないよう別系統): 検討=紫/参考=沈色
+const actCls=v=>v==="検討"?"actR":"actM";
 const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l"));
 const calT4=r=>calPct(top4p(r),_tb(r.no<=4?"t4e":"t4l"));
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
@@ -355,7 +355,7 @@ function _isOpen(r,dateStr){
   return Date.now()<dlMs;
 }
 function raceCard(r,v,showVen){
-  const _act=actLbl(r,v.code);
+  const _act=actLbl(r);
   const top=r.picks[0]||{c:"-",p:0};
   const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>`<div class="boatrow">${laneChip(b.lane)}<span class="bname">${esc(b.name)}</span><span class="bcls">${b.cls?`【${esc(b.cls)}】`:""}</span><span class="bbar"><i style="width:${Math.min(100,b.wp*140)}%"></i></span><span class="bp num">${pct(b.wp)}</span><span class="bst num${(r.st_ex&&r.st_ex[b.lane]!=null&&String(r.st_ex[b.lane]).indexOf("F")>=0)?" fstart":""}">${(r.st_ex&&r.st_ex[b.lane]!=null)?esc(r.st_ex[b.lane]):""}</span><span class="bex num">${(r.ex&&r.ex[b.lane]!=null)?esc(r.ex[b.lane]):""}</span></div>`).join("");
   const picks=r.picks.slice(0,5).map((p,i)=>
