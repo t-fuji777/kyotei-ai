@@ -95,8 +95,9 @@ def predict_races(tgt: pd.DataFrame, hist, fan, models, sengen):
         fav_p2 = float(g["p_top2"].to_numpy()[fav])
         # is_sen(厳選)は common.is_sengen()に統一:
         # 3連単上位3点(picks先頭3件, 買い目そのもの)の合算確率 >= 閾値 かつ除外会場でない
+        # かつ5R以降(1-4Rはモデルの高確率帯が信用できないため対象外)
         top3p = sum(p["p"] for p in picks[:3])
-        is_sen = is_sengen(top3p, venue)
+        is_sen = is_sengen(top3p, venue, rno)
         n_sengen += int(is_sen)
         boats = []
         for _, x in g.iterrows():

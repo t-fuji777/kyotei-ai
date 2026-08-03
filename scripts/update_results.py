@@ -149,7 +149,7 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 day["fuku_hit"] += 1
             day["top5_pred_sum"] += top5p
             _pay = pays.get(key)
-            if is_sengen(top3p, v["code"]) and _picks_ok(r, act, _pay):
+            if is_sengen(top3p, v["code"], r["no"]) and _picks_ok(r, act, _pay):
                 day["sen_n"] += 1
                 day["sen_pred_sum"] += top3p
                 # 竹プランROI: 1レース300円投資、的中時はpay3t(100円あたり払戻)を回収
@@ -157,7 +157,7 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 if act in picks[:3]:
                     day["sen_hit"] += 1
                     day["sen_ret"] += pays.get(key, 0)
-            if is_matsu(top4p, v["code"]) and _matsu_ok(r, act, _pay):
+            if is_matsu(top4p, v["code"], r["no"]) and _matsu_ok(r, act, _pay):
                 day["prm_n"] += 1
                 day["prm_pred_sum"] += top4p
                 # 松プランROI: 1レース400円投資、的中時はpay3tを回収

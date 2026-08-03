@@ -6,6 +6,8 @@ sen_n/sen_hit/sen_pred_sumを差し替えてtotalを再集計する。あわせ�
 (sen_stake/sen_ret)・松プラン(prm_stake/prm_ret)のROIも同時に再集計する: 竹は対象
 レース1件につき300円投資・的中(上位3点内)でpay3t(100円あたり払戻)を回収、松は
 1件につき400円投資・的中(上位4点内)でpay3tを回収(update_results.evaluateと同一定義)。
+竹・松とも5R以降のみが選定対象(common.SENGEN_MIN_RNO。1-4Rはモデルの高確率帯が
+信用できないことが較正で実証されているため除外)。
 Kやモデルは不要(予測JSON内のpicksと確定結果のorderだけで完結)。過去日エントリに残る
 super_n等のキーはそのまま保持し(履歴残置)、本スクリプトでは触らない。"""
 import glob
@@ -68,7 +70,8 @@ def recompute_day(pred: dict):
                 return t3.get(c)
 
             picks_ok = all((_eff(c) is None or _eff(c) >= SENGEN_MIN_ODDS) for c in picks[:3])
-            if is_sengen(top3p, v.get("code")) and picks_ok:
+            rno = r.get("no")
+            if is_sengen(top3p, v.get("code"), rno) and picks_ok:
                 sen_n += 1
                 sen_pred_sum += top3p
                 # 竹プランROI: 1レース300円投資、的中時はpay3t(100円あたり払戻)を回収
@@ -90,7 +93,7 @@ def recompute_day(pred: dict):
                 if _eff(c) < MATSU_MIN_ODDS:
                     matsu_ok = False
                     break
-            if is_matsu(top4p, v.get("code")) and matsu_ok:
+            if is_matsu(top4p, v.get("code"), rno) and matsu_ok:
                 prm_n += 1
                 prm_pred_sum += top4p
                 # 松プランROI: 1レース400円投資、的中時はpay3tを回収
