@@ -117,7 +117,6 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 .rjudge{font-size:22px;font-weight:800;line-height:1}
 .jhit{color:#34D399}
 .jmiss{color:#F87171}
-.jbest{color:#FBBF24}
 .rsub{margin-top:9px;font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .rtag{background:rgba(52,211,153,.15);color:#34D399;border:1px solid rgba(52,211,153,.4);border-radius:6px;padding:1px 6px;font-size:10px}
 .rwait{color:var(--dim);opacity:.55}
@@ -140,7 +139,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 .bar{flex:0 0 96px;height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
 .bp{min-width:42px;text-align:right;font-size:12px;font-weight:700}
-.pickrow{display:flex;align-items:center;gap:8px;padding:3px 0}
+.pickrow{display:flex;align-items:center;gap:8px;padding:3px 0}.pickrow.pwin{background:rgba(31,185,122,.16);border-radius:6px;margin:0 -6px;padding:3px 6px}
 .prank{min-width:18px;color:var(--dim);font-size:11px;text-align:right}
 .pickrow .bar{flex:1}
 .pickrow .bar i{background:#3D7FB8}
@@ -154,7 +153,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
 th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:2px 3px;line-height:1.35;overflow-wrap:break-word;border-bottom:0}.acctbl tr.stkrow:first-child th{padding:6px 3px 4px}.acctbl tr.blast>th,.acctbl tr.blast>td{box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.dcell{vertical-align:middle;text-align:center;box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.plab{color:var(--dim);font-weight:700}
-.acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background:var(--bg);border-bottom:0}.acctbl tr.mrow{cursor:pointer}
+.acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background-color:var(--surface);border-bottom:0}.acctbl tr.pmid>td{background-image:repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px),repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px);background-position:left top,left bottom;background-size:100% 1px,100% 1px;background-repeat:no-repeat}.acctbl tr.stkend>th,.acctbl tr.stkend>td{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl td.dcell.dend{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl tr.mrow{cursor:pointer}
 #senCount .anote{grid-column:1/-1;text-align:right;font-size:8px;line-height:1.45;font-weight:400;color:var(--dim);white-space:nowrap}
 .pad{padding:0 16px}
 .accwrap{padding:0 4px}
@@ -313,7 +312,7 @@ function renderSengen(){
     const fb=r.boats.find(b=>b.lane===fav.lane)||{};
     const top=r.picks[0]||{c:"-",p:0};
     const picks=r.picks.slice(0,isP?4:3).map((p,i)=>
-      `<div class="pickrow"><span class="prank num">${i+1}</span>
+      `<div class="pickrow${(r.result&&!r.result.status&&p.c===r.result.order)?' pwin':''}"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
         <span class="bp num">${pct(p.p)}</span>${(pickOdds(r,p.c)!=null)?`<span class="oddv num">${pickOdds(r,p.c)}倍</span>`:""}</div>`).join("");
@@ -322,7 +321,7 @@ function renderSengen(){
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls((isP?calT4(r):calT3(r))/100)}">${isP?calT4(r):calT3(r)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${(top.c===r.result.order)?"jbest":(hit?"jhit":"jmiss")}">${(top.c===r.result.order)?"◎":(hit?"〇":"✕")}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls((isP?calT4(r):calT3(r))/100)}">${isP?calT4(r):calT3(r)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${hit?"jhit":"jmiss"}">${hit?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
       </div>
       <div class="racebody">
         ${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
@@ -353,7 +352,7 @@ function raceCard(r,v,showVen){
   const top=r.picks[0]||{c:"-",p:0};
   const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>`<div class="boatrow">${laneChip(b.lane)}<span class="bname">${esc(b.name)}</span><span class="bcls">${b.cls?`【${esc(b.cls)}】`:""}</span><span class="bbar"><i style="width:${Math.min(100,b.wp*140)}%"></i></span><span class="bp num">${pct(b.wp)}</span><span class="bst num${(r.st_ex&&r.st_ex[b.lane]!=null&&String(r.st_ex[b.lane]).indexOf("F")>=0)?" fstart":""}">${(r.st_ex&&r.st_ex[b.lane]!=null)?esc(r.st_ex[b.lane]):""}</span><span class="bex num">${(r.ex&&r.ex[b.lane]!=null)?esc(r.ex[b.lane]):""}</span></div>`).join("");
   const picks=r.picks.slice(0,5).map((p,i)=>
-    `<div class="pickrow"><span class="prank num">${i+1}</span>
+    `<div class="pickrow${(r.result&&!r.result.status&&p.c===r.result.order)?' pwin':''}"><span class="prank num">${i+1}</span>
       <span class="honmei">${comboChips(p.c,true)}</span>
       <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
       <span class="bp num">${pct(p.p)}</span>${(pickOdds(r,p.c)!=null)?`<span class="oddv num">${pickOdds(r,p.c)}倍</span>`:""}</div>`).join("");
@@ -362,7 +361,7 @@ function raceCard(r,v,showVen){
         <span class="rno num">${r.no}R${showVen&&v?`<span class="rven">${esc(v.name)}</span>`:""}</span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(calT5(r)/100)}">${calT5(r)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${(top.c===r.result.order)?"jbest":(t5hit(r)?"jhit":"jmiss")}">${(top.c===r.result.order)?"◎":(t5hit(r)?"〇":"✕")}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls(calT5(r)/100)}">${calT5(r)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${t5hit(r)?"jhit":"jmiss"}">${t5hit(r)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
       </div>
       <div class="racebody">
         ${r.weather?`<div class="sec">水面気象情報${(r.live_at||r.deadline)?" "+esc(r.live_at||r.deadline)+"現在":""}</div><div class="wxinfo">気温${wfmt(r.weather.temp)}℃　${esc(r.weather.sky||"")}　風速${r.weather.wspd??"-"}m${windArrow(r.weather.wdir)}　水温${wfmt(r.weather.wtemp)}℃　波高${r.weather.wave??"-"}cm</div>`:""}
@@ -545,9 +544,9 @@ function renderAcc(acc){
     ];
     const dm=opts.dataM!=null?' data-m="'+opts.dataM+'"':'';
     return rows.map((row,i)=>{
-      const cls=(opts.cls?opts.cls+" ":"")+(i===2?"blast":"");
+      const cls=(opts.cls?opts.cls+" ":"")+(i===1?"pmid":"")+(i===2?"blast"+(opts.lastCls?" "+opts.lastCls:""):"");
       const clsAttr=cls.trim()?' class="'+cls.trim()+'"':'';
-      const dcell=i===0?'<td rowspan="3" class="dcell">'+labelHTML+'</td>':'';
+      const dcell=i===0?'<td rowspan="3" class="dcell'+(opts.dcellCls?" "+opts.dcellCls:"")+'">'+labelHTML+'</td>':'';
       return '<tr'+clsAttr+dm+'>'+dcell+'<td class="plab">'+row.lab+'</td><td class="num">'+row.cnt+'</td><td class="num">'+row.rate+'</td><td class="num">'+row.roi+'</td></tr>';
     }).join("");
   };
@@ -557,12 +556,15 @@ function renderAcc(acc){
   const curGroup=groups.find(g=>g.key===curMKey);
   // 当月集計は確定日に本日速報(未確定)を随時合算して表示する(翌朝確定値に置き換わる)
   const curList=(curGroup?curGroup.list:[]).concat((tj&&pred&&mkey(String(pred.date))===curMKey)?[tj]:[]);
-  const curMonthRows=blockRows(mLabel(curMKey,curOpen),curList.length?sumMonth(curList):null,{cls:"stkrow mrow",dataM:curMKey});
-  const todayRows=tj?blockRows(dlab2(pred.date)+'<br><span style="font-size:8px;color:var(--dim)">速報</span>',tj,{}):"";
+  const curMonthRows=blockRows(mLabel(curMKey,curOpen),curList.length?sumMonth(curList):null,{cls:"stkrow mrow",dataM:curMKey,lastCls:"stkend",dcellCls:"dend"});
+  // 本日速報の詳細行は当月の折りたたみに連動して表示/非表示(集計値は当月ブロックに合算済み)
+  const todayRows=(tj&&curOpen)?blockRows(dlab2(pred.date)+'<br><span style="font-size:8px;color:var(--dim)">速報</span>',tj,{}):"";
   const curDayRows=(curOpen&&curGroup)?curGroup.list.map(d=>blockRows(dlab2(d.date),d,{})).join(""):"";
   const pastRows=groups.filter(g=>g.key!==curMKey).map(g=>{
     const open=!!accOpenM[g.key];
-    const mrows=blockRows(mLabel(g.key,open),sumMonth(g.list),{cls:"mrow",dataM:g.key});
+    // 月の途中からデータが始まる月(6月=13日〜等)はラベルに開始日を注記する
+    const md=Math.min.apply(null,g.list.map(d=>+String(d.date).slice(6,8)));
+    const mrows=blockRows(mLabel(g.key,open)+(md>1?'<span style="display:block;font-size:8px;color:var(--dim)">'+md+'日〜</span>':""),sumMonth(g.list),{cls:"mrow",dataM:g.key});
     const dayRows=open?g.list.map(d=>blockRows(dlab2(d.date),d,{})).join(""):"";
     return mrows+dayRows;
   }).join("");
