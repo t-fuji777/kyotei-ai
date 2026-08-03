@@ -32,6 +32,9 @@ jobs:
       - name: update yesterday results
         run: python scripts/update_results.py
         continue-on-error: true
+      - name: build calibration
+        continue-on-error: true
+        run: python scripts/build_calib.py
       - name: retrain model (daily)
         run: python scripts/train.py
         continue-on-error: true
