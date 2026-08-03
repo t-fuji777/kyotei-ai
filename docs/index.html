@@ -153,7 +153,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
 th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:2px 3px;line-height:1.35;overflow-wrap:break-word;border-bottom:0}.acctbl tr.stkrow:first-child th{padding:6px 3px 4px}.acctbl tr.blast>th,.acctbl tr.blast>td{box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.dcell{vertical-align:middle;text-align:center;box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.plab{color:var(--dim);font-weight:700}
-.acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background-color:var(--surface);border-bottom:0}.acctbl tr.pmid>td{background-image:repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px),repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px);background-position:left top,left bottom;background-size:100% 1px,100% 1px;background-repeat:no-repeat}.acctbl tr.stkend>th,.acctbl tr.stkend>td{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl td.dcell.dend{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl tr.mrow{cursor:pointer}
+.acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background-color:var(--bg);border-bottom:0}.acctbl tr.tblk>th,.acctbl tr.tblk>td{background-color:var(--surface)}.acctbl tr.pmid>td{background-image:repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px),repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px);background-position:left top,left bottom;background-size:100% 1px,100% 1px;background-repeat:no-repeat}.acctbl tr.stkend>th,.acctbl tr.stkend>td{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl td.dcell.dend{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl tr.mrow{cursor:pointer}
 #senCount .anote{grid-column:1/-1;text-align:right;font-size:8px;line-height:1.45;font-weight:400;color:var(--dim);white-space:nowrap}
 .pad{padding:0 16px}
 .accwrap{padding:0 4px}
@@ -551,7 +551,7 @@ function renderAcc(acc){
     }).join("");
   };
   const headRow='<tr class="stkrow blast"><th>日付</th><th>プラン</th><th>的中/件数</th><th>的中率</th><th>回収率</th></tr>';
-  const totalRows=days.length?blockRows('<span style="font-weight:700">累計</span>',tt,{cls:"stkrow"}):"";
+  const totalRows=days.length?blockRows('<span style="font-weight:700">累計</span>',tt,{cls:"stkrow tblk"}):"";
   const curOpen=!!accOpenM[curMKey];
   const curGroup=groups.find(g=>g.key===curMKey);
   // 当月集計は確定日に本日速報(未確定)を随時合算して表示する(翌朝確定値に置き換わる)
