@@ -79,7 +79,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 .rtype{font-size:12px;color:var(--dim);display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;vertical-align:bottom}
 .rdl{font-size:11px;color:var(--dim)}
 .honmei{display:flex;gap:3px;align-items:center}
-.conf{font-size:11px;font-weight:800;border-radius:6px;padding:3px 7px;min-width:24px;text-align:center}
+.conf{font-size:11px;font-weight:800;border-radius:6px;padding:3px 4px;min-width:47px;box-sizing:border-box;text-align:center}
 .confA{background:var(--confA);color:#1A1200}
 .confB{background:var(--confB);color:#04222C}
 .senp{font-size:12px;font-weight:800;border-radius:6px;padding:3px 8px;background:#1FB97A;color:#04150C}
@@ -242,8 +242,11 @@ const _CAL_FALLBACK={t5e:CAL_T5E,t5l:CAL_T5L,t3e:CAL_T3E,t3l:CAL_T3L,t4e:CAL_T4E
 const _tb=k=>(CALIB&&CALIB[k]&&CALIB[k].length)?CALIB[k]:_CAL_FALLBACK[k];
 function calPct(p,tbl){const x=p*100;if(x<=tbl[0][0])return Math.round(tbl[0][1]*x/tbl[0][0]);for(let i=1;i<tbl.length;i++){if(x<=tbl[i][0]){const a=tbl[i-1],b=tbl[i];return Math.round(a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]));}}return Math.round(tbl[tbl.length-1][1]);}
 const calT5=r=>calPct(top5p(r),_tb(r.no<=4?"t5e":"t5l"));
-// 梅(当日予測)のバッジは%でなく「堅さ」の言葉ラベルで表示(較正値の帯に対応。無料プランに数値の約束を持たせない)
-const hardLbl=v=>v>=50?"堅い":v>=40?"やや堅":v>=30?"標準":v>=20?"混戦":"波乱含み";
+// 梅(当日予測)のバッジは「予測の自信」でなく「行動の推奨」を3段階で表示する。
+// 勝負=竹/松の選定条件を満たす(厳選そのもの) / 参考=較正40%以上だが厳選外 / 見送り=それ以外。
+// 外れても表示が約束にならず、1日約140レース中「勝負」は数件だけという誠実な設計。
+const actLbl=(r,vc)=>(sengenOk(r,vc)||matsuOk(r,vc))?"勝負":calT5(r)>=40?"参考":"見送り";
+const actCls=v=>v==="勝負"?"confA":v==="参考"?"confB":"confC";
 const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l"));
 const calT4=r=>calPct(top4p(r),_tb(r.no<=4?"t4e":"t4l"));
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
@@ -350,6 +353,7 @@ function _isOpen(r,dateStr){
   return Date.now()<dlMs;
 }
 function raceCard(r,v,showVen){
+  const _act=actLbl(r,v.code);
   const top=r.picks[0]||{c:"-",p:0};
   const boats=r.boats.slice().sort((a,b)=>b.wp-a.wp).map(b=>`<div class="boatrow">${laneChip(b.lane)}<span class="bname">${esc(b.name)}</span><span class="bcls">${b.cls?`【${esc(b.cls)}】`:""}</span><span class="bbar"><i style="width:${Math.min(100,b.wp*140)}%"></i></span><span class="bp num">${pct(b.wp)}</span><span class="bst num${(r.st_ex&&r.st_ex[b.lane]!=null&&String(r.st_ex[b.lane]).indexOf("F")>=0)?" fstart":""}">${(r.st_ex&&r.st_ex[b.lane]!=null)?esc(r.st_ex[b.lane]):""}</span><span class="bex num">${(r.ex&&r.ex[b.lane]!=null)?esc(r.ex[b.lane]):""}</span></div>`).join("");
   const picks=r.picks.slice(0,5).map((p,i)=>
@@ -362,7 +366,7 @@ function raceCard(r,v,showVen){
         <span class="rno num">${r.no}R${showVen&&v?`<span class="rven">${esc(v.name)}</span>`:""}</span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">堅　さ</span><span class="hjv"><span class="conf ${cumCls(calT5(r)/100)}">${hardLbl(calT5(r))}</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${t5hit(r)?"jhit":"jmiss"}">${t5hit(r)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
+        <span class="hjp"><span class="hjc"><span class="hjl">推　奨</span><span class="hjv"><span class="conf ${actCls(_act)}">${_act}</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${t5hit(r)?"jhit":"jmiss"}">${t5hit(r)?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
       </div>
       <div class="racebody">
         ${r.weather?`<div class="sec">水面気象情報${(r.live_at||r.deadline)?" "+esc(r.live_at||r.deadline)+"現在":""}</div><div class="wxinfo">気温${wfmt(r.weather.temp)}℃　${esc(r.weather.sky||"")}　風速${r.weather.wspd??"-"}m${windArrow(r.weather.wdir)}　水温${wfmt(r.weather.wtemp)}℃　波高${r.weather.wave??"-"}cm</div>`:""}
