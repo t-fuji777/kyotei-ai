@@ -244,11 +244,11 @@ const _tb=k=>(CALIB&&CALIB[k]&&CALIB[k].length)?CALIB[k]:_CAL_FALLBACK[k];
 function calPct(p,tbl){const x=p*100;if(x<=tbl[0][0])return Math.round(tbl[0][1]*x/tbl[0][0]);for(let i=1;i<tbl.length;i++){if(x<=tbl[i][0]){const a=tbl[i-1],b=tbl[i];return Math.round(a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]));}}return Math.round(tbl[tbl.length-1][1]);}
 const calT5=r=>calPct(top5p(r),_tb(r.no<=4?"t5e":"t5l"));
 // 梅(当日予測)のバッジは「行動の推奨」を2段階で表示する。
-// 検討=較正40%以上(買うか検討する価値) / 参考=それ以外(参考程度)。
+// 注目=較正40%以上(買うか検討する価値。結果の約束は含まない語) / 様子見=それ以外。
 // 旧「勝負」(竹松条件そのもの)は有料プランの選定を無料タブに漏らすため廃止。
-const actLbl=r=>calT5(r)>=40?"検討":"参考";
-// 梅バッジ専用配色(竹松の%バッジの金/青/灰と混同しないよう別系統): 検討=紫/参考=沈色
-const actCls=v=>v==="検討"?"actR":"actM";
+const actLbl=r=>calT5(r)>=40?"注目":"様子見";
+// 梅バッジ専用配色(竹松の%バッジの金/青/灰と混同しないよう別系統): 注目=紫/様子見=沈色
+const actCls=v=>v==="注目"?"actR":"actM";
 const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l"));
 const calT4=r=>calPct(top4p(r),_tb(r.no<=4?"t4e":"t4l"));
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
