@@ -153,7 +153,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
-th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:7px 3px;overflow-wrap:break-word}.acctbl th:first-child,.acctbl td:first-child{width:15%}.acctbl th:not(:first-child),.acctbl td:not(:first-child){width:14.1667%}
+th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:7px 3px;overflow-wrap:break-word}.acctbl th:first-child,.acctbl td:first-child{width:15%}.acctbl th:not(:first-child),.acctbl td:not(:first-child){width:17%}.phint{display:block;font-size:8px;font-weight:400;color:var(--dim);line-height:1.25;margin-top:1px;white-space:nowrap}
 .pad{padding:0 16px}
 .accwrap{padding:0 4px}
 .accwrap .acctbl td>br+span{white-space:nowrap}
@@ -474,11 +474,11 @@ function renderAcc(acc){
   const m=$("#main");
   const td=todayStats();
   const accRow=(label,X,st)=>{
-    const R=X.races||0,t1=X.top1_hit||0,t5=X.top5_hit||0,sn=X.sen_n||0,sh=X.sen_hit||0,pn=X.prm_n||0,ph=X.prm_hit||0;
+    const R=X.races||0,t5=X.top5_hit||0,sn=X.sen_n||0,sh=X.sen_hit||0,pn=X.prm_n||0,ph=X.prm_hit||0;
     const roi=X.stake5?Math.round((X.return5||0)/X.stake5*100):0;
     const cell=(num,den)=>den?`${num}<br><span style="color:var(--dim);font-size:11px">(${(num/den*100).toFixed(1)}%)</span>`:"-";
     const scell=(h,n)=>n?`${h}/${n}<br><span style="color:var(--dim);font-size:11px">(${(h/n*100).toFixed(1)}%)</span>`:"-";
-    return `<tr${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t1,R)}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${scell(ph,pn)}</td><td class="num">${roi}%</td></tr>`;
+    return `<tr${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${scell(ph,pn)}</td><td class="num">${roi}%</td></tr>`;
   };
   const days=(acc&&acc.days)?acc.days:[];
   const t0=(acc&&acc.total)?acc.total:null;
@@ -492,7 +492,7 @@ function renderAcc(acc){
   const todayRow=tj?accRow('本日<br><span style="color:var(--dim);font-size:9px">速報</span>',tj):"";
   const totalRow=days.length?accRow('累計',tt,'font-weight:700'):"";
   m.innerHTML=`<div class="accwrap"><table class="acctbl">
-      <tr><th>日付</th><th>R数</th><th>3連単</th><th>梅プラン</th><th>竹プラン</th><th>松プラン</th><th>回収率</th></tr>${totalRow}${todayRow}${dayRows}
+      <tr><th>日付</th><th>レース数</th><th>梅プラン<span class="phint">全レース<br>上位5点</span></th><th>竹プラン<span class="phint">上位3点<br>3.1倍以上</span></th><th>松プラン<span class="phint">上位4点<br>4.1〜10倍</span></th><th>回収率</th></tr>${totalRow}${todayRow}${dayRows}
     </table></div>`;
 }
 
