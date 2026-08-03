@@ -330,12 +330,11 @@ function renderSengen(){
       </div></div>`;
   };
   const openL=list.filter(x=>_isOpen(x.r,pred.date)),doneL=list.filter(x=>!_isOpen(x.r,pred.date));
-  const cards=doneL.map(_cf).join("")+((openL.length&&doneL.length)?'<div id="openTop"></div>':"")+openL.map(_cf).join("");
+  const cards=doneL.map(_cf).join("")+openL.map(_cf).join("");
   m.innerHTML=tierrow+`
     <div class="racelist sengen">${cards}</div>`;
   m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
   requestAnimationFrame(fitRtype);
-  if(!autoRefreshing&&openL.length&&doneL.length){const _ot=document.getElementById("openTop");if(_ot){const _hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const _at=window.scrollY+_ot.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,_at-_hh-7));}}
   m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
 }
 
@@ -676,6 +675,8 @@ async function show(tab){
     if(token!==showGen) return;
     m.innerHTML=`<div class="note">データの取得に失敗しました。<br>${e.message}</div>`;
   }
+  // 描画完了後にも最上部へ(切替直後のリセットが慣性スクロール等で上書きされる端末対策)。当日予測は従来挙動。
+  if(tab!=="today"&&token===showGen){requestAnimationFrame(()=>{if(cur===tab)window.scrollTo(0,0);});}
 }
 $("#tabSen").onclick=()=>show("sen");
 $("#tabToday").onclick=()=>show("today");
