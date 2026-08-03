@@ -205,9 +205,10 @@ const SENGEN_TOP3P_MIN=0.36, SENGEN_MIN_ODDS=3.1, SENGEN_EXCLUDE=[3,4,14];
 // 上位4点全てのオッズが取得済みで4.1〜10.0倍の帯(市場の同意)に収まるレースのみを対象とする。
 // 7,339レースのバックテスト+時系列分割検証で確定した閾値(scripts/common.py とミラー)。
 const MATSU_TOP4P_MIN=0.36, MATSU_MIN_ODDS=4.1, MATSU_MAX_ODDS=10;
-const VIEW={today:null,acc:null,model:null};
+const VIEW={today:null,acc:null,model:null,calib:null};
 let cur="today", pred=null, selVenue=null, todayMode="time";
 let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false, venDocBound=false;
+let CALIB=null; // 較正表(docs/calib.json、毎朝自動再計算)。起動時にfetchJSONで読み込み、失敗時はnullのまま(内蔵表にフォールバック)
 let showGen=0,autoRefreshing=false;
 let sengenTier="take";
 let accOpenM={},accResizeBound=false; // 的中実績: 過去月の折りたたみ開閉状態 / resizeリスナー二重登録防止
@@ -230,16 +231,20 @@ const cumCls=p=>p>=0.5?"confA":p>=0.4?"confB":"confC";
 // 序盤(1〜4R)はモデルの高確率帯が信用できない(40%超表示でも実測36〜44%で頭打ち)ため、
 // 1〜4R用(E)と5R以降用(L)の別テーブルを適用。単調性はisotonic回帰で保証。
 // 選定ロジック(生のtop3p/top4p閾値)には一切使わず、バッジ表示のみに適用。2026-08-03算出。
+// フォールバック値。正はdocs/calib.json(毎朝自動再計算)。calib.json未取得/対象キー欠落時のみ使用。
 const CAL_T5E=[[7.5,11.2],[17.5,20.8],[22.5,26.1],[27.5,32.9],[32.5,39.6],[37.5,43.9],[42.5,43.9],[47.5,43.9],[75,57.7]];
 const CAL_T3E=[[5,7.6],[12.5,14.8],[17.5,21.9],[22.5,27.4],[27.5,33.3],[33,33.3],[68,36]];
 const CAL_T4E=[[6,9.6],[15,19.2],[21,24.3],[27,33.6],[33,39.3],[39,39.3],[71,39.3]];
 const CAL_T5L=[[7.5,4.6],[17.5,17.8],[22.5,21.3],[27.5,30.3],[32.5,37.9],[37.5,43.9],[42.5,52.2],[47.5,56.7],[75,56.7]];
 const CAL_T3L=[[5,3.3],[12.5,12.3],[17.5,17.4],[22.5,26.1],[27.5,33.9],[33,41.9],[68,44.9]];
 const CAL_T4L=[[6,2.9],[15,13.9],[21,22.6],[27,30.7],[33,38.3],[39,48.6],[71,49]];
+const _CAL_FALLBACK={t5e:CAL_T5E,t5l:CAL_T5L,t3e:CAL_T3E,t3l:CAL_T3L,t4e:CAL_T4E,t4l:CAL_T4L};
+// CALIB(calib.json)に該当キーがあればそれを使い、無ければ内蔵フォールバック表を使う
+const _tb=k=>(CALIB&&CALIB[k]&&CALIB[k].length)?CALIB[k]:_CAL_FALLBACK[k];
 function calPct(p,tbl){const x=p*100;if(x<=tbl[0][0])return Math.round(tbl[0][1]*x/tbl[0][0]);for(let i=1;i<tbl.length;i++){if(x<=tbl[i][0]){const a=tbl[i-1],b=tbl[i];return Math.round(a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]));}}return Math.round(tbl[tbl.length-1][1]);}
-const calT5=r=>calPct(top5p(r),r.no<=4?CAL_T5E:CAL_T5L);
-const calT3=r=>calPct(top3p(r),r.no<=4?CAL_T3E:CAL_T3L);
-const calT4=r=>calPct(top4p(r),r.no<=4?CAL_T4E:CAL_T4L);
+const calT5=r=>calPct(top5p(r),_tb(r.no<=4?"t5e":"t5l"));
+const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l"));
+const calT4=r=>calPct(top4p(r),_tb(r.no<=4?"t4e":"t4l"));
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
 const t3hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,3).some(p=>p.c===r.result.order));
 const t4hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,4).some(p=>p.c===r.result.order));
@@ -591,6 +596,30 @@ function renderModel(rep){
   const tm=rep.test_metrics||{}, bm=rep.baseline_metrics||{};
   const fi=Object.entries(rep.feature_importance||{}).slice(0,10)
     .map(([k,v])=>`<div class="kv"><span>${k}</span><span class="num">${Math.round(v)}</span></div>`).join("");
+  // 表示的中率の検証: docs/calib.json(=VIEW.calib/CALIB)がある場合のみ、表示帯別に
+  // 直近30日/全期間の実測的中率を突き合わせて確認できる小表を出す。
+  let calibSec="";
+  const cal=VIEW.calib;
+  if(cal){
+    const vf=cal.verify||{};
+    const recent=vf.recent30||[];
+    const full=vf.full||[];
+    const bandSet=[];const seen={};
+    full.concat(recent).forEach(x=>{if(x&&x.band!=null&&!seen[x.band]){seen[x.band]=true;bandSet.push(x.band);}});
+    const findB=(arr,b)=>arr.find(x=>x&&x.band===b);
+    const rows=bandSet.map(b=>{
+      const r30=findB(recent,b),rf=findB(full,b);
+      const c30=r30?pct((r30.act||0)/100)+"("+(r30.n||0)+"R)":"-";
+      const cf=rf?pct((rf.act||0)/100)+"("+(rf.n||0)+"R)":"-";
+      return `<tr><td>${esc(b)}</td><td class="num">${c30}</td><td class="num">${cf}</td></tr>`;
+    }).join("");
+    const nTotal=cal.n_races!=null?cal.n_races:(cal.races!=null?cal.races:full.reduce((a,x)=>a+((x&&x.n)||0),0));
+    calibSec=`<div class="sec" style="margin-top:18px">表示的中率の検証</div>
+      <div style="font-size:11px;color:var(--dim);margin:-2px 0 8px">表示している的中率が実測と一致しているかの自動検証(毎朝更新)</div>
+      <div class="kv"><span>更新日</span><span class="num">${cal.updated_at||"-"}</span></div>
+      <div class="kv"><span>対象レース数</span><span class="num">${nTotal.toLocaleString()}R</span></div>
+      <table><tr><th>表示帯</th><th>直近30日 実測</th><th>全期間 実測</th></tr>${rows||'<tr><td colspan="3">データなし</td></tr>'}</table>`;
+  }
   m.innerHTML=`<div class="pad">
     <div class="kv"><span>学習日時</span><span class="num">${rep.trained_at||"-"}</span></div>
     <div class="kv"><span>学習期間</span><span class="num">${(rep.period||[]).join(" - ")}</span></div>
@@ -604,6 +633,7 @@ function renderModel(rep){
     <div class="kv"><span>厳選 3連単的中率</span><span class="num">${tm.sengen&&tm.sengen.top5_hit_rate!=null?pct(tm.sengen.top5_hit_rate)+" ("+tm.sengen.races_per_day+"R/日)":"-"}</span></div>
     <div class="kv"><span>回収率(TOP5均等買い)</span><span class="num">${pct(tm.top5_roi||0)}</span></div>
     <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}
+    ${calibSec}
   </div>`;
 }
 
@@ -645,6 +675,14 @@ $("#tabToday").onclick=()=>show("today");
 $("#tabAcc").onclick=()=>show("acc");
 $("#tabModel").onclick=()=>show("model");
 show("today");
+// 較正表(calib.json)は起動時に1回取得。失敗時はCALIB=nullのまま内蔵フォールバック表を使う。
+// 取得完了が現在表示中のタブの描画より後になった場合は、そのタブだけ再描画して反映する。
+fetchJSON("calib.json").then(c=>{
+  CALIB=c;VIEW.calib=c;
+  if(cur==="today")renderToday();
+  else if(cur==="sen")renderSengen();
+  else if(cur==="model")renderModel(VIEW.model);
+}).catch(()=>{});
 if("serviceWorker" in navigator){
   // 既にSWが制御していた=更新の場合のみ、新SW有効化時に1回だけリロード。
   // 初回訪問(controller無し)のclaimでは発火してもリロードしない(不要な二重読込を防止)。
