@@ -162,7 +162,7 @@ th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fi
 .kv span:first-child{color:var(--dim)}
 .warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
   color:var(--dim);font-size:11px;line-height:1.7}
-#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:15px;line-height:1.35;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;align-items:baseline;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}.tiersw{grid-column:1/-1;display:flex;gap:4px;margin-top:2px}.tswb{background:var(--surface);border:1px solid var(--line);color:var(--dim);border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer}.tswb.on{background:var(--confA);border-color:var(--confA);color:#1A1200}#todayMeta{position:absolute;right:0;top:0;margin:0;font-size:11px;line-height:16.5px;font-weight:400;display:grid;grid-template-columns:auto auto auto;column-gap:0;align-items:baseline;color:var(--dim)}#todayMeta .tml{justify-self:end;color:var(--dim);font-weight:400}#todayMeta .tmv{justify-self:end;color:var(--confA);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap}#todayMeta .tmn{justify-self:start;color:var(--dim);font-weight:400;white-space:nowrap}#todayMeta:empty{display:none}
+#senCount{position:absolute;right:16px;bottom:5px;margin:0;font-size:15px;line-height:1.35;font-weight:700;display:grid;grid-template-columns:auto auto;column-gap:4px;justify-items:end;align-items:baseline;color:var(--dim)}#senCount .ssl{color:var(--dim);font-weight:300}.ssk{display:inline-block;width:3.25em;text-align:justify;text-align-last:justify}#senCount .ssv{color:var(--confA);font-weight:500;font-variant-numeric:tabular-nums}#senCount:empty{display:none}.tswb{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--dim);border-radius:10px;padding:8px 0;font-size:13px;font-weight:700;cursor:pointer}.tswb.on{background:var(--confA);border-color:var(--confA);color:#1A1200}.tierrow{display:flex;gap:8px;padding:10px 16px 2px}#todayMeta{position:absolute;right:0;top:0;margin:0;font-size:11px;line-height:16.5px;font-weight:400;display:grid;grid-template-columns:auto auto auto;column-gap:0;align-items:baseline;color:var(--dim)}#todayMeta .tml{justify-self:end;color:var(--dim);font-weight:400}#todayMeta .tmv{justify-self:end;color:var(--confA);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap}#todayMeta .tmn{justify-self:start;color:var(--dim);font-weight:400;white-space:nowrap}#todayMeta:empty{display:none}
 .spin{width:28px;height:28px;border:3px solid var(--surface2);border-top-color:var(--accent);
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -183,10 +183,10 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
 <nav>
   <button id="tabToday" class="on">
     <svg viewBox="0 0 24 24"><path d="M3 14c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M3 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M6 11l5-7 7 5-2 3"/></svg>
-    本日予測<span class="navsub">（梅プラン）</span></button>
+    当日予測<span class="navsub">（梅プラン）</span></button>
   <button id="tabSen">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
-    厳選<span class="navsub">（竹＆松）</span></button>
+    厳選一覧<span class="navsub">（竹＆松）</span></button>
   <button id="tabAcc">
     <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>
     的中実績</button>
@@ -269,17 +269,17 @@ function renderSengen(){
     if(ok)list.push({v,r});
   }));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
-  {const sc=$("#senCount");if(sc){
+  {const _tm=$("#todayMeta");if(_tm){
     const hit=list.filter(x=>sengenTier==="matsu"?t4hit(x.r):t3hit(x.r)).length;
-    const tierSw=`<span class="tiersw"><button class="tswb ${sengenTier==="take"?"on":""}" data-t="take">竹プラン</button><button class="tswb ${sengenTier==="matsu"?"on":""}" data-t="matsu">松プラン</button></span>`;
-    sc.innerHTML=`<span class="ssl"><span class="ssk">本　日</span>：</span><span class="ssv">${list.length}件</span><span class="ssl"><span class="ssk">的　中</span>：</span><span class="ssv">${hit}件</span>${tierSw}`;
-    sc.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
+    _tm.innerHTML=`<span class="tml">本　日：</span><span class="tmv">${list.length}件</span><span class="tmn"></span><span class="tml">的　中：</span><span class="tmv">${hit}件</span><span class="tmn"></span>`;
   }}
+  const tierrow=`<div class="tierrow"><button class="tswb${sengenTier==='take'?' on':''}" data-t="take">竹プラン</button><button class="tswb${sengenTier==='matsu'?' on':''}" data-t="matsu">松プラン</button></div>`;
   if(!list.length){
     const note=sengenTier==="matsu"
       ?"本日の松プラン対象レースはありません。<br>AIの予測と市場のオッズが一致したレースのみを選定しています。"
       :"本日の竹プラン対象レースはありません。<br>3連単上位3点の合計確率が高く、水面が安定した会場のみを厳選しています。";
-    m.innerHTML=`<div class="note">${note}</div>`;
+    m.innerHTML=tierrow+`<div class="note">${note}</div>`;
+    m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
     return;
   }
   const _cf=({v,r})=>{
@@ -307,8 +307,9 @@ function renderSengen(){
   };
   const openL=list.filter(x=>_isOpen(x.r,pred.date)),doneL=list.filter(x=>!_isOpen(x.r,pred.date));
   const cards=doneL.map(_cf).join("")+((openL.length&&doneL.length)?'<div id="openTop"></div>':"")+openL.map(_cf).join("");
-  m.innerHTML=`
+  m.innerHTML=tierrow+`
     <div class="racelist sengen">${cards}</div>`;
+  m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
   requestAnimationFrame(fitRtype);
   if(!autoRefreshing&&openL.length&&doneL.length){const _ot=document.getElementById("openTop");if(_ot){const _hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const _at=window.scrollY+_ot.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,_at-_hh-7));}}
   m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
@@ -411,7 +412,7 @@ function renderToday(){
   const m=$("#main");
   const P=viewPred||pred;
   if(!P){m.innerHTML='<div class="spin"></div>';return}
-  setHeader(P);{const _tm=document.getElementById("todayMeta");if(_tm){if(todayMode==='time'&&P.venues&&P.venues.length){let _rn=0,_dec=0,_hit=0;P.venues.forEach(v=>(v.races||[]).forEach(r=>{_rn++;if(r.result&&!r.result.status){_dec++;if(t5hit(r))_hit++;}}));const _rate=_dec?(_hit/_dec*100).toFixed(1)+"％":"ー％";_tm.innerHTML=`<span class="tml">R　数：</span><span class="tmv">${_dec}R</span><span class="tmn">（${_rn}）</span><span class="tml">的中率：</span><span class="tmv">${_rate}</span><span class="tmn">（${_hit}）</span>`;}else{_tm.innerHTML="";}}}
+  setHeader(P);{const _tm=document.getElementById("todayMeta");if(_tm){if(todayMode==='time'&&P.venues&&P.venues.length){let _rn=0,_hit=0;P.venues.forEach(v=>(v.races||[]).forEach(r=>{_rn++;if(t5hit(r))_hit++;}));_tm.innerHTML=`<span class="tml">当　日：</span><span class="tmv">${_rn}件</span><span class="tmn"></span><span class="tml">的　中：</span><span class="tmv">${_hit}件</span><span class="tmn"></span>`;}else{_tm.innerHTML="";}}}
   renderDateNav(P);
   if(!P.venues||!P.venues.length){
     m.innerHTML=`<div class="note">${P.note||"この日の開催データがありません。"}</div>`;
