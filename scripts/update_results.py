@@ -123,7 +123,8 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
            "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
            "fuku_hit": 0, "sen_n": 0, "sen_hit": 0,
            "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
-           "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0}
+           "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0,
+           "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0}
     for v in pred.get("venues", []):
         for r in v["races"]:
             key = (v["code"], r["no"])
@@ -151,13 +152,19 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
             if is_sengen(top3p, v["code"]) and _picks_ok(r, act, _pay):
                 day["sen_n"] += 1
                 day["sen_pred_sum"] += top3p
+                # 竹プランROI: 1レース300円投資、的中時はpay3t(100円あたり払戻)を回収
+                day["sen_stake"] += 300
                 if act in picks[:3]:
                     day["sen_hit"] += 1
+                    day["sen_ret"] += pays.get(key, 0)
             if is_matsu(top4p, v["code"]) and _matsu_ok(r, act, _pay):
                 day["prm_n"] += 1
                 day["prm_pred_sum"] += top4p
+                # 松プランROI: 1レース400円投資、的中時はpay3tを回収
+                day["prm_stake"] += 400
                 if act in picks[:4]:
                     day["prm_hit"] += 1
+                    day["prm_ret"] += pays.get(key, 0)
             if picks and picks[0] == act:
                 day["top1_hit"] += 1
             # F/L等の異常艇が絡む組番は全額返還されるため、実投入額(返還されない点数)のみを
@@ -207,7 +214,8 @@ def main():
         t = {"races": 0, "win_hit": 0, "top1_hit": 0, "top5_hit": 0, "top6_hit": 0,
              "top10_hit": 0, "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
              "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
-             "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0}
+             "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0,
+             "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0}
         for d in acc["days"]:
             for k in t:
                 t[k] += d.get(k, 0)

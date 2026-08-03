@@ -2,9 +2,12 @@
 """厳選(sengen)ルール改定の再集計: 保存済みdocs/predictions/YYYYMMDD.jsonを新ルール
 (common.is_sengen, 3連単TOP3の3点買い)で読み直し、docs/accuracy.jsonの該当日エントリの
 sen_n/sen_hit/sen_pred_sumを差し替えてtotalを再集計する。あわせてプレミア(common.is_matsu,
-3連単TOP4の4点買い)のprm_n/prm_hit/prm_pred_sumも同時に再集計する。Kやモデルは不要
-(予測JSON内のpicksと確定結果のorderだけで完結)。過去日エントリに残るsuper_n等のキーは
-そのまま保持し(履歴残置)、本スクリプトでは触らない。"""
+3連単TOP4の4点買い)のprm_n/prm_hit/prm_pred_sumも同時に再集計する。さらに竹プラン
+(sen_stake/sen_ret)・松プラン(prm_stake/prm_ret)のROIも同時に再集計する: 竹は対象
+レース1件につき300円投資・的中(上位3点内)でpay3t(100円あたり払戻)を回収、松は
+1件につき400円投資・的中(上位4点内)でpay3tを回収(update_results.evaluateと同一定義)。
+Kやモデルは不要(予測JSON内のpicksと確定結果のorderだけで完結)。過去日エントリに残る
+super_n等のキーはそのまま保持し(履歴残置)、本スクリプトでは触らない。"""
 import glob
 import json
 import os
@@ -28,14 +31,20 @@ def _atomic_write_text(path: Path, text: str):
 
 
 def recompute_day(pred: dict):
-    """1日分の予測JSON -> {sen_n, sen_hit, sen_pred_sum, prm_n, prm_hit, prm_pred_sum}
-    (新ルールで再集計)。確定済み(result.orderあり)のレースのみ集計対象。"""
+    """1日分の予測JSON -> {sen_n, sen_hit, sen_pred_sum, prm_n, prm_hit, prm_pred_sum,
+    sen_stake, sen_ret, prm_stake, prm_ret}(新ルールで再集計)。確定済み(result.order
+    あり)のレースのみ集計対象。sen_stake/sen_ret/prm_stake/prm_retは竹300円・松400円
+    投資、的中時はpay3t(100円あたり払戻)回収というROI定義(update_results.evaluateと同一)。"""
     sen_n = 0
     sen_hit = 0
     sen_pred_sum = 0.0
     prm_n = 0
     prm_hit = 0
     prm_pred_sum = 0.0
+    sen_stake = 0
+    sen_ret = 0
+    prm_stake = 0
+    prm_ret = 0
     for v in pred.get("venues", []):
         for r in v.get("races", []):
             res = r.get("result")
@@ -62,8 +71,11 @@ def recompute_day(pred: dict):
             if is_sengen(top3p, v.get("code")) and picks_ok:
                 sen_n += 1
                 sen_pred_sum += top3p
+                # 竹プランROI: 1レース300円投資、的中時はpay3t(100円あたり払戻)を回収
+                sen_stake += 300
                 if res["order"] in picks[:3]:
                     sen_hit += 1
+                    sen_ret += res.get("pay3t") or 0
 
             # プレミア価値フィルタ(update_results._matsu_okと同一ロジックをローカル実装):
             # 上位4点は全点オッズ取得済みが前提(t3.get(c)がNoneなら即対象外)。上限(10.0倍)
@@ -81,10 +93,15 @@ def recompute_day(pred: dict):
             if is_matsu(top4p, v.get("code")) and matsu_ok:
                 prm_n += 1
                 prm_pred_sum += top4p
+                # 松プランROI: 1レース400円投資、的中時はpay3tを回収
+                prm_stake += 400
                 if res["order"] in picks[:4]:
                     prm_hit += 1
+                    prm_ret += res.get("pay3t") or 0
     return {"sen_n": sen_n, "sen_hit": sen_hit, "sen_pred_sum": sen_pred_sum,
-            "prm_n": prm_n, "prm_hit": prm_hit, "prm_pred_sum": prm_pred_sum}
+            "prm_n": prm_n, "prm_hit": prm_hit, "prm_pred_sum": prm_pred_sum,
+            "sen_stake": sen_stake, "sen_ret": sen_ret,
+            "prm_stake": prm_stake, "prm_ret": prm_ret}
 
 
 def main():
@@ -120,6 +137,10 @@ def main():
         day["prm_n"] = agg["prm_n"]
         day["prm_hit"] = agg["prm_hit"]
         day["prm_pred_sum"] = agg["prm_pred_sum"]
+        day["sen_stake"] = agg["sen_stake"]
+        day["sen_ret"] = agg["sen_ret"]
+        day["prm_stake"] = agg["prm_stake"]
+        day["prm_ret"] = agg["prm_ret"]
         n_updated += 1
         rate = (agg["sen_hit"] / agg["sen_n"] * 100) if agg["sen_n"] else 0.0
         prm_rate = (agg["prm_hit"] / agg["prm_n"] * 100) if agg["prm_n"] else 0.0
@@ -129,7 +150,8 @@ def main():
     t = {"races": 0, "win_hit": 0, "top1_hit": 0, "top5_hit": 0, "top6_hit": 0,
          "top10_hit": 0, "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
          "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
-         "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0}
+         "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0,
+         "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0}
     for d in acc.get("days", []):
         for k in t:
             t[k] += d.get(k, 0)

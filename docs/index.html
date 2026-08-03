@@ -155,6 +155,7 @@ th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
 th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:7px 3px;overflow-wrap:break-word}.acctbl th:first-child,.acctbl td:first-child{width:15%}.acctbl th:not(:first-child),.acctbl td:not(:first-child){width:17%}.acctbl tr.pdesc th{padding:4px 1px 6px;vertical-align:middle}.pdescbox{display:inline-block;font-size:9px;font-weight:400;color:var(--dim);line-height:1.4;white-space:nowrap}
 .acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background:var(--bg);border-bottom:0;box-shadow:inset 0 -1px 0 var(--line)}.acctbl tr.mrow{cursor:pointer}
+.acctbl td.roi3{font-size:10px;line-height:1.6} .rlab{color:var(--dim);font-size:8px;margin-right:1px}
 .pad{padding:0 16px}
 .accwrap{padding:0 4px}
 .accwrap .acctbl td>br+span{white-space:nowrap}
@@ -457,20 +458,20 @@ function renderToday(){
 
 function todayStats(){
   if(!pred||!pred.venues) return null;
-  let n=0,w=0,t1=0,t6=0,sn=0,sh=0,st=0,rt=0,sp=0,tp=0,mn=0,mh=0,mp=0;
+  let n=0,w=0,t1=0,t6=0,sn=0,sh=0,st=0,rt=0,sp=0,tp=0,mn=0,mh=0,mp=0,sst=0,sret=0,pst=0,pret=0;
   for(const v of pred.venues)for(const r of v.races){const x=r.result;if(!x||x.status)continue;
     n++;if(x.hit_win)w++;const p5=top5p(r);tp+=p5;
     if(r.picks&&r.picks[0]&&r.picks[0].c===x.order)t1++;
     if(t5hit(r)){t6++;rt+=(x.pay3t||0)}st+=500;
-    if(sengenOk(r,v.code)){sn++;sp+=top3p(r);if(t3hit(r))sh++}
-    if(matsuOk(r,v.code)){mn++;mp+=top4p(r);if(t4hit(r))mh++}}
+    if(sengenOk(r,v.code)){sn++;sp+=top3p(r);if(t3hit(r))sh++;sst+=300;if(t3hit(r))sret+=(x.pay3t||0);}
+    if(matsuOk(r,v.code)){mn++;mp+=top4p(r);if(t4hit(r))mh++;pst+=400;if(t4hit(r))pret+=(x.pay3t||0);}}
   if(!n) return null;
   const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
   const row=`<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
     <td class="num">${n}</td><td class="num">${Math.round(w/n*100)}%</td>
     <td class="num">${Math.round(t6/n*100)}%</td><td class="num">${sen}</td>
     <td class="num">${st?Math.round(rt/st*100):0}%</td></tr>`;
-  return {row,n,win_hit:w,top1_hit:t1,top5_hit:t6,sen_n:sn,sen_hit:sh,sen_pred_sum:sp,top5_pred_sum:tp,prm_n:mn,prm_hit:mh,prm_pred_sum:mp,stake5:st,return5:rt};
+  return {row,n,win_hit:w,top1_hit:t1,top5_hit:t6,sen_n:sn,sen_hit:sh,sen_pred_sum:sp,top5_pred_sum:tp,prm_n:mn,prm_hit:mh,prm_pred_sum:mp,stake5:st,return5:rt,sen_stake:sst,sen_ret:sret,prm_stake:pst,prm_ret:pret};
 }
 function renderAcc(acc){
   const m=$("#main");
@@ -478,17 +479,19 @@ function renderAcc(acc){
   // extra: tr自体に付与する追加属性(class/data-*)をそのまま差し込む。stickyの累計行・折りたたみの月集計行で使用。
   const accRow=(label,X,st,extra)=>{
     const R=X.races||0,t5=X.top5_hit||0,sn=X.sen_n||0,sh=X.sen_hit||0,pn=X.prm_n||0,ph=X.prm_hit||0;
-    const roi=X.stake5?Math.round((X.return5||0)/X.stake5*100):0;
     const cell=(num,den)=>den?`${num}<br><span style="color:var(--dim);font-size:11px">(${(num/den*100).toFixed(1)}%)</span>`:"-";
     const scell=(h,n)=>n?`${h}/${n}<br><span style="color:var(--dim);font-size:11px">(${(h/n*100).toFixed(1)}%)</span>`:"-";
-    return `<tr${extra||''}${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${scell(ph,pn)}</td><td class="num">${roi}%</td></tr>`;
+    // 回収率3段表示: 梅(TOP5均等買い)・竹(厳選)・松(プレミア)の順に投資/回収から算出する
+    const r3=(st2,rt)=>st2?Math.round((rt||0)/st2*100)+"%":"-";
+    const roi3=`<span class="rlab">梅</span>${r3(X.stake5,X.return5)}<br><span class="rlab">竹</span>${r3(X.sen_stake,X.sen_ret)}<br><span class="rlab">松</span>${r3(X.prm_stake,X.prm_ret)}`;
+    return `<tr${extra||''}${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${scell(ph,pn)}</td><td class="num roi3">${roi3}</td></tr>`;
   };
   const days=(acc&&acc.days)?acc.days:[];
   const t0=(acc&&acc.total)?acc.total:null;
   const dup=pred&&days.some(d=>String(d.date)===String(pred.date));
-  const tj=(td&&!dup)?{races:td.n,top1_hit:td.top1_hit,top5_hit:td.top5_hit,sen_n:td.sen_n,sen_hit:td.sen_hit,prm_n:td.prm_n,prm_hit:td.prm_hit,stake5:td.stake5,return5:td.return5}:null;
+  const tj=(td&&!dup)?{races:td.n,top1_hit:td.top1_hit,top5_hit:td.top5_hit,sen_n:td.sen_n,sen_hit:td.sen_hit,prm_n:td.prm_n,prm_hit:td.prm_hit,stake5:td.stake5,return5:td.return5,sen_stake:td.sen_stake||0,sen_ret:td.sen_ret||0,prm_stake:td.prm_stake||0,prm_ret:td.prm_ret||0}:null;
   let tt=t0;
-  if(t0&&tj)tt={races:(t0.races||0)+tj.races,top1_hit:(t0.top1_hit||0)+tj.top1_hit,top5_hit:(t0.top5_hit||0)+tj.top5_hit,sen_n:(t0.sen_n||0)+tj.sen_n,sen_hit:(t0.sen_hit||0)+tj.sen_hit,prm_n:(t0.prm_n||0)+(tj.prm_n||0),prm_hit:(t0.prm_hit||0)+(tj.prm_hit||0),stake5:(t0.stake5||0)+tj.stake5,return5:(t0.return5||0)+tj.return5};
+  if(t0&&tj)tt={races:(t0.races||0)+tj.races,top1_hit:(t0.top1_hit||0)+tj.top1_hit,top5_hit:(t0.top5_hit||0)+tj.top5_hit,sen_n:(t0.sen_n||0)+tj.sen_n,sen_hit:(t0.sen_hit||0)+tj.sen_hit,prm_n:(t0.prm_n||0)+(tj.prm_n||0),prm_hit:(t0.prm_hit||0)+(tj.prm_hit||0),stake5:(t0.stake5||0)+tj.stake5,return5:(t0.return5||0)+tj.return5,sen_stake:(t0.sen_stake||0)+(tj.sen_stake||0),sen_ret:(t0.sen_ret||0)+(tj.sen_ret||0),prm_stake:(t0.prm_stake||0)+(tj.prm_stake||0),prm_ret:(t0.prm_ret||0)+(tj.prm_ret||0)};
   else if(!t0)tt=tj;
   if(!tt||!tt.races){m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;}
   const dlab=ymd=>{const s=String(ymd);const w=['日','月','火','水','木','金','土'][new Date(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8)).getDay()];return '<span style="color:var(--dim);font-size:8px;white-space:nowrap">'+s.slice(2,4)+'年</span><br><span style="white-space:nowrap">'+s.slice(4,6)+"/"+s.slice(6,8)+'<span style="color:var(--dim);font-size:8px">('+w+')</span></span>';};
@@ -509,8 +512,8 @@ function renderAcc(acc){
     return '<span style="white-space:nowrap">'+yy+'年'+mm+'月<span style="color:var(--dim);font-size:8px">'+(open?'▲':'▼')+'</span></span>';
   };
   const sumMonth=list=>{
-    const s={races:0,top5_hit:0,sen_n:0,sen_hit:0,prm_n:0,prm_hit:0,stake5:0,return5:0};
-    list.forEach(d=>{s.races+=d.races||0;s.top5_hit+=d.top5_hit||0;s.sen_n+=d.sen_n||0;s.sen_hit+=d.sen_hit||0;s.prm_n+=d.prm_n||0;s.prm_hit+=d.prm_hit||0;s.stake5+=d.stake5||0;s.return5+=d.return5||0;});
+    const s={races:0,top5_hit:0,sen_n:0,sen_hit:0,prm_n:0,prm_hit:0,stake5:0,return5:0,sen_stake:0,sen_ret:0,prm_stake:0,prm_ret:0};
+    list.forEach(d=>{s.races+=d.races||0;s.top5_hit+=d.top5_hit||0;s.sen_n+=d.sen_n||0;s.sen_hit+=d.sen_hit||0;s.prm_n+=d.prm_n||0;s.prm_hit+=d.prm_hit||0;s.stake5+=d.stake5||0;s.return5+=d.return5||0;s.sen_stake+=d.sen_stake||0;s.sen_ret+=d.sen_ret||0;s.prm_stake+=d.prm_stake||0;s.prm_ret+=d.prm_ret||0;});
     return s;
   };
   const groupRows=groups.map(g=>{
@@ -524,7 +527,7 @@ function renderAcc(acc){
   const totalRow=days.length?accRow('累計',tt,'font-weight:700',' class="stkrow"'):"";
   m.innerHTML=`<div class="accwrap"><table class="acctbl">
       <tr class="stkrow"><th>日付</th><th>レース数</th><th>梅プラン</th><th>竹プラン</th><th>松プラン</th><th>回収率</th></tr>
-      <tr class="pdesc stkrow"><th><span class="pdescbox">※</span></th><th><span class="pdescbox">全場の<br>確定レース</span></th><th><span class="pdescbox">全レース<br>上位5点</span></th><th><span class="pdescbox">上位3点<br>3.1倍以上</span></th><th><span class="pdescbox">上位4点<br>4.1〜10倍</span></th><th><span class="pdescbox">梅プラン<br>500円買い</span></th></tr>${totalRow}${todayRow}${groupRows}
+      <tr class="pdesc stkrow"><th><span class="pdescbox">※</span></th><th><span class="pdescbox">全場の<br>確定レース</span></th><th><span class="pdescbox">全レース<br>上位5点</span></th><th><span class="pdescbox">上位3点<br>3.1倍以上</span></th><th><span class="pdescbox">上位4点<br>4.1〜10倍</span></th><th><span class="pdescbox">梅500・竹300<br>松400円買い</span></th></tr>${totalRow}${todayRow}${groupRows}
     </table></div>`;
   m.querySelectorAll(".acctbl tr.mrow").forEach(tr=>tr.onclick=()=>{const k=tr.getAttribute("data-m");accOpenM[k]=!accOpenM[k];renderAcc(acc);});
   requestAnimationFrame(positionAccSticky);
