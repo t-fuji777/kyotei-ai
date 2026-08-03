@@ -642,6 +642,8 @@ function renderModel(rep){
 async function show(tab){
   const token=++showGen;
   cur=tab;
+  // タブ切替時は必ず最上部から表示する(前のタブのスクロール位置を引き継がない)
+  window.scrollTo(0,0);
   {const hc=document.getElementById("hdrChips");if(hc)hc.innerHTML="";const sc=document.getElementById("senCount");if(sc)sc.textContent="";const dn=document.getElementById("dateNav");if(dn)dn.innerHTML="";const _tm=document.getElementById("todayMeta");if(_tm)_tm.innerHTML="";}
   const map={sen:"Sen",today:"Today",acc:"Acc",model:"Model"};
   ["Sen","Today","Acc","Model"].forEach(t=>$("#tab"+t).classList.toggle("on",map[tab]===t));
