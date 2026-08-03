@@ -91,6 +91,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 .resv{font-size:12px;font-weight:600;color:#7dd3fc;background:rgba(56,189,248,.12);padding:1px 7px;border-radius:5px}
 .vlabel{font-size:11px;color:var(--mut,#8FA3B8);display:block}
 .confC{background:var(--confC);color:#0B1B2B}
+.actS{background:#1FB97A;color:#04150C}.actR{background:#8E7CFF;color:#140A33}.actM{background:#26384A;color:#8FA6BA}
 .lane{display:inline-flex;align-items:center;justify-content:center;
   width:22px;height:22px;border-radius:5px;font-size:13px;font-weight:800;
   font-variant-numeric:tabular-nums}
@@ -246,7 +247,8 @@ const calT5=r=>calPct(top5p(r),_tb(r.no<=4?"t5e":"t5l"));
 // 勝負=竹/松の選定条件を満たす(厳選そのもの) / 参考=較正40%以上だが厳選外 / 見送り=それ以外。
 // 外れても表示が約束にならず、1日約140レース中「勝負」は数件だけという誠実な設計。
 const actLbl=(r,vc)=>(sengenOk(r,vc)||matsuOk(r,vc))?"勝負":calT5(r)>=40?"参考":"見送り";
-const actCls=v=>v==="勝負"?"confA":v==="参考"?"confB":"confC";
+// 梅バッジ専用配色(竹松の%バッジの金/青/灰と混同しないよう別系統): 勝負=緑/参考=紫/見送り=沈色
+const actCls=v=>v==="勝負"?"actS":v==="参考"?"actR":"actM";
 const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l"));
 const calT4=r=>calPct(top4p(r),_tb(r.no<=4?"t4e":"t4l"));
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
