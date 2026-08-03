@@ -153,7 +153,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
-th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:7px 3px;overflow-wrap:break-word}.acctbl th:first-child,.acctbl td:first-child{width:15%}.acctbl th:not(:first-child),.acctbl td:not(:first-child){width:17%}.acctbl tr.pdesc th{padding:0 1px 6px;vertical-align:top}.pdescbox{display:inline-block;font-size:8px;font-weight:400;color:var(--dim);line-height:1.35;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:7px 3px;overflow-wrap:break-word}.acctbl th:first-child,.acctbl td:first-child{width:15%}.acctbl th:not(:first-child),.acctbl td:not(:first-child){width:17%}.acctbl tr.pdesc th{padding:4px 1px 6px;vertical-align:middle}.pdescbox{display:inline-block;font-size:9px;font-weight:400;color:var(--dim);line-height:1.4;white-space:nowrap}
 .acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background:var(--bg);border-bottom:0;box-shadow:inset 0 -1px 0 var(--line)}.acctbl tr.mrow{cursor:pointer}
 .pad{padding:0 16px}
 .accwrap{padding:0 4px}
@@ -506,7 +506,7 @@ function renderAcc(acc){
   });
   const monthLabel=(key,open)=>{
     const yy=key.slice(2,4),mm=+key.slice(4,6);
-    return '<span style="white-space:nowrap"><span style="color:var(--dim);font-size:8px">'+yy+'年</span>'+mm+'月<span style="color:var(--dim);font-size:8px">'+(open?'▲':'▼')+'</span></span>';
+    return '<span style="white-space:nowrap">'+yy+'年'+mm+'月<span style="color:var(--dim);font-size:8px">'+(open?'▲':'▼')+'</span></span>';
   };
   const sumMonth=list=>{
     const s={races:0,top5_hit:0,sen_n:0,sen_hit:0,prm_n:0,prm_hit:0,stake5:0,return5:0};
