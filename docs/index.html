@@ -154,6 +154,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
 th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:7px 3px;overflow-wrap:break-word}.acctbl th:first-child,.acctbl td:first-child{width:15%}.acctbl th:not(:first-child),.acctbl td:not(:first-child){width:17%}.acctbl tr.pdesc th{padding:0 1px 6px;vertical-align:top}.pdescbox{display:inline-block;font-size:8px;font-weight:400;color:var(--dim);line-height:1.35;white-space:nowrap}
+.acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background:var(--bg)}.acctbl tr.mrow{cursor:pointer}
 .pad{padding:0 16px}
 .accwrap{padding:0 4px}
 .accwrap .acctbl td>br+span{white-space:nowrap}
@@ -208,6 +209,7 @@ let cur="today", pred=null, selVenue=null, todayMode="time";
 let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false, venDocBound=false;
 let showGen=0,autoRefreshing=false;
 let sengenTier="take";
+let accOpenM={},accResizeBound=false; // 的中実績: 過去月の折りたたみ開閉状態 / resizeリスナー二重登録防止
 const PREDS={};
 const _WD=["日","月","火","水","木","金","土"];
 
@@ -473,12 +475,13 @@ function todayStats(){
 function renderAcc(acc){
   const m=$("#main");
   const td=todayStats();
-  const accRow=(label,X,st)=>{
+  // extra: tr自体に付与する追加属性(class/data-*)をそのまま差し込む。stickyの累計行・折りたたみの月集計行で使用。
+  const accRow=(label,X,st,extra)=>{
     const R=X.races||0,t5=X.top5_hit||0,sn=X.sen_n||0,sh=X.sen_hit||0,pn=X.prm_n||0,ph=X.prm_hit||0;
     const roi=X.stake5?Math.round((X.return5||0)/X.stake5*100):0;
     const cell=(num,den)=>den?`${num}<br><span style="color:var(--dim);font-size:11px">(${(num/den*100).toFixed(1)}%)</span>`:"-";
     const scell=(h,n)=>n?`${h}/${n}<br><span style="color:var(--dim);font-size:11px">(${(h/n*100).toFixed(1)}%)</span>`:"-";
-    return `<tr${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${scell(ph,pn)}</td><td class="num">${roi}%</td></tr>`;
+    return `<tr${extra||''}${st?' style="'+st+'"':''}><td class="num">${label}</td><td class="num">${R}</td><td class="num">${cell(t5,R)}</td><td class="num">${scell(sh,sn)}</td><td class="num">${scell(ph,pn)}</td><td class="num">${roi}%</td></tr>`;
   };
   const days=(acc&&acc.days)?acc.days:[];
   const t0=(acc&&acc.total)?acc.total:null;
@@ -489,14 +492,55 @@ function renderAcc(acc){
   else if(!t0)tt=tj;
   if(!tt||!tt.races){m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;}
   const dlab=ymd=>{const s=String(ymd);const w=['日','月','火','水','木','金','土'][new Date(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8)).getDay()];return '<span style="color:var(--dim);font-size:8px;white-space:nowrap">'+s.slice(2,4)+'年</span><br><span style="white-space:nowrap">'+s.slice(4,6)+"/"+s.slice(6,8)+'<span style="color:var(--dim);font-size:8px">('+w+')</span></span>';};
-  const dayRows=days.slice().reverse().slice(0,60).map(d=>accRow(dlab(d.date),d)).join("");
+  // 月別集計+折りたたみ: 当月(latestDate||pred.date、未取得時は最新の日別行の月)だけ日別行を常時表示し、
+  // それ以外の月は1行の月集計行にまとめる。行クリックで accOpenM[key] をトグルして再描画する。
+  const mkey=ymd=>String(ymd).slice(0,6);
+  const curMKey=mkey(latestDate||(pred&&pred.date)||(days.length?days.reduce((a,b)=>String(b.date)>String(a.date)?b:a).date:"")||"");
+  const sortedDays=days.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const groups=[];
+  sortedDays.forEach(d=>{
+    const k=mkey(d.date);
+    const g=groups[groups.length-1];
+    if(!g||g.key!==k)groups.push({key:k,list:[d]});
+    else g.list.push(d);
+  });
+  const monthLabel=(key,open)=>{
+    const yy=key.slice(2,4),mm=+key.slice(4,6);
+    return '<span style="color:var(--dim);font-size:8px;white-space:nowrap">'+yy+'年</span><br><span style="white-space:nowrap">'+mm+'月 <span style="color:var(--dim);font-size:8px">'+(open?'▲':'▼')+'</span></span>';
+  };
+  const sumMonth=list=>{
+    const s={races:0,top5_hit:0,sen_n:0,sen_hit:0,prm_n:0,prm_hit:0,stake5:0,return5:0};
+    list.forEach(d=>{s.races+=d.races||0;s.top5_hit+=d.top5_hit||0;s.sen_n+=d.sen_n||0;s.sen_hit+=d.sen_hit||0;s.prm_n+=d.prm_n||0;s.prm_hit+=d.prm_hit||0;s.stake5+=d.stake5||0;s.return5+=d.return5||0;});
+    return s;
+  };
+  const groupRows=groups.map(g=>{
+    if(g.key===curMKey)return g.list.map(d=>accRow(dlab(d.date),d)).join("");
+    const open=!!accOpenM[g.key];
+    const mrow=accRow(monthLabel(g.key,open),sumMonth(g.list),'',' class="mrow" data-m="'+g.key+'"');
+    const dayRows=open?g.list.map(d=>accRow(dlab(d.date),d)).join(""):"";
+    return mrow+dayRows;
+  }).join("");
   const todayRow=tj?accRow(dlab(pred.date),tj):"";
-  const totalRow=days.length?accRow('累計',tt,'font-weight:700'):"";
+  const totalRow=days.length?accRow('累計',tt,'font-weight:700',' class="stkrow"'):"";
   m.innerHTML=`<div class="accwrap"><table class="acctbl">
-      <tr><th>日付</th><th>レース数</th><th>梅プラン</th><th>竹プラン</th><th>松プラン</th><th>回収率</th></tr>
-      <tr class="pdesc"><th></th><th></th><th><span class="pdescbox">全レース<br>上位5点</span></th><th><span class="pdescbox">上位3点<br>3.1倍以上</span></th><th><span class="pdescbox">上位4点<br>4.1〜10倍</span></th><th></th></tr>${totalRow}${todayRow}${dayRows}
+      <tr class="stkrow"><th>日付</th><th>レース数</th><th>梅プラン</th><th>竹プラン</th><th>松プラン</th><th>回収率</th></tr>
+      <tr class="pdesc stkrow"><th></th><th><span class="pdescbox">全場の<br>確定レース</span></th><th><span class="pdescbox">全レース<br>上位5点</span></th><th><span class="pdescbox">上位3点<br>3.1倍以上</span></th><th><span class="pdescbox">上位4点<br>4.1〜10倍</span></th><th><span class="pdescbox">梅プラン<br>500円買い</span></th></tr>${totalRow}${todayRow}${groupRows}
     </table></div>`;
+  m.querySelectorAll(".acctbl tr.mrow").forEach(tr=>tr.onclick=()=>{const k=tr.getAttribute("data-m");accOpenM[k]=!accOpenM[k];renderAcc(acc);});
+  requestAnimationFrame(positionAccSticky);
 }
+function positionAccSticky(){
+  if(cur!=="acc")return;
+  const tbl=document.querySelector(".acctbl");
+  if(!tbl)return;
+  const header=document.querySelector("header");
+  let top=header?header.offsetHeight:0;
+  tbl.querySelectorAll("tr.stkrow").forEach(tr=>{
+    Array.prototype.forEach.call(tr.children,cell=>{cell.style.top=top+"px";});
+    top+=tr.offsetHeight;
+  });
+}
+if(!accResizeBound){accResizeBound=true;window.addEventListener("resize",()=>{if(cur==="acc")positionAccSticky();});}
 
 function renderModel(rep){
   const m=$("#main");
