@@ -686,12 +686,19 @@ async function show(tab){
   // 描画完了後にも最上部へ(切替直後のリセットが慣性スクロール等で上書きされる端末対策)。当日予測は従来挙動。
   // iOS(WebKit)はscrollTo(0,0)の後に非同期でスクロール位置を復元することがあるため、
   // 1回のリセットでなく表示後250msの間フレーム毎に最上部へ固定して確実化する。当日予測は従来挙動。
-  if(tab!=="today"&&token===showGen){const _until=Date.now()+250;const _pin=()=>{if(cur!==tab||token!==showGen)return;window.scrollTo(0,0);if(Date.now()<_until)requestAnimationFrame(_pin);};requestAnimationFrame(_pin);}
+  if(tab!=="today"&&token===showGen){armScrollGuard();const _until=Date.now()+250;const _pin=()=>{if(cur!==tab||token!==showGen)return;window.scrollTo(0,0);if(Date.now()<_until)requestAnimationFrame(_pin);};requestAnimationFrame(_pin);}
 }
 $("#tabSen").onclick=()=>show("sen");
 $("#tabToday").onclick=()=>show("today");
 $("#tabAcc").onclick=()=>show("acc");
 $("#tabModel").onclick=()=>show("model");
+// 非タッチ由来のスクロール(iOSの非同期位置復元など)を打ち消すガード。
+// show()/復帰時に武装し、1.5秒の間「ユーザー操作なしのスクロール」を検知したら即0へ戻す。
+let _noScrollUntil=0,_userTouch=false;
+document.addEventListener("touchstart",()=>{_userTouch=true;},{passive:true});
+window.addEventListener("wheel",()=>{_userTouch=true;},{passive:true});
+window.addEventListener("scroll",()=>{if(!_userTouch&&Date.now()<_noScrollUntil&&window.scrollY>0&&cur!=="today")window.scrollTo(0,0);},{passive:true});
+function armScrollGuard(){_userTouch=false;_noScrollUntil=Date.now()+1500;window.scrollTo(0,0);document.documentElement.scrollTop=0;if(document.body)document.body.scrollTop=0;}
 if("scrollRestoration" in history)history.scrollRestoration="manual";
 show("today");
 // 較正表(calib.json)は起動時に1回取得。失敗時はCALIB=nullのまま内蔵フォールバック表を使う。
@@ -756,7 +763,7 @@ async function refreshLatest(){
 // アプリ復帰(バックグラウンド→前面)時: iOSはページを再読込せず前回のスクロール位置ごと
 // 復活させるため、当日予測以外のタブは最上部へ戻してから更新する(タブ切替時と同じ扱い)。
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){
-  if(cur&&cur!=="today"){const _u=Date.now()+300;const _p=()=>{if(cur==="today")return;window.scrollTo(0,0);document.documentElement.scrollTop=0;if(document.body)document.body.scrollTop=0;if(Date.now()<_u)requestAnimationFrame(_p);};_p();}
+  if(cur&&cur!=="today"){armScrollGuard();const _u=Date.now()+300;const _p=()=>{if(cur==="today")return;window.scrollTo(0,0);document.documentElement.scrollTop=0;if(document.body)document.body.scrollTop=0;if(Date.now()<_u)requestAnimationFrame(_p);};_p();}
   refreshLatest();
 }});
 setInterval(()=>{if(document.visibilityState==="visible")refreshLatest();},75000);
