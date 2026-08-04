@@ -149,7 +149,16 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 day["fuku_hit"] += 1
             day["top5_pred_sum"] += top5p
             _pay = pays.get(key)
-            if is_sengen(top3p, v["code"], r["no"]) and _picks_ok(r, act, _pay):
+            # 竹/松の該当可否: 確定時に焼き込まれたスタンプ(r["result"]["tk"]/["mt"])が
+            # あればそれを優先する(遡及改変防止が目的のため、動的再計算より確定値を優先)。
+            # 無い場合(スタンプ導入前の過去データ)は従来通り動的計算する。
+            # actはK帳票由来の実際の着順で、的中判定(act in picks)はスタンプ有無に関わらず従来通り。
+            rres = r.get("result") or {}
+            if "tk" in rres:
+                is_tk = bool(rres["tk"])
+            else:
+                is_tk = is_sengen(top3p, v["code"], r["no"]) and _picks_ok(r, act, _pay)
+            if is_tk:
                 day["sen_n"] += 1
                 day["sen_pred_sum"] += top3p
                 # 竹プランROI: 1レース300円投資、的中時はpay3t(100円あたり払戻)を回収
@@ -157,7 +166,11 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 if act in picks[:3]:
                     day["sen_hit"] += 1
                     day["sen_ret"] += pays.get(key, 0)
-            if is_matsu(top4p, v["code"], r["no"]) and _matsu_ok(r, act, _pay):
+            if "mt" in rres:
+                is_mt = bool(rres["mt"])
+            else:
+                is_mt = is_matsu(top4p, v["code"], r["no"]) and _matsu_ok(r, act, _pay)
+            if is_mt:
                 day["prm_n"] += 1
                 day["prm_pred_sum"] += top4p
                 # 松プランROI: 1レース400円投資、的中時はpay3tを回収

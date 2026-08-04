@@ -70,6 +70,57 @@ def is_matsu(top4p, venue, rno):
         return False
 
 
+def stamp_plans(race, vcode, res):
+    """結果(order)をレースに付与する瞬間に竹/松の該当可否をres["tk"]/res["mt"]
+    (1 or 0)へ焼き込む。目的: 確定後にpicks/oddsがパイプラインの競合(rebase -X theirs等)
+    で巻き戻っても、その時点で成立していた判定が遡及改変されないよう固定するため。
+
+    判定は既存ルール(is_sengen/is_matsu, update_results._picks_ok/_matsu_okと同一)を
+    その時点のrace(picks/odds/no)とres(order/pay3t)から再現する。
+    orderが無い(中止/不成立等のstatusのみ)resには何もしない(tk/mtを設定しない)。"""
+    order = res.get("order")
+    if not order:
+        return
+    rno = race.get("no")
+    picks = [p["c"] for p in (race.get("picks") or [])]
+    t3 = (race.get("odds") or {}).get("t3") or {}
+    pay = res.get("pay3t")
+
+    def eff_odds(c):
+        # 実効オッズ: 的中買い目(c==order)はpay3t/100(確定実配当)を優先し、
+        # それ以外(pay3t欠落時も含む)は取得済みt3オッズをそのまま使う。
+        if pay and c == order:
+            return pay / 100.0
+        return t3.get(c)
+
+    top3p = sengen_top3p(race.get("picks") or [])
+    tk = 0
+    if is_sengen(top3p, vcode, rno):
+        ok = True
+        for c in picks[:3]:
+            o = eff_odds(c)
+            if o is not None and o < SENGEN_MIN_ODDS:
+                ok = False
+                break
+        tk = 1 if ok else 0
+    res["tk"] = tk
+
+    top4p = matsu_top4p(race.get("picks") or [])
+    mt = 0
+    if is_matsu(top4p, vcode, rno):
+        ok = True
+        for c in picks[:4]:
+            o = t3.get(c)
+            if o is None or o > MATSU_MAX_ODDS:
+                ok = False
+                break
+            if eff_odds(c) < MATSU_MIN_ODDS:
+                ok = False
+                break
+        mt = 1 if ok else 0
+    res["mt"] = mt
+
+
 def zen2han(s: str) -> str:
     """全角英数字を半角化(カナ・漢字は維持)"""
     out = []
