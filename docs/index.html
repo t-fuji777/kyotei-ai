@@ -26,8 +26,10 @@ html,body{background:var(--bg);color:var(--text);
 /* 厳選一覧/的中実績/モデルは#main自身を内部スクロール化(ページ全体を常にビューポート内に収め、
    iOSのウィンドウスクロール位置の非同期復元による約40pxズレを根治する)。当日予測は対象外。 */
 #main.pane{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
-body:has(#main.pane){overflow:hidden}
-body:has(#main.pane) #app{padding-bottom:0}
+/* iOSはbodyのoverflow:hiddenを無視してウィンドウをスクロールできるため、
+   非todayタブではposition:fixedで完全ロックする(モーダルと同じ手法)。JSでbody.lockを付与。 */
+body.lock{position:fixed;inset:0;overflow:hidden;width:100%}
+body.lock #app{padding-bottom:0}
 header{position:sticky;top:0;z-index:20;background:#0B1B2B;
   backdrop-filter:blur(8px);
   padding:calc(10px + env(safe-area-inset-top)) 16px 4px}
@@ -668,9 +670,12 @@ async function show(tab){
   // 収めることで根治する)。当日予測は現行のウィンドウスクロールのまま(現在時刻帯/会場ポジション機能を優先)。
   if(tab!=="today"){
     m.classList.add("pane");
+    window.scrollTo(0,0);
+    document.body.classList.add("lock");
   }else{
     m.classList.remove("pane");
     m.style.height="";
+    document.body.classList.remove("lock");
   }
   {const hc=document.getElementById("hdrChips");if(hc)hc.innerHTML="";const sc=document.getElementById("senCount");if(sc)sc.textContent="";const dn=document.getElementById("dateNav");if(dn)dn.innerHTML="";const _tm=document.getElementById("todayMeta");if(_tm)_tm.innerHTML="";}
   const map={sen:"Sen",today:"Today",acc:"Acc",model:"Model"};
