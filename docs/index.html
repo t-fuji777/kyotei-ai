@@ -677,11 +677,21 @@ function positionAccSticky(){
     top+=tr.getBoundingClientRect().height;
   });
 }
-// #mainの高さ = ビューポート - ヘッダー - 下部ナビ。全タブ共通(内部スクロール)。
+// iOSホーム画面起動でビューポート下端が実画面下端より上で終わる場合の差分(実測)。
+// この分だけナビを下へ食い込ませて画面最下部に密着させる(下の余白を限界まで削る)。
+// gap=0(既に密着)なら何もしない。異常値(80超)は誤検出とみなし無効化。
+function _bottomGap(){
+  if(!_isIOSDevice()||!_isStandalone())return 0;
+  const g=Math.round((screen.height||0)-window.innerHeight);
+  return (g>0&&g<=80)?g:0;
+}
+// #mainの高さ = ビューポート - ヘッダー - 下部ナビ + ナビ食い込み分。全タブ共通(内部スクロール)。
 function fitMain(){
   const m=$("#main");if(!m)return;
   const hdr=document.querySelector("header"),nv=document.querySelector("nav");
-  m.style.height=(window.innerHeight-(hdr?hdr.offsetHeight:0)-(nv?nv.offsetHeight:0))+"px";
+  const gap=_bottomGap();
+  if(nv)nv.style.bottom=(-gap)+"px";
+  m.style.height=(window.innerHeight-(hdr?hdr.offsetHeight:0)-(nv?nv.offsetHeight:0)+gap)+"px";
 }
 if(!accResizeBound){accResizeBound=true;
   // 画面回転/リサイズ追随
@@ -783,7 +793,7 @@ function _screenInfo(){
     const nv=document.querySelector("nav");
     const nb=nv?Math.round(nv.getBoundingClientRect().bottom):0;
     const sa=_isStandalone()?" 全画面":"";
-    return `${window.innerWidth}x${window.innerHeight} 画面${screen.width}x${screen.height} inset${inset} ナビ下端${nb}${sa}`;
+    return `${window.innerWidth}x${window.innerHeight} 画面${screen.width}x${screen.height} inset${inset} 差${_bottomGap()} ナビ下端${nb}${sa}`;
   }catch(_){return "-";}
 }
 
