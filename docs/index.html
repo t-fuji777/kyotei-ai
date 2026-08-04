@@ -91,7 +91,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 .resv{font-size:12px;font-weight:600;color:#7dd3fc;background:rgba(56,189,248,.12);padding:1px 7px;border-radius:5px}
 .vlabel{font-size:11px;color:var(--mut,#8FA3B8);display:block}
 .confC{background:var(--confC);color:#0B1B2B}
-.actR{background:#8E7CFF;color:#140A33}.actM{background:#26384A;color:#8FA6BA}
+.actR{background:#FFFFFF;color:#111417}.actM{background:#26384A;color:#8FA6BA}
 .lane{display:inline-flex;align-items:center;justify-content:center;
   width:22px;height:22px;border-radius:5px;font-size:13px;font-weight:800;
   font-variant-numeric:tabular-nums}
@@ -307,8 +307,8 @@ function renderSengen(){
   const tierrow=`<div class="tierrow"><button class="tswb${sengenTier==='take'?' on':''}" data-t="take">竹プラン</button><button class="tswb${sengenTier==='matsu'?' on':''}" data-t="matsu">松プラン</button></div>`;
   if(!list.length){
     const note=sengenTier==="matsu"
-      ?"本日の松プラン対象レースはありません。<br>AIの予測と市場のオッズが一致したレースのみを選定しています。"
-      :"本日の竹プラン対象レースはありません。<br>3連単上位3点の合計確率が高く、水面が安定した会場のみを厳選しています。";
+      ?"本日の松プラン対象レースはありません。"
+      :"本日の竹プラン対象レースはありません。";
     m.innerHTML=tierrow+`<div class="note">${note}</div>`;
     m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
     return;
