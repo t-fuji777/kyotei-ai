@@ -224,6 +224,18 @@ let sengenTier="take";
 let accOpenM={},accResizeBound=false; // 的中実績: 過去月の折りたたみ開閉状態 / resizeリスナー二重登録防止
 const PREDS={};
 const _WD=["日","月","火","水","木","金","土"];
+// Web Push通知: PUSH_WORKERが空文字の間はデプロイ未完了とみなし、機能全体を非表示にする(休眠状態)。
+// デプロイ後にオーケストレータがWorker URLを設定して有効化する。
+const PUSH_WORKER="";
+const VAPID_PUB="BBwe0VKS6ZoMa4CDjXDpKHvp5xPR9okvoPQCQGQfZdmX8JcIBAls-FuE3qOGFd7b2dPbxI9T0XWYHsJDqvby3hQ";
+function urlBase64ToUint8Array(base64String){
+  const padding="=".repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+  const raw=atob(base64);
+  const arr=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
+  return arr;
+}
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const laneChip=(n,s)=>`<span class="lane ${s?'s':''} l${n}">${n}</span>`;
@@ -679,7 +691,70 @@ function renderModel(rep){
     <div class="kv"><span>回収率(TOP5均等買い)</span><span class="num">${pct(tm.top5_roi||0)}</span></div>
     <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}
     ${calibSec}
+    ${PUSH_WORKER?'<div id="pushSec"></div>':''}
   </div>`;
+  if(PUSH_WORKER)renderPushSection();
+}
+
+// プッシュ通知セクション(モデルタブ末尾)。PUSH_WORKERが空の間は呼ばれない(=完全非表示)。
+function _isIOSDevice(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);}
+function _isStandalone(){return !!window.navigator.standalone||(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches);}
+async function renderPushSection(){
+  const el=document.getElementById("pushSec");
+  if(!el)return;
+  if(_isIOSDevice()&&!_isStandalone()){
+    el.innerHTML=`<div class="sec" style="margin-top:18px">プッシュ通知</div>
+      <div style="font-size:12px;color:var(--dim);line-height:1.7">ホーム画面に追加したアプリから設定できます(共有ボタン→ホーム画面に追加)</div>`;
+    return;
+  }
+  if(!("serviceWorker" in navigator)||!("PushManager" in window)){
+    el.innerHTML=`<div class="sec" style="margin-top:18px">プッシュ通知</div>
+      <div style="font-size:12px;color:var(--dim);line-height:1.7">この端末はプッシュ通知に対応していません。</div>`;
+    return;
+  }
+  el.innerHTML=`<div class="sec" style="margin-top:18px">プッシュ通知</div><div id="pushBody" style="font-size:12px;color:var(--dim)">確認中…</div>`;
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    _pushBodyRender(sub);
+  }catch(e){
+    const b=document.getElementById("pushBody");if(b)b.textContent="通知状態の確認に失敗しました。";
+  }
+}
+function _pushBodyRender(sub){
+  const b=document.getElementById("pushBody");
+  if(!b)return;
+  if(sub){
+    b.innerHTML=`<div style="color:var(--text);margin-bottom:8px">通知は有効です</div><button id="pushOff" class="chip">解除</button>`;
+    const off=document.getElementById("pushOff");if(off)off.onclick=()=>_pushUnsubscribe(sub);
+  }else{
+    b.innerHTML=`<button id="pushOn" class="chip">通知を受け取る</button>`;
+    const on=document.getElementById("pushOn");if(on)on.onclick=_pushSubscribe;
+  }
+}
+async function _pushSubscribe(){
+  const b=document.getElementById("pushBody");
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=="granted"){if(b)b.innerHTML='<div style="color:var(--dim)">通知が許可されませんでした。</div>';return;}
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUB)});
+    const res=await fetch(PUSH_WORKER+"/sub",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub})});
+    if(!res.ok)throw new Error("subscribe register failed "+res.status);
+    _pushBodyRender(sub);
+  }catch(e){
+    if(b)b.innerHTML='<div style="color:var(--dim)">通知の登録に失敗しました。</div>';
+  }
+}
+async function _pushUnsubscribe(sub){
+  const b=document.getElementById("pushBody");
+  try{
+    await fetch(PUSH_WORKER+"/unsub",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:sub.endpoint})});
+    await sub.unsubscribe();
+    _pushBodyRender(null);
+  }catch(e){
+    if(b)b.innerHTML='<div style="color:var(--dim)">解除に失敗しました。</div>';
+  }
 }
 
 async function show(tab){

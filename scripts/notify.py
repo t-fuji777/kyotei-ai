@@ -1,14 +1,21 @@
 # -*- coding: utf-8 -*-
-"""竹/松プランの確定(conf)と結果(res)を外部Webhookへ通知する。
+"""竹/松プランの確定(conf)と結果(res)を外部Webhook/Web Pushへ通知する。
 
-環境変数 NOTIFY_WEBHOOK が未設定/空なら notify_events() は即座に何もしない
-(既存パイプラインの挙動に一切影響しない)。設定時のみ、送信先URLから
-Telegram(api.telegram.orgを含む)/ Discord互換 を自動判別してPOSTする。
+環境変数 NOTIFY_WEBHOOK が未設定/空ならWebhook送信は行わない。設定時のみ、
+送信先URLからTelegram(api.telegram.orgを含む)/ Discord互換 を自動判別してPOSTする。
+
+環境変数 PUSH_SUBS_URL / PUSH_AUTH_KEY / VAPID_PRIVATE が全て設定されている場合のみ、
+Cloudflare Worker(push-worker/)経由でホーム画面追加PWAへ本物のWeb Pushを送信する
+(pywebpush未インストール環境ではスキップしローカル互換を保つ)。
+
+Webhook/Web Pushはいずれも未設定なら notify_events() は即座に何もしない
+(既存パイプラインの挙動に一切影響しない)。どちらか一方でも成功すれば送信成功扱いとする。
 
 重複防止: docs/predictions/notify_state.json に送信済みイベントidを保存する。
 イベントidは "conf-{ymd}-{vcode}-{no}" / "res-{ymd}-{vcode}-{no}" の形式で、
 日付が変われば当日分以外は間引く(肥大防止)。
 """
+import hashlib
 import json
 import os
 import urllib.error
@@ -153,12 +160,98 @@ def _res_events(pred: dict, ymd: str):
     return out
 
 
+def _push_ready() -> bool:
+    """Web Push送信に必要な環境変数が全て設定されているか判定する。"""
+    return bool(
+        (os.environ.get("PUSH_SUBS_URL") or "").strip()
+        and (os.environ.get("PUSH_AUTH_KEY") or "").strip()
+        and (os.environ.get("VAPID_PRIVATE") or "")
+    )
+
+
+def _fetch_push_subs(subs_url: str, auth_key: str) -> list:
+    """GET {subs_url}/subs?key=... で購読一覧(JSON配列)を取得する。
+    失敗時は例外を送出せず空リストを返す。"""
+    try:
+        qs = urllib.parse.urlencode({"key": auth_key})
+        req = urllib.request.Request(f"{subs_url.rstrip('/')}/subs?{qs}", method="GET")
+        with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        print(f"notify: push subs fetch failed ({e})")
+        return []
+
+
+def _delete_push_sub(subs_url: str, auth_key: str, sub_id: str) -> None:
+    """404/410を返した購読をWorker側KVから削除する(送信側の掃除)。"""
+    try:
+        qs = urllib.parse.urlencode({"key": auth_key, "id": sub_id})
+        req = urllib.request.Request(f"{subs_url.rstrip('/')}/sub?{qs}", method="DELETE")
+        with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
+            resp.read()
+    except Exception as e:
+        print(f"notify: push sub delete failed ({e})")
+
+
+def send_push(text: str) -> bool:
+    """購読中の全端末へpywebpushでWeb Push通知を送信する。
+    PUSH_SUBS_URL/PUSH_AUTH_KEY/VAPID_PRIVATEのいずれかが未設定なら何もせずFalseを返す。
+    pywebpush未インストール環境ではImportErrorをcatchしてスキップする(ローカル互換)。
+    1件以上送信成功でTrueを返す(呼び出し元のsent登録判定用)。"""
+    subs_url = (os.environ.get("PUSH_SUBS_URL") or "").strip()
+    auth_key = (os.environ.get("PUSH_AUTH_KEY") or "").strip()
+    vapid_private = os.environ.get("VAPID_PRIVATE") or ""
+    if not (subs_url and auth_key and vapid_private):
+        return False
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        print("notify: pywebpush not installed, skip web push")
+        return False
+    subs = _fetch_push_subs(subs_url, auth_key)
+    if not subs:
+        # 購読者ゼロ=届け先が無いだけなので配送済み扱い(後から購読した端末に
+        # 当日分のバックログが一斉着弾するのを防ぐ。60秒毎の再送スパムも防止)。
+        return True
+    # Web Push本文は暗号化後4096バイト上限。日本語の長文で超えないよう本文を切り詰める。
+    if len(text) > 900:
+        text = text[:900] + "\n(続きはアプリで)"
+    payload = json.dumps({"title": "アリテイ", "body": text}, ensure_ascii=False)
+    ok = False
+    for entry in subs:
+        sub = entry.get("subscription") if isinstance(entry, dict) else None
+        if not sub:
+            continue
+        sub_id = entry.get("id") or hashlib.sha256(
+            sub.get("endpoint", "").encode("utf-8")
+        ).hexdigest()
+        try:
+            webpush(
+                subscription_info=sub,
+                data=payload,
+                vapid_private_key=vapid_private,
+                vapid_claims={"sub": "mailto:t.fujino@meihogp.co.jp"},
+            )
+            ok = True
+        except WebPushException as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status in (404, 410):
+                _delete_push_sub(subs_url, auth_key, sub_id)
+            else:
+                print(f"notify: web push failed ({e})")
+        except Exception as e:
+            print(f"notify: web push failed ({e})")
+    return ok
+
+
 def notify_events(pred: dict, ymd: str) -> None:
-    """当日予測dictを走査し、確定/結果イベントを検出。未送信分のみ1回のPOSTに
+    """当日予測dictを走査し、確定/結果イベントを検出。未送信分のみ1回のPOST/Web Pushに
     まとめて送信し、状態ファイルへ記録する(重複防止)。
-    NOTIFY_WEBHOOKが未設定/空なら何もしない。"""
+    NOTIFY_WEBHOOKもWeb Push設定(PUSH_SUBS_URL等)も未設定/空なら何もしない。"""
     url = (os.environ.get("NOTIFY_WEBHOOK") or "").strip()
-    if not url:
+    push_ready = _push_ready()
+    if not url and not push_ready:
         return
     state = _prune_state(_load_state(), ymd)
     sent = set(state.get("sent", []))
@@ -169,6 +262,8 @@ def notify_events(pred: dict, ymd: str) -> None:
         return
     # 1800字を上限にチャンク分割して送信(Discord 2000/Telegram 4096の上限対策)。
     # 送信に成功したチャンクのidだけをsentに記録し、失敗分は次サイクル(60秒後)に再送する。
+    # webhook/Web Pushは独立で判定し、どちらか一方でも成功すればsent登録する
+    # (両方失敗の場合のみ再送対象)。webhook未設定でWeb Pushのみの構成でも動作する。
     chunks = []
     cur_ids, cur_msgs, cur_len = [], [], 0
     for eid, msg in new_events:
@@ -184,7 +279,9 @@ def notify_events(pred: dict, ymd: str) -> None:
         text = "\n".join(msgs)
         if not text.startswith(APP_TAG):
             text = APP_TAG + "\n" + text
-        if send_webhook(url, text):
+        webhook_ok = send_webhook(url, text) if url else False
+        push_ok = send_push(text) if push_ready else False
+        if webhook_ok or push_ok:
             sent.update(ids)
         else:
             print(f"notify send failed: {len(ids)} event(s) will retry next cycle")

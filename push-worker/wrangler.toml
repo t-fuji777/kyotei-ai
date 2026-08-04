@@ -1,0 +1,11 @@
+name = "aritei-push"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+kv_namespaces = [
+  { binding = "SUBS", id = "PLACEHOLDER_KV_ID" }
+  # idはデプロイ時に `wrangler kv namespace create SUBS` で作成したIDに差し替える
+]
+
+# AUTH_KEYはリポジトリに書かない。デプロイ後に以下で設定する:
+#   wrangler secret put AUTH_KEY
