@@ -76,7 +76,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
   margin-bottom:7px;overflow:hidden}
 .race.cand{border-style:dashed;border-color:#3B5A74}
 .stconf{font-size:10px;color:var(--dim);margin-left:6px;white-space:nowrap}
-.candchip{font-size:10px;font-weight:800;border-radius:5px;padding:1px 5px;margin-left:6px;background:rgba(143,166,186,.18);color:var(--dim);line-height:1.4;white-space:nowrap}
+.conf.candb{background:transparent;border:1px dashed #3B5A74;color:var(--dim);font-weight:700}
 .racehead{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}.racelist.sengen .racehead{cursor:default}
 .rno{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;font-size:16px;font-weight:800;min-width:34px}
 .rven{font-size:10px;font-weight:600;color:var(--dim);line-height:1.1;margin-top:2px;letter-spacing:.02em}
@@ -357,9 +357,14 @@ function renderSengen(){
     // (従来通りの見た目を維持)。
     const stampFixed=(r.tk!=null||r.mt!=null);
     const legacyFixed=!!(r.result&&!r.result.status&&(isP?r.result.mt!=null:r.result.tk!=null));
-    const isCand=!stampFixed&&!legacyFixed;
+    // 候補=未確定(スタンプ無し・結果も無し)。数字は確定するまで出さない:
+    // 的中率枠には「候補」を表示し、確定/決着後に初めて較正%を刻む(以後不変)。
+    const isCand=!stampFixed&&!legacyFixed&&!r.result;
     const stampHtml=stampFixed?`<span class="stconf">確定${r.pt?(" "+esc(r.pt)):""}</span>`:"";
-    const candHtml=isCand?`<span class="candchip">候補</span>`:"";
+    const candHtml="";
+    const badgeHtml=isCand
+      ?`<span class="conf candb">候補</span>`
+      :`<span class="conf ${cumCls((isP?calT4(r):calT3(r))/100)}">${isP?calT4(r):calT3(r)}%</span>`;
     const picks=r.picks.slice(0,isP?4:3).map((p,i)=>
       `<div class="pickrow${(r.result&&!r.result.status&&p.c===r.result.order)?' pwin':''}"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
@@ -370,7 +375,7 @@ function renderSengen(){
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span>${candHtml}<br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span>${stampHtml}</span>
-        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf ${cumCls((isP?calT4(r):calT3(r))/100)}">${isP?calT4(r):calT3(r)}%</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${hit?"jhit":"jmiss"}">${hit?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv">${badgeHtml}</span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${hit?"jhit":"jmiss"}">${hit?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
       </div>
       <div class="racebody">
         ${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
