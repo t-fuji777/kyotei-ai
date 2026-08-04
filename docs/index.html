@@ -684,12 +684,15 @@ async function show(tab){
     m.innerHTML=`<div class="note">データの取得に失敗しました。<br>${e.message}</div>`;
   }
   // 描画完了後にも最上部へ(切替直後のリセットが慣性スクロール等で上書きされる端末対策)。当日予測は従来挙動。
-  if(tab!=="today"&&token===showGen){requestAnimationFrame(()=>{if(cur===tab)window.scrollTo(0,0);});}
+  // iOS(WebKit)はscrollTo(0,0)の後に非同期でスクロール位置を復元することがあるため、
+  // 1回のリセットでなく表示後250msの間フレーム毎に最上部へ固定して確実化する。当日予測は従来挙動。
+  if(tab!=="today"&&token===showGen){const _until=Date.now()+250;const _pin=()=>{if(cur!==tab||token!==showGen)return;window.scrollTo(0,0);if(Date.now()<_until)requestAnimationFrame(_pin);};requestAnimationFrame(_pin);}
 }
 $("#tabSen").onclick=()=>show("sen");
 $("#tabToday").onclick=()=>show("today");
 $("#tabAcc").onclick=()=>show("acc");
 $("#tabModel").onclick=()=>show("model");
+if("scrollRestoration" in history)history.scrollRestoration="manual";
 show("today");
 // 較正表(calib.json)は起動時に1回取得。失敗時はCALIB=nullのまま内蔵フォールバック表を使う。
 // 取得完了が現在表示中のタブの描画より後になった場合は、そのタブだけ再描画して反映する。
