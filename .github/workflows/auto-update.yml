@@ -18,11 +18,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pandas numpy lightgbm lhafile requests
+      - run: pip install pandas numpy lightgbm lhafile requests pywebpush
       - name: loop results + live re-predict
         env:
           NOTIFY_WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK }}
           NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
+          PUSH_SUBS_URL: ${{ vars.PUSH_SUBS_URL }}
+          PUSH_AUTH_KEY: ${{ secrets.PUSH_AUTH_KEY }}
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com

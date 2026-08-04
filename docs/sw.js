@@ -1,4 +1,4 @@
-const CACHE = "kyotei-ai-v122";
+const CACHE = "kyotei-ai-v123";
 
 self.addEventListener("install", e => {
   e.waitUntil(
@@ -38,5 +38,39 @@ self.addEventListener("fetch", e => {
         return res;
       })
       .catch(() => caches.match(e.request, { ignoreSearch: true }))
+  );
+});
+
+// Web Push受信: ペイロードのJSON化に失敗した場合は既定文言にフォールバックする
+self.addEventListener("push", e => {
+  let title = "アリテイ", body = "新着情報があります";
+  try {
+    if (e.data) {
+      const d = e.data.json();
+      if (d && d.title) title = d.title;
+      if (d && d.body) body = d.body;
+    }
+  } catch (_) {
+    // JSONでない場合は既定文言のまま
+  }
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "icon-192.png",
+      badge: "icon-192.png"
+    })
+  );
+});
+
+// 通知タップ: 既存ウィンドウがあればフォーカス、無ければ新規に開く
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+      for (const c of list) {
+        if ("focus" in c) return c.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow("./");
+    })
   );
 });
