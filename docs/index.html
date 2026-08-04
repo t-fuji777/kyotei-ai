@@ -21,15 +21,14 @@ html,body{background:var(--bg);color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
   font-size:15px;line-height:1.5}
 .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
-#app{max-width:480px;margin:0 auto;min-height:100vh;
-  padding-bottom:calc(72px + env(safe-area-inset-bottom))}
-/* 厳選一覧/的中実績/モデルは#main自身を内部スクロール化(ページ全体を常にビューポート内に収め、
-   iOSのウィンドウスクロール位置の非同期復元による約40pxズレを根治する)。当日予測は対象外。 */
-#main.pane{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#app{max-width:480px;margin:0 auto;height:100%}
+/* 全タブ共通で#main自身を内部スクロール化(ページ全体を常にビューポート内に収める)。
+   iOSのウィンドウスクロール位置の非同期復元ズレの根治に加え、SafariのURLバー伸縮で
+   下部ナビが上下に動くのを防ぐ(全タブでナビ位置が固定される)。 */
+#main{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 /* iOSはbodyのoverflow:hiddenを無視してウィンドウをスクロールできるため、
-   非todayタブではposition:fixedで完全ロックする(モーダルと同じ手法)。JSでbody.lockを付与。 */
-body.lock{position:fixed;inset:0;overflow:hidden;width:100%}
-body.lock #app{padding-bottom:0}
+   position:fixedで常時完全ロックする(モーダルと同じ手法)。 */
+body{position:fixed;inset:0;overflow:hidden;width:100%}
 header{position:sticky;top:0;z-index:20;background:#0B1B2B;
   backdrop-filter:blur(8px);
   padding:calc(10px + env(safe-area-inset-top)) 16px 4px}
@@ -174,6 +173,12 @@ th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fi
 .accwrap .acctbl td>br+span{white-space:nowrap}
 .note{color:var(--dim);font-size:13px;padding:32px 24px;text-align:center;line-height:1.8}.race.gap{opacity:.55}.gapnote{margin-left:auto;color:var(--dim);font-size:12px}.venopt.off{opacity:.4;color:var(--dim);cursor:default;pointer-events:none}
 .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+/* 設定タブの折りたたみ(モデル詳細) */
+.setdet{margin-top:18px;border-top:1px solid var(--line)}
+.setdet summary{list-style:none;cursor:pointer;padding:12px 0;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.setdet summary::-webkit-details-marker{display:none}
+.setdet summary::after{content:"▾";color:var(--dim)}
+.setdet[open] summary::after{content:"▴"}
 .kv span:first-child{color:var(--dim)}
 .warn{margin:10px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
   color:var(--dim);font-size:11px;line-height:1.7}
@@ -182,7 +187,7 @@ th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fi
   border-radius:50%;margin:48px auto;animation:sp 0.8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.spin{animation:none}}
-.todaytog{position:sticky;top:calc(var(--hh,84px) - 1px);z-index:15;display:flex;gap:0;padding:0 16px;margin:0;background:var(--bg)}.todaytog::after{content:"";position:absolute;left:0;bottom:0;width:100%;height:1px;background:var(--line)}
+.todaytog{position:sticky;top:-1px;z-index:15;display:flex;gap:0;padding:0 16px;margin:0;background:var(--bg)}.todaytog::after{content:"";position:absolute;left:0;bottom:0;width:100%;height:1px;background:var(--line)}
 body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabToday.on) header{padding-bottom:0px}.todaytog .tt{flex:1;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);border-radius:0;padding:10.5px 0 4.2px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:-1px}.todaytog .tt.on{color:var(--accent);border-bottom-color:var(--accent)}.timesec{font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.04em;margin:16px 2px 8px;padding-bottom:4px;border-bottom:1px solid var(--line)}.timesec:first-child{margin-top:4px}
 </style>
 </head>
@@ -207,7 +212,7 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
     的中実績</button>
   <button id="tabModel">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
-    モデル</button>
+    設定</button>
 </nav>
 <script>
 const $=s=>document.querySelector(s);
@@ -294,7 +299,6 @@ function setHeader(p){
   const d=p.date;
   $("#hdrDate").textContent=`${d.slice(0,4)}/${d.slice(4,6)}/${d.slice(6,8)} の予測`;
   const mt=$("#hdrMetaTxt");if(mt)mt.textContent=`予測生成：${p.generated_at||"-"}\n学　　習：${p.model_trained_at||"-"}`;
-  const _h=document.querySelector("header");if(_h)document.documentElement.style.setProperty("--hh",_h.offsetHeight+"px");
 }
 
 function axisTable(r){ return ""; }
@@ -365,7 +369,7 @@ function renderSengen(){
     m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
     if(skipList.length){
       requestAnimationFrame(fitRtype);
-      m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
+      m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const mm=$("#main");const tg=mm.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=mm.scrollTop+t.getBoundingClientRect().top-mm.getBoundingClientRect().top;mm.scrollTo({top:Math.max(0,at-th-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
     }
     return;
   }
@@ -411,7 +415,7 @@ function renderSengen(){
     <div class="racelist sengen">${cards}${skipHtml}</div>`;
   m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
   requestAnimationFrame(fitRtype);
-  m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
+  m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const mm=$("#main");const tg=mm.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=mm.scrollTop+t.getBoundingClientRect().top-mm.getBoundingClientRect().top;mm.scrollTo({top:Math.max(0,at-th-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
 }
 
 function _isOpen(r,dateStr){
@@ -506,7 +510,6 @@ function renderDateNav(P){
     nav.querySelectorAll("#dMenu .dopt").forEach(o=>o.onclick=()=>{menu.hidden=true;gotoDate(o.dataset.d);});
   }
   if(!dnavDocBound){dnavDocBound=true;document.addEventListener("click",ev=>{const mm=document.getElementById("dMenu");if(mm&&!ev.target.closest("#dateNav"))mm.hidden=true;});}
-  const _h=document.querySelector("header");if(_h)document.documentElement.style.setProperty("--hh",_h.offsetHeight+"px");
 }
 function renderToday(){
   const m=$("#main");
@@ -529,7 +532,7 @@ function renderToday(){
     m.innerHTML=_todayTog()+`<div class="racelist">${body||'<div class="note">レースがありません。</div>'}</div>`;
     _wireTodayTog(m);
     m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
-    if(!autoRefreshing){if(openL.length&&doneL.length){const el=document.getElementById("openTop");if(el){const hh=(document.querySelector("header")||{offsetHeight:90}).offsetHeight;const tg=m.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=window.scrollY+el.getBoundingClientRect().top;window.scrollTo(0,Math.max(0,at-hh-th-7));}}else if(!openL.length){window.scrollTo(0,0);}}
+    if(!autoRefreshing){if(openL.length&&doneL.length){const el=document.getElementById("openTop");if(el){const tg=m.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=m.scrollTop+el.getBoundingClientRect().top-m.getBoundingClientRect().top;m.scrollTop=Math.max(0,at-th-7);}}else if(!openL.length){m.scrollTop=0;}}
     requestAnimationFrame(fitRtype);
     return;
   }
@@ -547,7 +550,7 @@ function renderToday(){
   document.getElementById("hdrChips").innerHTML=`<button id="venSel">${venue?_disp(venue):""}<span class="car">▾</span></button><div id="venMenu" hidden>${chips}</div>`;
   m.innerHTML=_todayTog()+`<div class="racelist">${races}</div>`;
   _wireTodayTog(m);
-  if(!autoRefreshing&&!P.venues.some(v=>v.races.some(r=>_isOpen(r,P.date))))window.scrollTo(0,0);
+  if(!autoRefreshing&&!P.venues.some(v=>v.races.some(r=>_isOpen(r,P.date))))m.scrollTop=0;
   {const sel=document.getElementById("venSel"),menu=document.getElementById("venMenu");if(sel&&menu){sel.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;if(!menu.hidden){const _dm=document.getElementById("dMenu");if(_dm)_dm.hidden=true;const _on=menu.querySelector(".venopt.on");if(_on)_on.scrollIntoView({block:"center"});}};document.querySelectorAll("#venMenu .venopt").forEach(o=>o.onclick=()=>{selVenue=+o.dataset.v;renderToday();});if(!venDocBound){venDocBound=true;document.addEventListener("click",ev=>{const mm=document.getElementById("venMenu");if(mm&&!ev.target.closest("#hdrChips"))mm.hidden=true;});}}}
   m.querySelectorAll(".racehead").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
   requestAnimationFrame(fitRtype);
@@ -659,28 +662,35 @@ function positionAccSticky(){
   if(cur!=="acc")return;
   const tbl=document.querySelector(".acctbl");
   if(!tbl)return;
-  const header=document.querySelector("header");
-  // #main.paneがスクロール祖先になる場合、stickyのtop起点は0(headerの高さを足さない)。
-  // 従来のウィンドウスクロール祖先の場合のみheader高さを起点にする。
+  // #mainが常にスクロール祖先なのでstickyのtop起点は0。
   // 高さは小数精度(getBoundingClientRect)で累積する。整数丸め(offsetHeight)だと
   // 固定行の間にサブピクセルの隙間ができ、スクロール内容が透けて見えるため。
-  let top=document.querySelector("#main.pane")?0:(header?header.getBoundingClientRect().height:0);
+  let top=0;
   tbl.querySelectorAll("tr.stkrow").forEach(tr=>{
     Array.prototype.forEach.call(tr.children,cell=>{cell.style.top=top+"px";});
     top+=tr.getBoundingClientRect().height;
   });
 }
-if(!accResizeBound){accResizeBound=true;window.addEventListener("resize",()=>{
-  // 画面回転/リサイズ追随: today以外のタブは#main.paneの高さを再計算する
-  if(cur!=="today"){const m=$("#main");const hdr=document.querySelector("header"),nv=document.querySelector("nav");m.style.height=(window.innerHeight-(hdr?hdr.offsetHeight:0)-(nv?nv.offsetHeight:0))+"px";}
-  if(cur==="acc")positionAccSticky();
-});}
+// #mainの高さ = ビューポート - ヘッダー - 下部ナビ。全タブ共通(内部スクロール)。
+function fitMain(){
+  const m=$("#main");if(!m)return;
+  const hdr=document.querySelector("header"),nv=document.querySelector("nav");
+  m.style.height=(window.innerHeight-(hdr?hdr.offsetHeight:0)-(nv?nv.offsetHeight:0))+"px";
+}
+if(!accResizeBound){accResizeBound=true;
+  // 画面回転/リサイズ追随
+  window.addEventListener("resize",()=>{fitMain();if(cur==="acc")positionAccSticky();});
+  // ヘッダー内容は描画後に非同期で変わる(日付ナビ/当日メタ等)ため、
+  // 高さ変化を監視して#mainの高さを追随させる(下部ナビとの隙間/被りを防ぐ)。
+  if(window.ResizeObserver){new ResizeObserver(()=>fitMain()).observe(document.querySelector("header"));}
+}
 
 function renderModel(rep){
+  // 設定タブ: 通知/アプリ情報を上部に、表示的中率の検証を中段に、
+  // モデル詳細(学習と精度)は折りたたみで下部に置く。
   const m=$("#main");
-  if(!rep){m.innerHTML='<div class="note">モデル情報がありません。<br>学習完了後に表示されます。</div>';return}
-  const tm=rep.test_metrics||{}, bm=rep.baseline_metrics||{};
-  const fi=Object.entries(rep.feature_importance||{}).slice(0,10)
+  const tm=rep?(rep.test_metrics||{}):{}, bm=rep?(rep.baseline_metrics||{}):{};
+  const fi=Object.entries((rep&&rep.feature_importance)||{}).slice(0,10)
     .map(([k,v])=>`<div class="kv"><span>${k}</span><span class="num">${Math.round(v)}</span></div>`).join("");
   // 表示的中率の検証: docs/calib.json(=VIEW.calib/CALIB)がある場合のみ、表示帯別に
   // 直近30日/全期間の実測的中率を突き合わせて確認できる小表を出す。
@@ -706,7 +716,10 @@ function renderModel(rep){
       <div class="kv"><span>対象レース数</span><span class="num">${nTotal.toLocaleString()}R</span></div>
       <table><tr><th>表示帯</th><th>直近30日 実測</th><th>全期間 実測</th></tr>${rows||'<tr><td colspan="3">データなし</td></tr>'}</table>`;
   }
-  m.innerHTML=`<div class="pad">
+  const pushSec=PUSH_WORKER?'<div id="pushSec"></div>':`<div class="sec" style="margin-top:14px">通知</div>
+    <div class="kv"><span>プッシュ通知</span><span class="num" style="color:var(--dim)">準備中</span></div>
+    <div style="font-size:11px;color:var(--dim);margin-top:6px">竹・松プランの確定と結果を端末に通知する機能を準備しています。公開時はここでオン/オフできます。</div>`;
+  const modelBody=rep?`
     <div class="kv"><span>学習日時</span><span class="num">${rep.trained_at||"-"}</span></div>
     <div class="kv"><span>学習期間</span><span class="num">${(rep.period||[]).join(" - ")}</span></div>
     <div class="kv"><span>学習行数</span><span class="num">${(rep.rows_train||0).toLocaleString()}</span></div>
@@ -718,14 +731,37 @@ function renderModel(rep){
     <div class="kv"><span>3連単 TOP10内</span><span class="num">${pct(tm.top10_hit_rate||0)} (基準 ${pct(bm.top10_hit_rate||0)})</span></div>
     <div class="kv"><span>厳選 3連単的中率</span><span class="num">${tm.sengen&&tm.sengen.top5_hit_rate!=null?pct(tm.sengen.top5_hit_rate)+" ("+tm.sengen.races_per_day+"R/日)":"-"}</span></div>
     <div class="kv"><span>回収率(TOP5均等買い)</span><span class="num">${pct(tm.top5_roi||0)}</span></div>
-    <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}
+    <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}`
+    :'<div class="note">モデル情報がありません。<br>学習完了後に表示されます。</div>';
+  m.innerHTML=`<div class="pad">
+    ${pushSec}
+    <div class="sec" style="margin-top:18px">アプリ</div>
+    <div class="kv"><span>バージョン</span><span class="num" id="appVer">-</span></div>
+    <div style="margin-top:10px"><button id="appReload" class="chip">最新版に更新(再読み込み)</button></div>
     ${calibSec}
-    ${PUSH_WORKER?'<div id="pushSec"></div>':''}
+    <details class="setdet"><summary>モデル情報(学習と精度)</summary>${modelBody}</details>
   </div>`;
   if(PUSH_WORKER)renderPushSection();
+  _renderAppVer();
+  {const rb=document.getElementById("appReload");if(rb)rb.onclick=_appReload;}
 }
 
-// プッシュ通知セクション(モデルタブ末尾)。PUSH_WORKERが空の間は呼ばれない(=完全非表示)。
+// 設定タブ: バージョン表示(sw.jsのCACHE_VERSIONを唯一の出所として取得)と手動更新
+async function _renderAppVer(){
+  const el=document.getElementById("appVer");if(!el)return;
+  try{
+    const t=await (await fetch("sw.js",{cache:"no-store"})).text();
+    const mv=t.match(/kyotei-ai-v(\d+)/);
+    el.textContent=mv?"v"+mv[1]:"-";
+  }catch(_){el.textContent="-";}
+}
+async function _appReload(){
+  const b=document.getElementById("appReload");if(b){b.disabled=true;b.textContent="更新中…";}
+  try{if("serviceWorker" in navigator){const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.update()));}}catch(_){}
+  location.reload();
+}
+
+// プッシュ通知セクション(設定タブ)。PUSH_WORKERが空の間は呼ばれない(=「準備中」の静的表示のみ)。
 function _isIOSDevice(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);}
 function _isStandalone(){return !!window.navigator.standalone||(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches);}
 async function renderPushSection(){
@@ -790,26 +826,13 @@ async function show(tab){
   const token=++showGen;
   cur=tab;
   const m=$("#main");
-  // 厳選一覧/的中実績/モデルは#main自身の内部スクロールへ切替える(iOS実機で発生する
-  // ウィンドウスクロール位置の非同期復元による約40pxズレを、ページ全体を常にビューポート内に
-  // 収めることで根治する)。当日予測は現行のウィンドウスクロールのまま(現在時刻帯/会場ポジション機能を優先)。
-  if(tab!=="today"){
-    m.classList.add("pane");
-    window.scrollTo(0,0);
-    document.body.classList.add("lock");
-  }else{
-    m.classList.remove("pane");
-    m.style.height="";
-    document.body.classList.remove("lock");
-  }
+  // 全タブ共通で#mainの内部スクロール(ページ全体は常時ロック)。下部ナビとヘッダーの
+  // 位置はタブに依らず固定される(SafariのURLバー伸縮の影響を受けない)。
   {const hc=document.getElementById("hdrChips");if(hc)hc.innerHTML="";const sc=document.getElementById("senCount");if(sc)sc.textContent="";const dn=document.getElementById("dateNav");if(dn)dn.innerHTML="";const _tm=document.getElementById("todayMeta");if(_tm)_tm.innerHTML="";}
   const map={sen:"Sen",today:"Today",acc:"Acc",model:"Model"};
   ["Sen","Today","Acc","Model"].forEach(t=>$("#tab"+t).classList.toggle("on",map[tab]===t));
   // 高さ計測はタブクラス適用後に行う(ヘッダの高さがタブ依存CSSで変わるため。resize時の再計算と同条件)
-  if(tab!=="today"){
-    const hdr=document.querySelector("header"),nv=document.querySelector("nav");
-    m.style.height=(window.innerHeight-(hdr?hdr.offsetHeight:0)-(nv?nv.offsetHeight:0))+"px";
-  }
+  fitMain();
   m.innerHTML='<div class="spin"></div>';
   try{
     if(tab==="sen"){
@@ -836,7 +859,8 @@ async function show(tab){
     if(token!==showGen) return;
     m.innerHTML=`<div class="note">データの取得に失敗しました。<br>${e.message}</div>`;
   }
-  // 描画完了後に先頭表示へ(前のタブのスクロール位置を引き継がない)。当日予測はウィンドウスクロールのまま。
+  // 描画完了後に先頭表示へ(前のタブのスクロール位置を引き継がない)。
+  // 当日予測はrenderToday側で現在時刻帯へ自動ポジションするため対象外。
   if(tab!=="today"&&token===showGen)m.scrollTop=0;
 }
 $("#tabSen").onclick=()=>show("sen");
@@ -880,8 +904,8 @@ async function refreshLatest(){
       if(dateList&&dateList.indexOf(pred.date)<0){dateList.push(pred.date);dateList.sort();}
       if(wasCurrentDate) viewPred=null;
       // 自動更新の再描画で展開カード/スクロール位置を壊さない: 退避→再描画→復元
-      // today以外(sen/acc/model)は#main.paneの内部スクロールなのでscrollTopを退避/復元する
-      const sc=(cur==="today")?{get:()=>window.scrollY,set:v=>window.scrollTo(0,v)}:{get:()=>$("#main").scrollTop,set:v=>{$("#main").scrollTop=v;}};
+      // 全タブ#mainの内部スクロールなのでscrollTopを退避/復元する
+      const sc={get:()=>$("#main").scrollTop,set:v=>{$("#main").scrollTop=v;}};
       const _sy=sc.get();
       const _open=[].slice.call(document.querySelectorAll(".racelist .race.open")).map(e=>e.getAttribute("data-r")).filter(Boolean);
       autoRefreshing=true;
@@ -906,8 +930,8 @@ async function refreshLatest(){
     refreshBusy=false;
   }
 }
-// アプリ復帰(バックグラウンド→前面)時: 当日予測以外のタブは#main.pane内部スクロールなので
-// 先頭表示に戻してから更新する(ウィンドウスクロール自体は発生しないため復元処理は不要)。
+// アプリ復帰(バックグラウンド→前面)時: 当日予測以外のタブは先頭表示に戻してから更新する
+// (全タブ#main内部スクロールでウィンドウスクロール自体が発生しないため復元処理は不要)。
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){
   if(cur&&cur!=="today")$("#main").scrollTop=0;
   refreshLatest();
