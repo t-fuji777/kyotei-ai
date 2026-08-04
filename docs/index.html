@@ -77,6 +77,9 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 .race.cand{border-style:dashed;border-color:#3B5A74}
 .stconf{font-size:10px;color:var(--dim);margin-left:6px;white-space:nowrap}
 .conf.candb{background:transparent;border:1px dashed #3B5A74;color:var(--dim);font-weight:700}
+.race.skip{opacity:.55}
+.skiphead{font-size:9px;color:var(--dim);padding:10px 16px 3px;letter-spacing:.02em}
+.rsreason{font-size:9px;color:var(--dim);white-space:nowrap}
 .racehead{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}.racelist.sengen .racehead{cursor:default}
 .rno{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;font-size:16px;font-weight:800;min-width:34px}
 .rven{font-size:10px;font-weight:600;color:var(--dim);line-height:1.1;margin-top:2px;letter-spacing:.02em}
@@ -327,22 +330,43 @@ function renderSengen(){
   if(!pred){m.innerHTML='<div class="spin"></div>';return}
   setHeader();
   const list=[];
+  // 見送り: 確率条件は通ったがオッズ条件で不成立(rs=理由文字列)となった準候補。
+  // tk/mtどちらも成立していないレースのみ対象(成立したプランがあれば通常の候補/確定側に出る)。
+  const skipList=[];
   (pred.venues||[]).forEach(v=>v.races.forEach(r=>{
     const ok=sengenTier==="matsu"?matsuOk(r,v.code):sengenOk(r,v.code);
     if(ok)list.push({v,r});
+    if(r.rs&&r.tk!==1&&r.mt!==1)skipList.push({v,r});
   }));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
+  skipList.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   {const _tm=$("#todayMeta");if(_tm){
     const hit=list.filter(x=>sengenTier==="matsu"?t4hit(x.r):t3hit(x.r)).length;
     _tm.innerHTML=`<span class="tml">本　日：</span><span class="tmv">${list.length}件</span><span class="tmn"></span><span class="tml">的　中：</span><span class="tmv">${hit}件</span><span class="tmn"></span>`;
   }}
   const tierrow=`<div class="tierrow"><button class="tswb${sengenTier==='take'?' on':''}" data-t="take">竹プラン</button><button class="tswb${sengenTier==='matsu'?' on':''}" data-t="matsu">松プラン</button></div>`;
+  // 見送りカード: racebody無し・タップ不可の1行カード。結果/払戻金は通常カードと同じ表示。
+  const _skipCf=({v,r})=>{
+    return `<div class="race skip">
+      <div class="racehead">
+        <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
+        <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span><br>
+          <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv"><span class="conf candb">見送り</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv"><span class="rsreason">${esc(r.rs||"")}</span></span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
+      </div>
+    </div>`;
+  };
+  const skipHtml=skipList.length?(`<div class="skiphead">見送り</div>`+skipList.map(_skipCf).join("")):"";
   if(!list.length){
     const note=sengenTier==="matsu"
       ?"本日の松プラン対象レースはありません。"
       :"本日の竹プラン対象レースはありません。";
-    m.innerHTML=tierrow+`<div class="note">${note}</div>`;
+    m.innerHTML=tierrow+`<div class="note">${note}</div>`+(skipList.length?`<div class="racelist sengen">${skipHtml}</div>`:"");
     m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
+    if(skipList.length){
+      requestAnimationFrame(fitRtype);
+      m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
+    }
     return;
   }
   const _cf=({v,r})=>{
@@ -384,7 +408,7 @@ function renderSengen(){
   const openL=list.filter(x=>_isOpen(x.r,pred.date)),doneL=list.filter(x=>!_isOpen(x.r,pred.date));
   const cards=doneL.map(_cf).join("")+openL.map(_cf).join("");
   m.innerHTML=tierrow+`
-    <div class="racelist sengen">${cards}</div>`;
+    <div class="racelist sengen">${cards}${skipHtml}</div>`;
   m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
   requestAnimationFrame(fitRtype);
   m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const hh=(document.querySelector("header")||{getBoundingClientRect:()=>({height:90})}).getBoundingClientRect().height;const at=window.scrollY+t.getBoundingClientRect().top;window.scrollTo({top:Math.max(0,at-hh-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
