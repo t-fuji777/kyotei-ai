@@ -23,6 +23,11 @@ html,body{background:var(--bg);color:var(--text);
 .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
 #app{max-width:480px;margin:0 auto;min-height:100vh;
   padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+/* 厳選一覧/的中実績/モデルは#main自身を内部スクロール化(ページ全体を常にビューポート内に収め、
+   iOSのウィンドウスクロール位置の非同期復元による約40pxズレを根治する)。当日予測は対象外。 */
+#main.pane{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+body:has(#main.pane){overflow:hidden}
+body:has(#main.pane) #app{padding-bottom:0}
 header{position:sticky;top:0;z-index:20;background:#0B1B2B;
   backdrop-filter:blur(8px);
   padding:calc(10px + env(safe-area-inset-top)) 16px 4px}
@@ -591,15 +596,21 @@ function positionAccSticky(){
   const tbl=document.querySelector(".acctbl");
   if(!tbl)return;
   const header=document.querySelector("header");
+  // #main.paneがスクロール祖先になる場合、stickyのtop起点は0(headerの高さを足さない)。
+  // 従来のウィンドウスクロール祖先の場合のみheader高さを起点にする。
   // 高さは小数精度(getBoundingClientRect)で累積する。整数丸め(offsetHeight)だと
   // 固定行の間にサブピクセルの隙間ができ、スクロール内容が透けて見えるため。
-  let top=header?header.getBoundingClientRect().height:0;
+  let top=document.querySelector("#main.pane")?0:(header?header.getBoundingClientRect().height:0);
   tbl.querySelectorAll("tr.stkrow").forEach(tr=>{
     Array.prototype.forEach.call(tr.children,cell=>{cell.style.top=top+"px";});
     top+=tr.getBoundingClientRect().height;
   });
 }
-if(!accResizeBound){accResizeBound=true;window.addEventListener("resize",()=>{if(cur==="acc")positionAccSticky();});}
+if(!accResizeBound){accResizeBound=true;window.addEventListener("resize",()=>{
+  // 画面回転/リサイズ追随: today以外のタブは#main.paneの高さを再計算する
+  if(cur!=="today"){const m=$("#main");const hdr=document.querySelector("header"),nv=document.querySelector("nav");m.style.height=(window.innerHeight-(hdr?hdr.offsetHeight:0)-(nv?nv.offsetHeight:0))+"px";}
+  if(cur==="acc")positionAccSticky();
+});}
 
 function renderModel(rep){
   const m=$("#main");
@@ -651,13 +662,25 @@ function renderModel(rep){
 async function show(tab){
   const token=++showGen;
   cur=tab;
-  // タブ切替時は最上部から表示する(前のタブのスクロール位置を引き継がない)。
-  // 当日予測のみ従来挙動を維持(レンダラ側の現在時刻帯/会場ポジション機能を優先)。
-  if(tab!=="today")window.scrollTo(0,0);
+  const m=$("#main");
+  // 厳選一覧/的中実績/モデルは#main自身の内部スクロールへ切替える(iOS実機で発生する
+  // ウィンドウスクロール位置の非同期復元による約40pxズレを、ページ全体を常にビューポート内に
+  // 収めることで根治する)。当日予測は現行のウィンドウスクロールのまま(現在時刻帯/会場ポジション機能を優先)。
+  if(tab!=="today"){
+    m.classList.add("pane");
+  }else{
+    m.classList.remove("pane");
+    m.style.height="";
+  }
   {const hc=document.getElementById("hdrChips");if(hc)hc.innerHTML="";const sc=document.getElementById("senCount");if(sc)sc.textContent="";const dn=document.getElementById("dateNav");if(dn)dn.innerHTML="";const _tm=document.getElementById("todayMeta");if(_tm)_tm.innerHTML="";}
   const map={sen:"Sen",today:"Today",acc:"Acc",model:"Model"};
   ["Sen","Today","Acc","Model"].forEach(t=>$("#tab"+t).classList.toggle("on",map[tab]===t));
-  const m=$("#main");m.innerHTML='<div class="spin"></div>';
+  // 高さ計測はタブクラス適用後に行う(ヘッダの高さがタブ依存CSSで変わるため。resize時の再計算と同条件)
+  if(tab!=="today"){
+    const hdr=document.querySelector("header"),nv=document.querySelector("nav");
+    m.style.height=(window.innerHeight-(hdr?hdr.offsetHeight:0)-(nv?nv.offsetHeight:0))+"px";
+  }
+  m.innerHTML='<div class="spin"></div>';
   try{
     if(tab==="sen"){
       if(!pred) pred=await fetchJSON("predictions/latest.json");sortVenues(pred);
@@ -673,7 +696,7 @@ async function show(tab){
     }else if(tab==="acc"){
       if(!VIEW.acc) VIEW.acc=await fetchJSON("accuracy.json").catch(()=>null);
       if(token!==showGen) return;
-      renderAcc(VIEW.acc);window.scrollTo(0,0);
+      renderAcc(VIEW.acc);
     }else{
       if(!VIEW.model) VIEW.model=await fetchJSON("model_report.json").catch(()=>null);
       if(token!==showGen) return;
@@ -683,22 +706,13 @@ async function show(tab){
     if(token!==showGen) return;
     m.innerHTML=`<div class="note">データの取得に失敗しました。<br>${e.message}</div>`;
   }
-  // 描画完了後にも最上部へ(切替直後のリセットが慣性スクロール等で上書きされる端末対策)。当日予測は従来挙動。
-  // iOS(WebKit)はscrollTo(0,0)の後に非同期でスクロール位置を復元することがあるため、
-  // 1回のリセットでなく表示後250msの間フレーム毎に最上部へ固定して確実化する。当日予測は従来挙動。
-  if(tab!=="today"&&token===showGen){armScrollGuard();const _until=Date.now()+250;const _pin=()=>{if(cur!==tab||token!==showGen)return;window.scrollTo(0,0);if(Date.now()<_until)requestAnimationFrame(_pin);};requestAnimationFrame(_pin);}
+  // 描画完了後に先頭表示へ(前のタブのスクロール位置を引き継がない)。当日予測はウィンドウスクロールのまま。
+  if(tab!=="today"&&token===showGen)m.scrollTop=0;
 }
 $("#tabSen").onclick=()=>show("sen");
 $("#tabToday").onclick=()=>show("today");
 $("#tabAcc").onclick=()=>show("acc");
 $("#tabModel").onclick=()=>show("model");
-// 非タッチ由来のスクロール(iOSの非同期位置復元など)を打ち消すガード。
-// show()/復帰時に武装し、1.5秒の間「ユーザー操作なしのスクロール」を検知したら即0へ戻す。
-let _noScrollUntil=0,_userTouch=false;
-document.addEventListener("touchstart",()=>{_userTouch=true;},{passive:true});
-window.addEventListener("wheel",()=>{_userTouch=true;},{passive:true});
-window.addEventListener("scroll",()=>{if(!_userTouch&&Date.now()<_noScrollUntil&&window.scrollY>0&&cur!=="today")window.scrollTo(0,0);},{passive:true});
-function armScrollGuard(){_userTouch=false;_noScrollUntil=Date.now()+1500;window.scrollTo(0,0);document.documentElement.scrollTop=0;if(document.body)document.body.scrollTop=0;}
 if("scrollRestoration" in history)history.scrollRestoration="manual";
 show("today");
 // 較正表(calib.json)は起動時に1回取得。失敗時はCALIB=nullのまま内蔵フォールバック表を使う。
@@ -736,14 +750,16 @@ async function refreshLatest(){
       if(dateList&&dateList.indexOf(pred.date)<0){dateList.push(pred.date);dateList.sort();}
       if(wasCurrentDate) viewPred=null;
       // 自動更新の再描画で展開カード/スクロール位置を壊さない: 退避→再描画→復元
-      const _sy=window.scrollY;
+      // today以外(sen/acc/model)は#main.paneの内部スクロールなのでscrollTopを退避/復元する
+      const sc=(cur==="today")?{get:()=>window.scrollY,set:v=>window.scrollTo(0,v)}:{get:()=>$("#main").scrollTop,set:v=>{$("#main").scrollTop=v;}};
+      const _sy=sc.get();
       const _open=[].slice.call(document.querySelectorAll(".racelist .race.open")).map(e=>e.getAttribute("data-r")).filter(Boolean);
       autoRefreshing=true;
       if(cur==="sen") renderSengen();
       else if(cur==="today"&&wasCurrentDate) renderToday();
       autoRefreshing=false;
       if(cur==="today"){_open.forEach(rn=>{const el=document.querySelector('.racelist .race[data-r="'+rn+'"]');if(el)el.classList.add("open");});}
-      window.scrollTo(0,_sy);
+      sc.set(_sy);
     }
     // 的中実績(accuracy.json)も更新し、実績タブを自動反映(リロード不要)
     try{
@@ -760,10 +776,10 @@ async function refreshLatest(){
     refreshBusy=false;
   }
 }
-// アプリ復帰(バックグラウンド→前面)時: iOSはページを再読込せず前回のスクロール位置ごと
-// 復活させるため、当日予測以外のタブは最上部へ戻してから更新する(タブ切替時と同じ扱い)。
+// アプリ復帰(バックグラウンド→前面)時: 当日予測以外のタブは#main.pane内部スクロールなので
+// 先頭表示に戻してから更新する(ウィンドウスクロール自体は発生しないため復元処理は不要)。
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){
-  if(cur&&cur!=="today"){armScrollGuard();const _u=Date.now()+300;const _p=()=>{if(cur==="today")return;window.scrollTo(0,0);document.documentElement.scrollTop=0;if(document.body)document.body.scrollTop=0;if(Date.now()<_u)requestAnimationFrame(_p);};_p();}
+  if(cur&&cur!=="today")$("#main").scrollTop=0;
   refreshLatest();
 }});
 setInterval(()=>{if(document.visibilityState==="visible")refreshLatest();},75000);
