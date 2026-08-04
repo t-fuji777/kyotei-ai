@@ -238,7 +238,10 @@ def predict_live(ymd, meta, models, sengen):
 
 # race-level fields holding observed data (results/odds/exhibition), attached by
 # the update loop -- these must survive a same-day regeneration (daily's retrain).
-_OBSERVED_FIELDS = ("result", "odds", "st_ex", "ex", "weather", "wind", "wave")
+# tk/mt/pt/rs はチェックポイント確定スタンプと見送り理由(first-wins・不変)のため、
+# 同日再生成で必ず引き継ぐ(消えると所属確定が失われる)。
+_OBSERVED_FIELDS = ("result", "odds", "st_ex", "ex", "weather", "wind", "wave",
+                    "tk", "mt", "pt", "rs")
 # model-output fields; never re-issue them for a race already gone live
 # (exhibition-based) or finished (its result was scored against those picks).
 _PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "live", "live_at")
