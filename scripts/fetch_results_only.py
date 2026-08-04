@@ -11,6 +11,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from common import stamp_plans
 from fetch_result import fetch_result
 
 ROOT = Path(__file__).parent.parent
@@ -92,6 +93,8 @@ def update_results(pred, now, ymd, backfill=False) -> int:
             res["hit_t1"] = bool(picks) and picks[0] == order
             res["hit_t6"] = order in picks[:6]
             res["hit_t10"] = order in picks[:10]
+            # 竹/松の該当可否を確定時点のrace(picks/odds)で焼き込む(遡及改変防止)。
+            stamp_plans(r, v["code"], res)
             r["result"] = res
             n_res += 1
             print(f"  result {v['code']}-{r['no']}R: {order} fuku={'HIT' if res['hit_fuku'] else 'MISS'}"

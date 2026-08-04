@@ -281,11 +281,17 @@ function setHeader(p){
 
 function axisTable(r){ return ""; }
 // 厳選判定: 序盤1-4Rはモデルの高確率帯が信用できない(較正で実証)ため、5R以降のみ対象とする。
-function sengenOk(r,vcode){if(r.no<5)return false;if(top3p(r)<SENGEN_TOP3P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;return r.picks.slice(0,3).every(function(p){var o=pickOdds(r,p.c);return o==null||o>=SENGEN_MIN_ODDS;});}
+function sengenOk(r,vcode){
+  // 確定時スタンプ優先(パイプライン競合による遡及改変から所属を守る)
+  if(r.result&&!r.result.status&&r.result.tk!=null)return !!r.result.tk;
+  if(r.no<5)return false;if(top3p(r)<SENGEN_TOP3P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;return r.picks.slice(0,3).every(function(p){var o=pickOdds(r,p.c);return o==null||o>=SENGEN_MIN_ODDS;});}
 // プレミア判定: 厳選と異なりオッズ必須(未取得=対象外)。上限(10.0)は取得オッズそのままで判定し、
 // 下限(4.1)のみ確定レースの的中買い目に限り実配当を優先する(pickOdds と同じ流儀)。
 // 厳選と同様、序盤1-4Rはモデルの高確率帯が信用できないため5R以降のみ対象とする。
-function matsuOk(r,vcode){if(r.no<5)return false;if(top4p(r)<MATSU_TOP4P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;
+function matsuOk(r,vcode){
+  // 確定時スタンプ優先(パイプライン競合による遡及改変から所属を守る)
+  if(r.result&&!r.result.status&&r.result.mt!=null)return !!r.result.mt;
+  if(r.no<5)return false;if(top4p(r)<MATSU_TOP4P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;
   return r.picks.slice(0,4).every(function(p){var raw=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;
     if(raw==null||raw>MATSU_MAX_ODDS)return false;var o=pickOdds(r,p.c);return o>=MATSU_MIN_ODDS;});}
 function fitRtype(){document.querySelectorAll(".rtype").forEach(el=>{el.style.fontSize="";let fs=12,g=0;while(el.scrollWidth>el.clientWidth+0.5&&fs>8&&g<24){fs-=0.5;el.style.fontSize=fs+"px";g++;}});}

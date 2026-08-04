@@ -71,7 +71,14 @@ def recompute_day(pred: dict):
 
             picks_ok = all((_eff(c) is None or _eff(c) >= SENGEN_MIN_ODDS) for c in picks[:3])
             rno = r.get("no")
-            if is_sengen(top3p, v.get("code"), rno) and picks_ok:
+            # 竹/松の該当可否: 確定時に焼き込まれたスタンプ(res["tk"]/["mt"])があれば
+            # それを優先する(遡及改変防止が目的のため、動的再計算より確定値を優先)。
+            # 無い場合(スタンプ導入前の過去データ)は従来通り動的計算する。
+            if "tk" in res:
+                is_tk = bool(res["tk"])
+            else:
+                is_tk = is_sengen(top3p, v.get("code"), rno) and picks_ok
+            if is_tk:
                 sen_n += 1
                 sen_pred_sum += top3p
                 # 竹プランROI: 1レース300円投資、的中時はpay3t(100円あたり払戻)を回収
@@ -93,7 +100,11 @@ def recompute_day(pred: dict):
                 if _eff(c) < MATSU_MIN_ODDS:
                     matsu_ok = False
                     break
-            if is_matsu(top4p, v.get("code"), rno) and matsu_ok:
+            if "mt" in res:
+                is_mt = bool(res["mt"])
+            else:
+                is_mt = is_matsu(top4p, v.get("code"), rno) and matsu_ok
+            if is_mt:
                 prm_n += 1
                 prm_pred_sum += top4p
                 # 松プランROI: 1レース400円投資、的中時はpay3tを回収

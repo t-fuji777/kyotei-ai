@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from common import stamp_plans
 from fetch_result import fetch_result, fetch_before_html, parse_before
 from fetch_odds import fetch_odds, fetch_racename, fetch_t3
 
@@ -128,6 +129,8 @@ def do_results(pred, now, ymd, max_fetch=RESULT_MAX_PER_RUN) -> int:
             res["hit_t1"] = bool(picks) and picks[0] == order
             res["hit_t6"] = order in picks[:6]
             res["hit_t10"] = order in picks[:10]
+            # 竹/松の該当可否を確定時点のrace(picks/odds)で焼き込む(遡及改変防止)。
+            stamp_plans(r, v["code"], res)
             r["result"] = res
             n += 1
             print(f"  result {v['code']}-{r['no']}R: {order}")
@@ -391,15 +394,18 @@ def main():
         print("no venues today")
         return
 
-    n_res = do_results(pred, now, ymd)
     if results_only:
+        n_res = do_results(pred, now, ymd)
         n_stx = do_st_ex(pred, now, ymd)
         if n_res or n_stx:
             pred["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
             write(pred, ymd)
         print(f"results-only: results={n_res} st_ex={n_stx}")
         return
+    # オッズ取得を結果確定より先に行う(確定時スタンプ(stamp_plans)が同一サイクルで
+    # 取得した直前オッズを反映して判定できるように)。
     n_odds = do_odds(pred, now, ymd)
+    n_res = do_results(pred, now, ymd)
     n_morn = do_morning_odds(pred, now, ymd)
     n_name = do_racenames(pred, ymd)
     if n_res == 0 and n_odds == 0 and n_morn == 0 and n_name == 0:
