@@ -433,6 +433,11 @@ def main():
         if n_res or n_stx or n_stp:
             pred["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
             write(pred, ymd)
+        try:
+            from notify import notify_events
+            notify_events(pred, ymd)
+        except Exception as e:
+            print(f"notify skip: {e}")
         print(f"results-only: results={n_res} st_ex={n_stx} stamps={n_stp}")
         return
     # オッズ取得を結果確定より先に行う(確定時スタンプ(stamp_plans)が同一サイクルで
@@ -445,12 +450,22 @@ def main():
     n_name = do_racenames(pred, ymd)
     if n_res == 0 and n_odds == 0 and n_morn == 0 and n_name == 0 and n_stp == 0:
         print("nothing to update")
+        try:
+            from notify import notify_events
+            notify_events(pred, ymd)
+        except Exception as e:
+            print(f"notify skip: {e}")
         return
     if n_res:
         pred["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
     if n_odds or n_morn:
         pred["odds_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
     write(pred, ymd)
+    try:
+        from notify import notify_events
+        notify_events(pred, ymd)
+    except Exception as e:
+        print(f"notify skip: {e}")
     print(f"updated: results={n_res} odds={n_odds} morning={n_morn} names={n_name} stamps={n_stp}")
 
 

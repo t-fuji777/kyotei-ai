@@ -20,6 +20,9 @@ jobs:
           python-version: "3.12"
       - run: pip install pandas numpy lightgbm lhafile requests
       - name: loop results + live re-predict
+        env:
+          NOTIFY_WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK }}
+          NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
