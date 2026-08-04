@@ -60,6 +60,9 @@ nav button.on{color:var(--accent)}
 nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
   stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .navsub{display:block;font-size:8.5px;line-height:1.2;font-weight:600;margin-top:1px;white-space:nowrap;letter-spacing:0}
+/* ホーム画面起動(standalone)ではビューポート下端が既にホームバーの上で終わるため、
+   env(safe-area-inset-bottom)を足すとセーフエリアが二重になりナビが浮く。固定の小余白に置換。 */
+@media (display-mode: standalone){nav{padding-bottom:6px}}
 
 .hdrtop{display:flex;align-items:center;gap:10px}.hdrtop h1{flex:0 0 auto;margin:0}#hdrChips{position:absolute;top:0;right:0;display:flex;justify-content:flex-end}#hdrChips:empty{display:none}#venSel{display:flex;justify-content:space-between;width:148px;height:25px;margin-top:8px;align-self:center;align-items:center;gap:2px;max-width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:2px 5px 2px 12px;font-size:14px;font-weight:700;line-height:1.2;cursor:pointer;white-space:nowrap}#venSel .car{color:var(--dim);font-size:20px}#venMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:152px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}#venMenu[hidden]{display:none}.venopt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:14px;border-radius:6px;cursor:pointer;white-space:nowrap}.venopt:hover{background:var(--surface)}.venopt.on{background:var(--accent);color:#06121E;font-weight:700}
   .chips{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;
@@ -173,7 +176,10 @@ th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fi
 .accwrap .acctbl td>br+span{white-space:nowrap}
 .note{color:var(--dim);font-size:13px;padding:32px 24px;text-align:center;line-height:1.8}.race.gap{opacity:.55}.gapnote{margin-left:auto;color:var(--dim);font-size:12px}.venopt.off{opacity:.4;color:var(--dim);cursor:default;pointer-events:none}
 .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
-/* 設定タブの折りたたみ(モデル詳細) */
+/* 設定タブの折りたたみ(用語説明/モデル詳細) */
+.term{padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;line-height:1.7}
+.term b{display:block;font-size:12.5px}
+.term span{color:var(--dim)}
 .setdet{margin-top:18px;border-top:1px solid var(--line)}
 .setdet summary{list-style:none;cursor:pointer;padding:12px 0;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
 .setdet summary::-webkit-details-marker{display:none}
@@ -733,17 +739,52 @@ function renderModel(rep){
     <div class="kv"><span>回収率(TOP5均等買い)</span><span class="num">${pct(tm.top5_roi||0)}</span></div>
     <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}`
     :'<div class="note">モデル情報がありません。<br>学習完了後に表示されます。</div>';
+  const terms=[
+    ["判断(注目/様子見)","全レースに付く参考判断。過去実測に較正した的中率(TOP5)が40%以上なら「注目」、未満なら「様子見」。"],
+    ["的中率の%バッジ","AIの自己申告ではなく、過去全レースの実測的中率に補正(較正)した数値。金色は50%以上。下の「表示的中率の検証」で実測との一致を毎朝確認している。"],
+    ["候補","竹/松プランの確率条件を満たし、締切15分前の最終判定(オッズ条件)を待っているレース。数値はまだ確定していない。"],
+    ["確定","締切15分前の時点でプラン対象に確定したレース。確定時刻を表示し、以後の後出し変更はできない。"],
+    ["見送り","候補だったが最終判定でオッズ条件を満たさなかったレース。見送った理由を明記する。"],
+    ["竹プラン","厳選3点買い(100円×3点)。的中すれば必ずプラスになるオッズ条件で選定。5R以降のみ。"],
+    ["松プラン","プレミア4点買い(100円×4点)。竹より厳しい条件に加え、市場評価との一致も確認したレースのみ。5R以降のみ。"],
+    ["判定/結果/払戻金","レース確定後の答え合わせ。予測TOP5内に的中したか・1〜3着の並び・3連単100円あたりの払戻額。"],
+  ].map(t=>`<div class="term"><b>${t[0]}</b><span>${t[1]}</span></div>`).join("");
+  let startTab="today";try{if(localStorage.getItem("aritei_start_tab")==="sen")startTab="sen";}catch(_){/*プライベートモード等*/}
   m.innerHTML=`<div class="pad">
     ${pushSec}
+    <div class="sec" style="margin-top:18px">表示</div>
+    <div class="kv"><span>起動時に開くタブ</span><span style="display:flex;gap:6px"><button class="chip stb${startTab==="today"?" on":""}" data-t="today" style="font-size:12px;padding:5px 12px">当日予測</button><button class="chip stb${startTab==="sen"?" on":""}" data-t="sen" style="font-size:12px;padding:5px 12px">厳選一覧</button></span></div>
     <div class="sec" style="margin-top:18px">アプリ</div>
     <div class="kv"><span>バージョン</span><span class="num" id="appVer">-</span></div>
+    <div class="kv"><span>画面情報(診断用)</span><span class="num" id="scrInfo" style="font-size:10px">-</span></div>
     <div style="margin-top:10px"><button id="appReload" class="chip">最新版に更新(再読み込み)</button></div>
     ${calibSec}
+    <details class="setdet"><summary>用語とバッジの説明</summary>${terms}</details>
     <details class="setdet"><summary>モデル情報(学習と精度)</summary>${modelBody}</details>
   </div>`;
   if(PUSH_WORKER)renderPushSection();
   _renderAppVer();
   {const rb=document.getElementById("appReload");if(rb)rb.onclick=_appReload;}
+  m.querySelectorAll(".stb").forEach(b=>b.onclick=()=>{
+    try{localStorage.setItem("aritei_start_tab",b.dataset.t);}catch(_){/*保存不可でも表示だけ切替*/}
+    m.querySelectorAll(".stb").forEach(x=>x.classList.toggle("on",x===b));
+  });
+  {const si=document.getElementById("scrInfo");if(si)si.textContent=_screenInfo();}
+}
+
+// 画面診断: ビューポート/実画面/セーフエリア/ナビ下端の実測値。standalone表示ずれの遠隔調査用。
+function _screenInfo(){
+  try{
+    const p=document.createElement("div");
+    p.style.cssText="position:fixed;bottom:0;padding-bottom:env(safe-area-inset-bottom);visibility:hidden";
+    document.body.appendChild(p);
+    const inset=Math.round(parseFloat(getComputedStyle(p).paddingBottom)||0);
+    p.remove();
+    const nv=document.querySelector("nav");
+    const nb=nv?Math.round(nv.getBoundingClientRect().bottom):0;
+    const sa=_isStandalone()?" 全画面":"";
+    return `${window.innerWidth}x${window.innerHeight} 画面${screen.width}x${screen.height} inset${inset} ナビ下端${nb}${sa}`;
+  }catch(_){return "-";}
 }
 
 // 設定タブ: バージョン表示(sw.jsのCACHE_VERSIONを唯一の出所として取得)と手動更新
@@ -868,7 +909,8 @@ $("#tabToday").onclick=()=>show("today");
 $("#tabAcc").onclick=()=>show("acc");
 $("#tabModel").onclick=()=>show("model");
 if("scrollRestoration" in history)history.scrollRestoration="manual";
-show("today");
+// 起動タブ: 設定「起動時に開くタブ」の保存値を反映(未設定/取得不可は当日予測)
+{let _st="today";try{if(localStorage.getItem("aritei_start_tab")==="sen")_st="sen";}catch(_){/*プライベートモード等*/}show(_st);}
 // 較正表(calib.json)は起動時に1回取得。失敗時はCALIB=nullのまま内蔵フォールバック表を使う。
 // 取得完了が現在表示中のタブの描画より後になった場合は、そのタブだけ再描画して反映する。
 fetchJSON("calib.json").then(c=>{
