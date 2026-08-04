@@ -213,7 +213,8 @@ def update_results(pred, now, ymd) -> int:
             res["hit_t6"] = order in picks[:6]
             res["hit_t10"] = order in picks[:10]
             # 竹/松の該当可否を確定時点のrace(picks/odds)で焼き込む(遡及改変防止)。
-            stamp_plans(r, v["code"], res)
+            # first-winsのため、締切15分前チェックポイントで既に確定済みなら何もしない。
+            stamp_plans(r, v["code"], res, now.strftime("%H:%M"))
             r["result"] = res
             n_res += 1
             print(f"  result {v['code']}-{r['no']}R: {order} fuku={'HIT' if res['hit_fuku'] else 'MISS'}"

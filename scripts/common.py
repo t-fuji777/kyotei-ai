@@ -70,25 +70,34 @@ def is_matsu(top4p, venue, rno):
         return False
 
 
-def stamp_plans(race, vcode, res):
-    """結果(order)をレースに付与する瞬間に竹/松の該当可否をres["tk"]/res["mt"]
+def stamp_plans(race, vcode, res=None, now_hhmm=None):
+    """竹/松の該当可否を確定し、レースオブジェクト直下のrace["tk"]/race["mt"]
     (1 or 0)へ焼き込む。目的: 確定後にpicks/oddsがパイプラインの競合(rebase -X theirs等)
     で巻き戻っても、その時点で成立していた判定が遡及改変されないよう固定するため。
 
+    first-wins: race["tk"]が既に存在する場合は何もしない(二度と再計算・上書きしない。
+    締切15分前のチェックポイントで確定させ、以後は不変とするため)。
+    now_hhmmを渡せばrace["pt"]に確定時刻("HH:MM")も記録する。
+
     判定は既存ルール(is_sengen/is_matsu, update_results._picks_ok/_matsu_okと同一)を
-    その時点のrace(picks/odds/no)とres(order/pay3t)から再現する。
-    orderが無い(中止/不成立等のstatusのみ)resには何もしない(tk/mtを設定しない)。"""
-    order = res.get("order")
-    if not order:
+    その時点のrace(picks/odds/no)とres(order/pay3t、任意)から再現する。
+    - resを渡した場合(結果確定後のフォールバック呼び出し): 的中買い目(c==order)は
+      pay3t/100(確定実配当)を優先してオッズ判定する。
+    - res無し(締切15分前チェックポイントの呼び出し): 取得済みt3オッズのみで判定する。
+    resにorderが無い(中止/不成立等のstatusのみ)場合は何もしない(tk/mtを設定しない)。"""
+    if "tk" in race:
+        return
+    if res is not None and not res.get("order"):
         return
     rno = race.get("no")
     picks = [p["c"] for p in (race.get("picks") or [])]
     t3 = (race.get("odds") or {}).get("t3") or {}
-    pay = res.get("pay3t")
+    order = res.get("order") if res else None
+    pay = res.get("pay3t") if res else None
 
     def eff_odds(c):
         # 実効オッズ: 的中買い目(c==order)はpay3t/100(確定実配当)を優先し、
-        # それ以外(pay3t欠落時も含む)は取得済みt3オッズをそのまま使う。
+        # それ以外(pay3t欠落時・res無し時も含む)は取得済みt3オッズをそのまま使う。
         if pay and c == order:
             return pay / 100.0
         return t3.get(c)
@@ -103,7 +112,7 @@ def stamp_plans(race, vcode, res):
                 ok = False
                 break
         tk = 1 if ok else 0
-    res["tk"] = tk
+    race["tk"] = tk
 
     top4p = matsu_top4p(race.get("picks") or [])
     mt = 0
@@ -118,7 +127,10 @@ def stamp_plans(race, vcode, res):
                 ok = False
                 break
         mt = 1 if ok else 0
-    res["mt"] = mt
+    race["mt"] = mt
+
+    if now_hhmm:
+        race["pt"] = now_hhmm
 
 
 def zen2han(s: str) -> str:
