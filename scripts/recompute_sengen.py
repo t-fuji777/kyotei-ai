@@ -71,10 +71,15 @@ def recompute_day(pred: dict):
 
             picks_ok = all((_eff(c) is None or _eff(c) >= SENGEN_MIN_ODDS) for c in picks[:3])
             rno = r.get("no")
-            # 竹/松の該当可否: 確定時に焼き込まれたスタンプ(res["tk"]/["mt"])があれば
-            # それを優先する(遡及改変防止が目的のため、動的再計算より確定値を優先)。
-            # 無い場合(スタンプ導入前の過去データ)は従来通り動的計算する。
-            if "tk" in res:
+            # 竹/松の該当可否: 優先順位は
+            #   1. r["tk"]/r["mt"](レース直下、締切15分前チェックポイントで確定/
+            #      取りこぼし時は結果確定時にフォールバックで焼き込み)
+            #   2. res["tk"]/res["mt"](旧仕様互換。導入前に確定済みだった本日分等)
+            #   3. 従来通りの動的計算(スタンプの無い過去データ、52日互換)
+            # 上位ほど遡及改変防止の確度が高いため優先する。
+            if "tk" in r:
+                is_tk = bool(r["tk"])
+            elif "tk" in res:
                 is_tk = bool(res["tk"])
             else:
                 is_tk = is_sengen(top3p, v.get("code"), rno) and picks_ok
@@ -100,7 +105,9 @@ def recompute_day(pred: dict):
                 if _eff(c) < MATSU_MIN_ODDS:
                     matsu_ok = False
                     break
-            if "mt" in res:
+            if "mt" in r:
+                is_mt = bool(r["mt"])
+            elif "mt" in res:
                 is_mt = bool(res["mt"])
             else:
                 is_mt = is_matsu(top4p, v.get("code"), rno) and matsu_ok

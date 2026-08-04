@@ -93,6 +93,34 @@ def _axis_from_odds(nr, odds):
     }
 
 
+STAMP_LEAD_MIN = 15  # 締切何分前からチェックポイント確定を打刻するか
+
+
+def do_stamps(pred, now) -> int:
+    """締切15分前チェックポイント: まだ竹/松が確定していない(r["tk"]無し)かつ
+    結果未確定のレースのうち、締切までSTAMP_LEAD_MIN分以内(締切を過ぎた分=負値も
+    含む。ループ間隔でチェックポイントを逃した場合はここで拾う)のものへ、その
+    時点のpicks/oddsで竹/松スタンプ(r["tk"]/r["mt"]/r["pt"])をfirst-winsで
+    焼き込む。それでも取りこぼした場合はdo_results側のフォールバックで結果確定
+    時に焼く。"""
+    n = 0
+    now_hhmm = now.strftime("%H:%M")
+    for v in pred["venues"]:
+        for r in v["races"]:
+            if "tk" in r:
+                continue
+            if r.get("result"):
+                continue
+            mins = _mins_to_deadline(now, r.get("deadline"))
+            if mins is None or mins > STAMP_LEAD_MIN:
+                continue
+            stamp_plans(r, v["code"], None, now_hhmm)
+            n += 1
+    if n:
+        print(f"stamps: {n} race(s) checkpointed")
+    return n
+
+
 def do_results(pred, now, ymd, max_fetch=RESULT_MAX_PER_RUN) -> int:
     n = 0
     tried = 0
@@ -130,7 +158,9 @@ def do_results(pred, now, ymd, max_fetch=RESULT_MAX_PER_RUN) -> int:
             res["hit_t6"] = order in picks[:6]
             res["hit_t10"] = order in picks[:10]
             # 竹/松の該当可否を確定時点のrace(picks/odds)で焼き込む(遡及改変防止)。
-            stamp_plans(r, v["code"], res)
+            # first-winsのため、チェックポイント(do_stamps)で既に確定済みなら
+            # ここでは何もしない(取りこぼした場合のみのフォールバック)。
+            stamp_plans(r, v["code"], res, now.strftime("%H:%M"))
             r["result"] = res
             n += 1
             print(f"  result {v['code']}-{r['no']}R: {order}")
@@ -395,20 +425,25 @@ def main():
         return
 
     if results_only:
+        # 毎分パスが最も確実に締切T-15のチェックポイントを捉えられるため、
+        # 結果確定(do_results)の前にdo_stampsを呼ぶ。
+        n_stp = do_stamps(pred, now)
         n_res = do_results(pred, now, ymd)
         n_stx = do_st_ex(pred, now, ymd)
-        if n_res or n_stx:
+        if n_res or n_stx or n_stp:
             pred["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
             write(pred, ymd)
-        print(f"results-only: results={n_res} st_ex={n_stx}")
+        print(f"results-only: results={n_res} st_ex={n_stx} stamps={n_stp}")
         return
     # オッズ取得を結果確定より先に行う(確定時スタンプ(stamp_plans)が同一サイクルで
-    # 取得した直前オッズを反映して判定できるように)。
+    # 取得した直前オッズを反映して判定できるように)。do_stampsはdo_odds直後・
+    # do_resultsの前に置き、その時点の最新オッズでチェックポイント確定させる。
     n_odds = do_odds(pred, now, ymd)
+    n_stp = do_stamps(pred, now)
     n_res = do_results(pred, now, ymd)
     n_morn = do_morning_odds(pred, now, ymd)
     n_name = do_racenames(pred, ymd)
-    if n_res == 0 and n_odds == 0 and n_morn == 0 and n_name == 0:
+    if n_res == 0 and n_odds == 0 and n_morn == 0 and n_name == 0 and n_stp == 0:
         print("nothing to update")
         return
     if n_res:
@@ -416,7 +451,7 @@ def main():
     if n_odds or n_morn:
         pred["odds_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
     write(pred, ymd)
-    print(f"updated: results={n_res} odds={n_odds} morning={n_morn} names={n_name}")
+    print(f"updated: results={n_res} odds={n_odds} morning={n_morn} names={n_name} stamps={n_stp}")
 
 
 if __name__ == "__main__":

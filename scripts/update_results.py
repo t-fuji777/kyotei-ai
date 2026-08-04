@@ -149,12 +149,17 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 day["fuku_hit"] += 1
             day["top5_pred_sum"] += top5p
             _pay = pays.get(key)
-            # 竹/松の該当可否: 確定時に焼き込まれたスタンプ(r["result"]["tk"]/["mt"])が
-            # あればそれを優先する(遡及改変防止が目的のため、動的再計算より確定値を優先)。
-            # 無い場合(スタンプ導入前の過去データ)は従来通り動的計算する。
-            # actはK帳票由来の実際の着順で、的中判定(act in picks)はスタンプ有無に関わらず従来通り。
+            # 竹/松の該当可否: 優先順位は
+            #   1. r["tk"]/r["mt"](レース直下、締切15分前チェックポイントで確定/
+            #      取りこぼし時は結果確定時にフォールバックで焼き込み)
+            #   2. res["tk"]/res["mt"](旧仕様互換。導入前に確定済みだった本日分等)
+            #   3. 従来通りの動的計算(スタンプの無い過去データ、52日互換)
+            # 上位ほど遡及改変防止の確度が高いため優先する。
+            # actはK帳票由来の実際の着順で、的中判定(act in picks)は優先順位に関わらず従来通り。
             rres = r.get("result") or {}
-            if "tk" in rres:
+            if "tk" in r:
+                is_tk = bool(r["tk"])
+            elif "tk" in rres:
                 is_tk = bool(rres["tk"])
             else:
                 is_tk = is_sengen(top3p, v["code"], r["no"]) and _picks_ok(r, act, _pay)
@@ -166,7 +171,9 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 if act in picks[:3]:
                     day["sen_hit"] += 1
                     day["sen_ret"] += pays.get(key, 0)
-            if "mt" in rres:
+            if "mt" in r:
+                is_mt = bool(r["mt"])
+            elif "mt" in rres:
                 is_mt = bool(rres["mt"])
             else:
                 is_mt = is_matsu(top4p, v["code"], r["no"]) and _matsu_ok(r, act, _pay)
