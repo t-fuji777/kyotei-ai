@@ -753,7 +753,12 @@ async function refreshLatest(){
     refreshBusy=false;
   }
 }
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refreshLatest();});
+// アプリ復帰(バックグラウンド→前面)時: iOSはページを再読込せず前回のスクロール位置ごと
+// 復活させるため、当日予測以外のタブは最上部へ戻してから更新する(タブ切替時と同じ扱い)。
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){
+  if(cur&&cur!=="today"){const _u=Date.now()+300;const _p=()=>{if(cur==="today")return;window.scrollTo(0,0);document.documentElement.scrollTop=0;if(document.body)document.body.scrollTop=0;if(Date.now()<_u)requestAnimationFrame(_p);};_p();}
+  refreshLatest();
+}});
 setInterval(()=>{if(document.visibilityState==="visible")refreshLatest();},75000);
 </script>
 </body>
