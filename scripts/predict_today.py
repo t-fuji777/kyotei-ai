@@ -240,8 +240,11 @@ def predict_live(ymd, meta, models, sengen):
 # the update loop -- these must survive a same-day regeneration (daily's retrain).
 # tk/mt/pt/rs はチェックポイント確定スタンプと見送り理由(first-wins・不変)のため、
 # 同日再生成で必ず引き継ぐ(消えると所属確定が失われる)。
+# os は判定時点の板(締切後に上書きされる odds.t3 と違い不変)。今はデータを貯め始めた
+# 段階で、消費側は docs/index.html の表示のみ。集計側(recompute_sengen/update_results/
+# build_calib)は依然 odds.t3 を読むため、そちらの移行は os が溜まってから行う。
 _OBSERVED_FIELDS = ("result", "odds", "st_ex", "ex", "weather", "wind", "wave",
-                    "tk", "mt", "pt", "rs")
+                    "tk", "mt", "pt", "rs", "os")
 # model-output fields; never re-issue them for a race already gone live
 # (exhibition-based) or finished (its result was scored against those picks).
 _PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "live", "live_at")
@@ -272,7 +275,10 @@ def _merge_existing(out, ymd):
             if o.get("rn_full"):
                 r["type"] = o.get("type", r["type"])
                 r["rn_full"] = True
-            if o.get("live") or o.get("result"):
+            # 竹/松の所属が確定("tk"あり)したレースも買い目を凍結する。確定は
+            # その時点のpicksで判定しているため、後から買い目だけ差し替わると
+            # 画面の買い目と確定根拠がずれる(実測で確定済みの3割で発生していた)。
+            if o.get("live") or o.get("result") or "tk" in o:
                 for k in _PICK_FIELDS:
                     if k in o:
                         r[k] = o[k]

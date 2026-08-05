@@ -130,6 +130,16 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None):
                 take_below.append(o)
         tk = 1 if ok else 0
     race["tk"] = tk
+    # 判定時点で取得済みだった生オッズを race["os"] へ残す。
+    # odds.t3 は締切後にも再取得され確定オッズで上書きされるため、後から odds.t3 で
+    # 選定を再現すると実運用より甘い結果になる(実測で締切前の板は確定板より中央値
+    # 1.6倍高い)。判定時の板を残しておけば公開実績を後から正しく再検証できる。
+    # 代入は race["tk"] の後に置く: 先に置くと途中で例外が出たとき「osはあるがtkが無い」
+    # 状態になり、次回呼び出しがfirst-winsガードを素通りしてosを上書きしてしまう。
+    # 既にodds.finalが立っている(=締切後に確定板へ取り直された)場合は判定時点の板
+    # ではないので焼かない。この場合は消費側が従来通り odds.t3 にフォールバックする。
+    if "os" not in race and not (race.get("odds") or {}).get("final"):
+        race["os"] = {c: t3.get(c) for c in picks[:4]}
 
     top4p = matsu_top4p(race.get("picks") or [])
     matsu_quasi = is_matsu(top4p, vcode, rno)
