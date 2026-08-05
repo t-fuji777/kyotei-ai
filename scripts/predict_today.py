@@ -240,8 +240,9 @@ def predict_live(ymd, meta, models, sengen):
 # the update loop -- these must survive a same-day regeneration (daily's retrain).
 # tk/mt/pt/rs はチェックポイント確定スタンプと見送り理由(first-wins・不変)のため、
 # 同日再生成で必ず引き継ぐ(消えると所属確定が失われる)。
+# os は判定時点の板(締切後に上書きされる odds.t3 と違い不変)。検証の再現性に必須。
 _OBSERVED_FIELDS = ("result", "odds", "st_ex", "ex", "weather", "wind", "wave",
-                    "tk", "mt", "pt", "rs")
+                    "tk", "mt", "pt", "rs", "os")
 # model-output fields; never re-issue them for a race already gone live
 # (exhibition-based) or finished (its result was scored against those picks).
 _PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "live", "live_at")

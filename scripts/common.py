@@ -107,6 +107,12 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None):
     rno = race.get("no")
     picks = [p["c"] for p in (race.get("picks") or [])]
     t3 = (race.get("odds") or {}).get("t3") or {}
+    # 判定に使った板を race["os"] へ焼き込む(tk/mtと同じくfirst-wins)。
+    # odds.t3 は締切後にも再取得され確定オッズで上書きされる。実測では締切前の
+    # 板は確定板より中央値1.6倍高く、後から odds.t3 で選定を再現すると実運用より
+    # 甘い結果になる(検証が構造的に楽観バイアスを持つ)。判定時点の板を残すことで
+    # 公開実績を後から正しく再検証でき、見送り理由の数値とも食い違わなくなる。
+    race["os"] = {c: t3.get(c) for c in picks[:4]}
     order = res.get("order") if res else None
     pay = res.get("pay3t") if res else None
 

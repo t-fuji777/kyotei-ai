@@ -347,6 +347,13 @@ function pickOdds(r,c){
   if(r.result&&!r.result.status&&r.result.pay3t>0&&c===r.result.order){return Math.round(r.result.pay3t/10)/10;}
   return (r.odds&&r.odds.t3)?r.odds.t3[c]:null;
 }
+// 厳選一覧の表示用オッズ: 判定が済んだレースは判定時点の板(r.os)を出す。
+// odds.t3 は締切後に確定オッズへ書き換わるため、そのまま出すと見送り理由の数値
+// (判定時点の値)と画面のオッズが食い違い「この倍率で帯超え?」という混乱を生む。
+function decOdds(r,c){
+  if(r.os&&r.os[c]!=null)return r.os[c];
+  return pickOdds(r,c);
+}
 function renderSengen(){
   const m=$("#main");
   if(!pred){m.innerHTML='<div class="spin"></div>';return}
@@ -419,7 +426,7 @@ function renderSengen(){
       `<div class="pickrow${(r.result&&!r.result.status&&p.c===r.result.order)?' pwin':''}"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
-        <span class="bp num">${pct(p.p)}</span>${(pickOdds(r,p.c)!=null)?`<span class="oddv num">${pickOdds(r,p.c)}倍</span>`:""}</div>`).join("");
+        <span class="bp num">${pct(p.p)}</span>${(decOdds(r,p.c)!=null)?`<span class="oddv num">${decOdds(r,p.c)}倍</span>`:""}</div>`).join("");
     return `<div class="race open${isP?' prm':''}${isCand?' cand':''}">
       <div class="racehead">
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
