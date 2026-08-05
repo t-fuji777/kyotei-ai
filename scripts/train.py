@@ -103,7 +103,13 @@ def race_eval_rows(part: pd.DataFrame):
 
 
 def pick_sengen(valid_r: pd.DataFrame):
-    """厳選=3連単 上位5点の合算自信度(top5p)>=0.40。validで3連単TOP5的中率を測る。"""
+    """高確率帯(3連単 上位5点の合算確率 top5p>=0.40)のTOP5的中率をvalidで測る、
+    モデル単体の品質指標。
+
+    注意: 商品の「厳選」(竹/松プラン)とは別物。竹はTOP3・3点300円(top3p>=0.36 +
+    オッズ3.1倍以上 + 5R以降 + 除外会場)、松はTOP4・4点400円で、判定基準も購入点数も
+    ここと一致しない。プランの実績は accuracy.json(的中実績タブ)が唯一の出所。
+    キー名 sengen は既存 model_report.json との互換のため変更していない。"""
     thr = 0.40
     s = valid_r[valid_r["top5p"] >= thr]
     rate = float(s["hit_t5"].mean()) if len(s) else None
