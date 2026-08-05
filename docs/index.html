@@ -50,10 +50,8 @@ header h1 span{color:var(--accent)}
 #dMenu .dtoday{font-size:10px;color:var(--dim)}
 #dMenu .dopt.on .dtoday{color:#06121E}
 
-/* バーは画面最下部まで塗る。ページ背景(--bg)と同系色だと境界が見えず「途中で終わって
-   浮いている」ように見えるため、LINE等と同様に明確に暗い帯として塗り分ける。 */
 nav{position:fixed;bottom:0;left:0;right:0;z-index:30;
-  background:rgba(4,10,17,.97);backdrop-filter:blur(8px);
+  background:rgba(11,27,43,.95);backdrop-filter:blur(8px);
   border-top:1px solid var(--line);display:flex;
   padding-bottom:env(safe-area-inset-bottom)}
 nav button{flex:1;background:none;border:none;color:var(--dim);
@@ -61,7 +59,6 @@ nav button{flex:1;background:none;border:none;color:var(--dim);
 nav button.on{color:var(--accent)}
 nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
   stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.navsub{display:block;font-size:8.5px;line-height:1.2;font-weight:600;margin-top:1px;white-space:nowrap;letter-spacing:0}
 /* ホーム画面起動(standalone)ではバー下端=実画面最下部(実測確認済み)。
    env(safe-area-inset-bottom)分の余白はホームバー安全圏だが、マスターの意向で
    限界まで詰める(固定6px)。ボタンはホームバー(白い横棒)とわずかに重なり得る。 */
@@ -212,10 +209,10 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
 <nav>
   <button id="tabToday" class="on">
     <svg viewBox="0 0 24 24"><path d="M3 14c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M3 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M6 11l5-7 7 5-2 3"/></svg>
-    当日予測<span class="navsub">（梅プラン）</span></button>
+    当日予測</button>
   <button id="tabSen">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
-    厳選一覧<span class="navsub">（竹＆松プラン）</span></button>
+    厳選一覧</button>
   <button id="tabAcc">
     <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>
     的中実績</button>
