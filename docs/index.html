@@ -64,7 +64,9 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
    限界まで詰める(固定6px)。ボタンはホームバー(白い横棒)とわずかに重なり得る。 */
 @media (display-mode: standalone){nav{padding-bottom:6px}}
 
-.hdrtop{display:flex;align-items:center;gap:10px}.hdrtop h1{flex:0 0 auto;margin:0}#hdrChips{position:absolute;top:0;right:0;display:flex;justify-content:flex-end}#hdrChips:empty{display:none}#venSel{display:flex;justify-content:space-between;width:148px;height:25px;margin-top:8px;align-self:center;align-items:center;gap:2px;max-width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:2px 5px 2px 12px;font-size:14px;font-weight:700;line-height:1.2;cursor:pointer;white-space:nowrap}#venSel .car{color:var(--dim);font-size:20px}#venMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:152px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}#venMenu[hidden]{display:none}.venopt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:14px;border-radius:6px;cursor:pointer;white-space:nowrap}.venopt:hover{background:var(--surface)}.venopt.on{background:var(--accent);color:#06121E;font-weight:700}
+.hdrtop{display:flex;align-items:center;gap:10px}.hdrtop h1{flex:0 0 auto;margin:0}
+/* アプリアイコン: h1の行高(18px x 1.5 = 27px)以内に収め、ヘッダーの縦幅を変えない */
+#hdrIcon{flex:0 0 auto;width:26px;height:26px;border-radius:7px;display:block;margin-right:-2px}#hdrChips{position:absolute;top:0;right:0;display:flex;justify-content:flex-end}#hdrChips:empty{display:none}#venSel{display:flex;justify-content:space-between;width:148px;height:25px;margin-top:8px;align-self:center;align-items:center;gap:2px;max-width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:2px 5px 2px 12px;font-size:14px;font-weight:700;line-height:1.2;cursor:pointer;white-space:nowrap}#venSel .car{color:var(--dim);font-size:20px}#venMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:152px;max-height:50vh;overflow-y:auto;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);-webkit-overflow-scrolling:touch}#venMenu[hidden]{display:none}.venopt{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:9px 12px;font-size:14px;border-radius:6px;cursor:pointer;white-space:nowrap}.venopt:hover{background:var(--surface)}.venopt.on{background:var(--accent);color:#06121E;font-weight:700}
   .chips{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;
   scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .chips::-webkit-scrollbar{display:none}
@@ -84,6 +86,9 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 /* 確定予定(候補)は未確定の予告なので、確定済みの時刻より控えめに見せる */
 .stfixe{color:var(--dim);font-weight:600}
 .race.skip{opacity:.55}
+/* カード全体がタップ可能(見送りカード)。押下時に軽く反応させる */
+.racelist.sengen .race.jumpcard,.racelist.sengen .race.jumpcard .racehead{cursor:pointer}
+.race.jumpcard:active{background:var(--surface2)}
 .skiphead{font-size:9px;color:var(--dim);padding:10px 16px 3px;letter-spacing:.02em}
 .rsreason{font-size:9px;color:var(--dim);white-space:nowrap}
 /* 見送りカード: 確定予定〜払戻金の幅をまとめて理由の記載に使う */
@@ -207,7 +212,7 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
 <body>
 <div id="app">
   <header>
-    <div class="hdrtop"><h1>アリ<span>テイ</span></h1><span id="dateNav"></span><span id="senCount" class="num"></span></div>
+    <div class="hdrtop"><img id="hdrIcon" src="icon-192.png" alt=""><h1>アリ<span>テイ</span></h1><span id="dateNav"></span><span id="senCount" class="num"></span></div>
     <div id="hdrDate" class="num" hidden></div>
     <div id="hdrMeta" class="num"><span id="hdrMetaTxt"></span><div id="hdrChips"></div><span id="todayMeta" class="num"></span></div>
   </header>
@@ -362,9 +367,10 @@ function renderSengen(){
     _tm.innerHTML=`<span class="tml">本　日：</span><span class="tmv">${list.length}件</span><span class="tmn"></span><span class="tml">的　中：</span><span class="tmv">${hit}件</span><span class="tmn"></span>`;
   }}
   const tierrow=`<div class="tierrow"><button class="tswb${sengenTier==='take'?' on':''}" data-t="take">竹プラン</button><button class="tswb${sengenTier==='matsu'?' on':''}" data-t="matsu">松プラン</button></div>`;
-  // 見送りカード: racebody無し・タップ不可の1行カード。結果/払戻金は通常カードと同じ表示。
+  // 見送りカード: racebody無しの1行カード。買い目が無く展開する中身が無いため、
+  // カード全体をタップで当日予測の該当レースへ移動する(jumpcard)。
   const _skipCf=({v,r})=>{
-    return `<div class="race skip">
+    return `<div class="race skip jumpcard" data-vc="${v.code}" data-rn="${r.no}">
       <div class="racehead">
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span><br>
@@ -382,7 +388,7 @@ function renderSengen(){
     m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
     if(skipList.length){
       requestAnimationFrame(fitRtype);
-      m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const mm=$("#main");const tg=mm.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=mm.scrollTop+t.getBoundingClientRect().top-mm.getBoundingClientRect().top;mm.scrollTo({top:Math.max(0,at-th-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
+      _wireSengenJump(m);
     }
     return;
   }
@@ -431,7 +437,32 @@ function renderSengen(){
     <div class="racelist sengen">${cards}${skipHtml}</div>`;
   m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
   requestAnimationFrame(fitRtype);
-  m.querySelectorAll(".rno.jump").forEach(el=>el.onclick=(e)=>{e.stopPropagation();const vc=el.dataset.vc;selVenue=+vc;todayMode="venue";const rn=el.dataset.rn;show("today");let n=0;const iv=setInterval(()=>{const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');if(t){clearInterval(iv);t.classList.add("open");const mm=$("#main");const tg=mm.querySelector(".todaytog");const th=tg?tg.offsetHeight:0;const at=mm.scrollTop+t.getBoundingClientRect().top-mm.getBoundingClientRect().top;mm.scrollTo({top:Math.max(0,at-th-8),behavior:"smooth"});void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1500);}else if(++n>40)clearInterval(iv);},35);});
+  _wireSengenJump(m);
+}
+
+// 厳選一覧→当日予測へのジャンプ: 会場を切替えて該当レースを開き、位置を合わせて点滅させる。
+// 描画完了を待つため35msごとに最大40回まで対象カードを探す。
+function _jumpToRace(vc,rn){
+  selVenue=+vc;todayMode="venue";
+  show("today");
+  let n=0;
+  const iv=setInterval(()=>{
+    const t=document.querySelector('.racelist .race[data-r="'+vc+"-"+rn+'"]');
+    if(t){
+      clearInterval(iv);
+      t.classList.add("open");
+      const mm=$("#main"),tg=mm.querySelector(".todaytog"),th=tg?tg.offsetHeight:0;
+      const at=mm.scrollTop+t.getBoundingClientRect().top-mm.getBoundingClientRect().top;
+      mm.scrollTo({top:Math.max(0,at-th-8),behavior:"smooth"});
+      void t.offsetWidth;t.classList.add("flash");
+      setTimeout(()=>t.classList.remove("flash"),1500);
+    }else if(++n>40)clearInterval(iv);
+  },35);
+}
+// 厳選一覧のジャンプ配線: レース番号(全カード)と、カード全体(見送りカードのみ)。
+function _wireSengenJump(root){
+  root.querySelectorAll(".rno.jump").forEach(el=>el.onclick=e=>{e.stopPropagation();_jumpToRace(el.dataset.vc,el.dataset.rn);});
+  root.querySelectorAll(".race.jumpcard").forEach(el=>el.onclick=()=>_jumpToRace(el.dataset.vc,el.dataset.rn));
 }
 
 // 確定予定時刻 = 締切の15分前(scripts/update_all.py の STAMP_LEAD_MIN=15 とミラー)。
