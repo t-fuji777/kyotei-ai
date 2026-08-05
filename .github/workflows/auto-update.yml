@@ -42,9 +42,23 @@ jobs:
             done
             echo "push not completed this iteration (will retry next loop)"
           }
+          # 各周回の先頭でリモートへ追随する。commit_push は「差分なし」で早期
+          # return して fetch しないため、書くものが無い間は古い作業ツリーのまま
+          # 走り続け、後から差分が出た瞬間に rebase -X theirs で他runnerの新しい
+          # データを巻き戻す事故が起きていた(2026-08-05: 70レース巻き戻し・
+          # 打刻36件を改竄)。未pushのローカルコミットがある時だけ reset を見送る。
+          sync_remote() {
+            git fetch origin main || return
+            if git merge-base --is-ancestor HEAD FETCH_HEAD 2>/dev/null; then
+              git reset --hard FETCH_HEAD
+            else
+              echo "local commits not yet pushed; keeping tree"
+            fi
+          }
           START=$(date +%s)
           HEAVY_AT=0
           while true; do
+            sync_remote
             H=$(TZ=Asia/Tokyo date +%H)
             M=$(TZ=Asia/Tokyo date +%M)
             HM=$((10#$H*60 + 10#$M))
