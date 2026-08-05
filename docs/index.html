@@ -87,6 +87,9 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 .race.skip{opacity:.55}
 .skiphead{font-size:9px;color:var(--dim);padding:10px 16px 3px;letter-spacing:.02em}
 .rsreason{font-size:9px;color:var(--dim);white-space:nowrap}
+/* 見送りカード: 確定予定〜払戻金の幅をまとめて理由の記載に使う */
+.rscell{min-width:152px;justify-content:center;text-align:center}
+.rscell .rsreason{font-size:11px;white-space:normal;line-height:1.35}
 .racehead{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer}.racelist.sengen .racehead{cursor:default}
 .rno{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;font-size:16px;font-weight:800;min-width:34px}
 .rven{font-size:10px;font-weight:600;color:var(--dim);line-height:1.1;margin-top:2px;letter-spacing:.02em}
@@ -367,7 +370,7 @@ function renderSengen(){
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span><br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span></span>
-        <span class="hjp"><span class="hjc"><span class="hjl">判　断</span><span class="hjv"><span class="conf candb">見送り</span></span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv"><span class="rsreason">${esc(r.rs||"")}</span></span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
+        <span class="hjp"><span class="hjc"><span class="hjl">判　断</span><span class="hjv"><span class="conf candb">見送り</span></span></span><span class="hjc"><span class="hjl">理　由</span><span class="hjv rscell"><span class="rsreason">${esc(r.rs||"")}</span></span></span></span>
       </div>
     </div>`;
   };
@@ -399,11 +402,10 @@ function renderSengen(){
     // 候補=未確定(スタンプ無し・結果も無し)。数字は確定するまで出さない:
     // 的中率枠には「候補」を表示し、確定/決着後に初めて較正%を刻む(以後不変)。
     const isCand=!stampFixed&&!legacyFixed&&!r.result;
-    // 確定時刻: 未決着の間は判定/結果のプレースホルダ領域に大きく表示する。
-    // 候補(未確定)は確定予定時刻(締切15分前)、確定済みは実際の確定時刻。
-    // 決着後はその領域が判定/結果に切り替わるため、締切横の小表示(stconf)で証跡を残す。
-    const stampHtml=(stampFixed&&r.result)?`<span class="stconf">確定${r.pt?(" "+esc(r.pt)):""}</span>`:"";
-    const stampPending=stampFixed&&!r.result;
+    // 確定済みは締切横に「確定 HH:MM」を小さく添えるのみで、本体は従来通り
+    // 的中率/判定/結果/払戻金の4項目を出す。候補のみ判定・結果の空き枠を
+    // まとめて確定予定時刻(締切15分前=判定が走る時刻)の表示に使う。
+    const stampHtml=stampFixed?`<span class="stconf">確定${r.pt?(" "+esc(r.pt)):""}</span>`:"";
     const etaTime=isCand?_stampEta(r.deadline):null;
     const candHtml="";
     const badgeHtml=isCand
@@ -419,7 +421,7 @@ function renderSengen(){
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span>${candHtml}<br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span>${stampHtml}</span>
-        <span class="hjp"><span class="hjc"><span class="hjl">${isCand?"判　断":"的中率"}</span><span class="hjv">${badgeHtml}</span></span>${(stampPending||etaTime)?`<span class="hjc"><span class="hjl">${stampPending?"確定時刻":"確定予定"}</span><span class="hjv stfixc num${etaTime?" stfixe":""}">${esc(stampPending?(r.pt||"—"):etaTime)}</span></span>`:`<span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${hit?"jhit":"jmiss"}">${hit?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span>`}<span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
+        <span class="hjp"><span class="hjc"><span class="hjl">${isCand?"判　断":"的中率"}</span><span class="hjv">${badgeHtml}</span></span>${etaTime?`<span class="hjc"><span class="hjl">確定予定</span><span class="hjv stfixc stfixe num">${esc(etaTime)}</span></span>`:`<span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${hit?"jhit":"jmiss"}">${hit?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span>`}<span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
       </div>
       <div class="racebody">
         ${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
