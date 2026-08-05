@@ -363,6 +363,49 @@ def _carryover(now):
 
 ST_EX_LEAD = 25
 ST_EX_MAX_PER_RUN = 15
+# 決着後の取りこぼし回収: 展示は締切25分前〜結果確定までの間しか取りに行かないため、
+# その窓でパイプラインが動かないと(実行の重なり/停止など)展示ST・展示タイムが
+# 永久に欠落する。beforeinfoはレース後も参照できるので決着後に回収する。
+# 1回の実行あたりの件数を絞り、締切から一定時間を過ぎたレースは諦める
+# (恒久的に取得できないレースが毎回の枠を食い潰さないようにするため)。
+ST_EX_BACKFILL_PER_RUN = 5
+ST_EX_BACKFILL_MAX_AGE = 240
+
+
+def _fill_st_ex(r, ymd, vcode) -> bool:
+    """beforeinfoを取得して st_ex / ex / weather を埋める。埋まればTrue。
+    取得・解析の例外は呼び出し元へ送出する(リトライ判断は呼び出し元の責務)。"""
+    bi = parse_before(fetch_before_html(ymd, vcode, r["no"]))
+    stx = bi.get("st", {})
+    if not stx:
+        return False
+    r["st_ex"] = {str(k): val for k, val in stx.items()}
+    if not r.get("ex") and len(bi.get("ex", {})) == 6:
+        r["ex"] = bi["ex"]
+    if bi.get("weather"):
+        r["weather"] = bi["weather"]
+    return True
+
+
+def _st_ex_targets(pred, now):
+    """展示取得の対象を優先順で返す。
+    (1) 未決着かつ締切25分前以内(従来動作。速報性が最優先)
+    (2) 決着済みで展示が欠落しているもの(取りこぼし回収。締切から4時間以内)"""
+    live, backfill = [], []
+    for v in pred["venues"]:
+        for r in v["races"]:
+            mins = _mins_to_deadline(now, r.get("deadline"))
+            if mins is None:
+                continue
+            if r.get("result"):
+                if not r.get("st_ex") and -ST_EX_BACKFILL_MAX_AGE <= mins < 0:
+                    backfill.append((v["code"], r))
+                continue
+            if r.get("st_ex") and r.get("weather"):
+                continue
+            if mins <= ST_EX_LEAD:
+                live.append((v["code"], r))
+    return live[:ST_EX_MAX_PER_RUN] + backfill[:ST_EX_BACKFILL_PER_RUN]
 
 
 def do_st_ex(pred, now, ymd) -> int:
@@ -371,42 +414,22 @@ def do_st_ex(pred, now, ymd) -> int:
     # slow live re-prediction pass. No ML; only beforeinfo fetches. Bounded by
     # fetch count so it never blocks the results loop for long.
     n = 0
-    tried = 0
     consec_fail = 0
-    for v in pred["venues"]:
-        for r in v["races"]:
-            if tried >= ST_EX_MAX_PER_RUN:
-                break
-            if r.get("result"):
-                continue
-            if r.get("st_ex") and r.get("weather"):
-                continue
-            mins = _mins_to_deadline(now, r.get("deadline"))
-            if mins is None or mins > ST_EX_LEAD:
-                continue
-            tried += 1
-            try:
-                bi = parse_before(fetch_before_html(ymd, v["code"], r["no"]))
-            except Exception as e:
-                print(f"  st_ex {v['code']}-{r['no']}R fail: {e}")
-                consec_fail += 1
-                time.sleep(0.3)
-                if consec_fail >= 5:
-                    print("st_ex: 5 consecutive failures; aborting pass")
-                    return n
-                continue
-            consec_fail = 0
-            stx = bi.get("st", {})
-            if stx:
-                r["st_ex"] = {str(k): val for k, val in stx.items()}
-                if not r.get("ex") and len(bi.get("ex", {})) == 6:
-                    r["ex"] = bi["ex"]
-                if bi.get("weather"):
-                    r["weather"] = bi["weather"]
-                n += 1
+    for vcode, r in _st_ex_targets(pred, now):
+        try:
+            filled = _fill_st_ex(r, ymd, vcode)
+        except Exception as e:
+            print(f"  st_ex {vcode}-{r['no']}R fail: {e}")
+            consec_fail += 1
             time.sleep(0.3)
-        if tried >= ST_EX_MAX_PER_RUN:
-            break
+            if consec_fail >= 5:
+                print("st_ex: 5 consecutive failures; aborting pass")
+                return n
+            continue
+        consec_fail = 0
+        if filled:
+            n += 1
+        time.sleep(0.3)
     return n
 
 
