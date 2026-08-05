@@ -94,15 +94,18 @@ def _axis_from_odds(nr, odds):
 
 
 STAMP_LEAD_MIN = 15  # 締切何分前からチェックポイント確定を打刻するか
+# 締切から何分後まで打刻を許すか。古い作業ツリーのrunnerが何時間も後に
+# 「締切15分前の確定」を名乗って打刻するのを防ぐ(2026-08-05に締切39分後の
+# 打刻が発生)。この窓を過ぎたレースは do_results のフォールバックが拾う。
+STAMP_LATE_MAX = 15
 
 
 def do_stamps(pred, now) -> int:
     """締切15分前チェックポイント: まだ竹/松が確定していない(r["tk"]無し)かつ
-    結果未確定のレースのうち、締切までSTAMP_LEAD_MIN分以内(締切を過ぎた分=負値も
-    含む。ループ間隔でチェックポイントを逃した場合はここで拾う)のものへ、その
-    時点のpicks/oddsで竹/松スタンプ(r["tk"]/r["mt"]/r["pt"])をfirst-winsで
-    焼き込む。それでも取りこぼした場合はdo_results側のフォールバックで結果確定
-    時に焼く。"""
+    結果未確定のレースのうち、締切前後STAMP_LEAD_MIN/STAMP_LATE_MAX分以内の
+    ものへ、その時点のpicks/oddsで竹/松スタンプ(r["tk"]/r["mt"]/r["pt"])を
+    first-winsで焼き込む。窓を外したものはdo_results側のフォールバックで結果
+    確定時に焼く。"""
     n = 0
     now_hhmm = now.strftime("%H:%M")
     for v in pred["venues"]:
@@ -112,7 +115,7 @@ def do_stamps(pred, now) -> int:
             if r.get("result"):
                 continue
             mins = _mins_to_deadline(now, r.get("deadline"))
-            if mins is None or mins > STAMP_LEAD_MIN:
+            if mins is None or mins > STAMP_LEAD_MIN or mins < -STAMP_LATE_MAX:
                 continue
             stamp_plans(r, v["code"], None, now_hhmm)
             n += 1
