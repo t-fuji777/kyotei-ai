@@ -797,11 +797,12 @@ function renderModel(rep){
     <div class="kv"><span>学習行数</span><span class="num">${(rep.rows_train||0).toLocaleString()}</span></div>
     <div class="kv"><span>プラン条件</span><span class="num">竹プラン: 5R以降・TOP3合計確率36%以上・全3点オッズ3.1倍以上・安定水面のみ<br>松プラン: 5R以降・TOP4合計確率36%以上・全4点4.1〜10倍(市場コンセンサス)<br>いずれも7,339レースのバックテストで決定</span></div>
     <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
+    <div style="font-size:11px;color:var(--dim);margin:-2px 0 8px">学習時に測ったモデル単体の精度。すべてTOP5基準で、竹・松プランの成績とは別物です。プランの実績は的中実績タブをご覧ください。</div>
     <div class="kv"><span>1着的中率</span><span class="num">${pct(tm.win_hit_rate||0)} (基準 ${pct(bm.win_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 予測</span><span class="num">${pct(tm.top1_hit_rate||0)} (基準 ${pct(bm.top1_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 TOP5内</span><span class="num">${pct(tm.top5_hit_rate||0)} (基準 ${pct(bm.top5_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 TOP10内</span><span class="num">${pct(tm.top10_hit_rate||0)} (基準 ${pct(bm.top10_hit_rate||0)})</span></div>
-    <div class="kv"><span>厳選 3連単的中率</span><span class="num">${tm.sengen&&tm.sengen.top5_hit_rate!=null?pct(tm.sengen.top5_hit_rate)+" ("+tm.sengen.races_per_day+"R/日)":"-"}</span></div>
+    <div class="kv"><span>高確率帯 TOP5内${tm.sengen&&tm.sengen.top5_min!=null?"(合計"+Math.round(tm.sengen.top5_min*100)+"%以上)":""}</span><span class="num">${tm.sengen&&tm.sengen.top5_hit_rate!=null?pct(tm.sengen.top5_hit_rate)+" ("+tm.sengen.races_per_day+"R/日)":"-"}</span></div>
     <div class="kv"><span>回収率(TOP5均等買い)</span><span class="num">${pct(tm.top5_roi||0)}</span></div>
     <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}`
     :'<div class="note">モデル情報がありません。<br>学習完了後に表示されます。</div>';
