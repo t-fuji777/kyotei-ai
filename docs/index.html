@@ -78,7 +78,10 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
   margin-bottom:7px;overflow:hidden}
 .race.cand{border-style:dashed;border-color:#3B5A74}
 .stconf{font-size:10px;color:var(--dim);margin-left:6px;white-space:nowrap}
-.conf.candb{background:transparent;border:1px dashed #3B5A74;color:var(--dim);font-weight:700}
+.conf.candb{background:transparent;border:1px solid #3B5A74;color:var(--dim);font-weight:700}
+/* 確定済み・未決着レース: 判定/結果のプレースホルダ領域を使って確定時刻を表示。
+   min-widthは判定セル+gap+結果セル(60px)ぶんを確保し、決着済みカードと列位置を揃える */
+.stfixc{min-width:85px;justify-content:center;font-weight:700}
 .race.skip{opacity:.55}
 .skiphead{font-size:9px;color:var(--dim);padding:10px 16px 3px;letter-spacing:.02em}
 .rsreason{font-size:9px;color:var(--dim);white-space:nowrap}
@@ -394,7 +397,10 @@ function renderSengen(){
     // 候補=未確定(スタンプ無し・結果も無し)。数字は確定するまで出さない:
     // 的中率枠には「候補」を表示し、確定/決着後に初めて較正%を刻む(以後不変)。
     const isCand=!stampFixed&&!legacyFixed&&!r.result;
-    const stampHtml=stampFixed?`<span class="stconf">確定${r.pt?(" "+esc(r.pt)):""}</span>`:"";
+    // 確定時刻: 未決着の間は判定/結果のプレースホルダ領域に大きく表示(stfixCell)。
+    // 決着後はその領域が判定/結果に切り替わるため、締切横の小表示(stconf)で証跡を残す。
+    const stampHtml=(stampFixed&&r.result)?`<span class="stconf">確定${r.pt?(" "+esc(r.pt)):""}</span>`:"";
+    const stampPending=stampFixed&&!r.result;
     const candHtml="";
     const badgeHtml=isCand
       ?`<span class="conf candb">候補</span>`
@@ -409,7 +415,7 @@ function renderSengen(){
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
         <span class="rmeta"><span class="rtype">${esc(r.type||"")}</span>${candHtml}<br>
           <span class="rdl num">締切 ${r.deadline||"-"}</span>${stampHtml}</span>
-        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv">${badgeHtml}</span></span><span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${hit?"jhit":"jmiss"}">${hit?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span><span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
+        <span class="hjp"><span class="hjc"><span class="hjl">的中率</span><span class="hjv">${badgeHtml}</span></span>${stampPending?`<span class="hjc"><span class="hjl">確定時刻</span><span class="hjv stfixc num">${esc(r.pt||"—")}</span></span>`:`<span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${hit?"jhit":"jmiss"}">${hit?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span>`}<span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
       </div>
       <div class="racebody">
         ${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
