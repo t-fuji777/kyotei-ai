@@ -112,7 +112,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 .senp{font-size:12px;font-weight:800;border-radius:6px;padding:3px 8px;background:#1FB97A;color:#04150C}
 .livechip{font-size:9px;font-weight:800;border-radius:5px;padding:2px 5px;background:#7C4DFF;color:#fff;line-height:1.4;white-space:nowrap}.voidchip{font-size:9px;font-weight:800;border-radius:5px;padding:2px 5px;background:#E53935;color:#fff;line-height:1.4;white-space:nowrap}
 .exv{min-width:34px;text-align:right;font-size:11px;color:var(--dim)}
-.oddv{font-size:11px;color:#FFC53D;margin-left:6px;display:inline-block;min-width:42px;text-align:right}
+.oddv{font-size:11px;color:#FFC53D;margin-left:6px;display:inline-block;min-width:42px;text-align:right;white-space:nowrap}
 .hitchip{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px;background:#1FB97A;color:#04150C;margin-left:4px}
 .misschip{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px;background:#E5484D;color:#fff;margin-left:4px}
 .resv{font-size:12px;font-weight:600;color:#7dd3fc;background:rgba(56,189,248,.12);padding:1px 7px;border-radius:5px}
@@ -347,16 +347,20 @@ function pickOdds(r,c){
   if(r.result&&!r.result.status&&r.result.pay3t>0&&c===r.result.order){return Math.round(r.result.pay3t/10)/10;}
   return (r.odds&&r.odds.t3)?r.odds.t3[c]:null;
 }
-// 買い目行の表示用オッズ。odds.t3 は締切後に確定オッズへ書き換わるため、決着後に
-// そのまま出すと「その倍率なら帯超えではないのでは」と読める値になる。判定時点の
-// 板(r.os)があればそれを出し、竹/松がどの数字で判定されたかを画面と一致させる。
-function decOdds(r,c){
-  // 的中買い目は実配当(pickOdds)のまま。同じカードの払戻金欄と食い違わせない。
-  if(r.result&&!r.result.status&&r.result.pay3t>0&&c===r.result.order)return pickOdds(r,c);
+// 買い目行の表示用オッズ(文字列)。竹/松は締切15分前の板で判定するため、判定に使った
+// 値(r.os)を出さないと「3.1倍以上のはずなのに2.9倍と書いてある」という矛盾に見える。
+// 一方その板は締切までに動くので、的中買い目は「判定時→実配当」を併記して両方見せる。
+// odds.t3 は締切後に確定オッズへ書き換わるので決着後の表示には使わない。
+function decOddsText(r,c){
+  const isWin=!!(r.result&&!r.result.status&&r.result.pay3t>0&&c===r.result.order);
+  const act=isWin?pickOdds(r,c):null;
   // 判定時点で板が無かった買い目(値がnull)は確定オッズで埋めない。
   // 「オッズ未取得だから見送り」の根拠そのものなので、倍率を出さないのが正しい。
-  if(r.os&&Object.prototype.hasOwnProperty.call(r.os,c))return r.os[c];
-  return pickOdds(r,c);
+  const dec=(r.os&&Object.prototype.hasOwnProperty.call(r.os,c))?r.os[c]:(isWin?null:pickOdds(r,c));
+  if(dec!=null&&act!=null&&Math.abs(dec-act)>=0.05)return dec+"→"+act+"倍";
+  if(act!=null)return act+"倍";
+  if(dec!=null)return dec+"倍";
+  return null;
 }
 function renderSengen(){
   const m=$("#main");
@@ -430,7 +434,7 @@ function renderSengen(){
       `<div class="pickrow${(r.result&&!r.result.status&&p.c===r.result.order)?' pwin':''}"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
-        <span class="bp num">${pct(p.p)}</span>${(decOdds(r,p.c)!=null)?`<span class="oddv num">${decOdds(r,p.c)}倍</span>`:""}</div>`).join("");
+        <span class="bp num">${pct(p.p)}</span>${(()=>{const _o=decOddsText(r,p.c);return _o?`<span class="oddv num">${_o}</span>`:"";})()}</div>`).join("");
     return `<div class="race open${isP?' prm':''}${isCand?' cand':''}">
       <div class="racehead">
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
@@ -506,7 +510,7 @@ function raceCard(r,v,showVen){
     `<div class="pickrow${(r.result&&!r.result.status&&p.c===r.result.order)?' pwin':''}"><span class="prank num">${i+1}</span>
       <span class="honmei">${comboChips(p.c,true)}</span>
       <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
-      <span class="bp num">${pct(p.p)}</span>${(decOdds(r,p.c)!=null)?`<span class="oddv num">${decOdds(r,p.c)}倍</span>`:""}</div>`).join("");
+      <span class="bp num">${pct(p.p)}</span>${(()=>{const _o=decOddsText(r,p.c);return _o?`<span class="oddv num">${_o}</span>`:"";})()}</div>`).join("");
   return `<div class="race" data-r="${v.code}-${r.no}">
       <div class="racehead">
         <span class="rno num">${r.no}R${showVen&&v?`<span class="rven">${esc(v.name)}</span>`:""}</span>
