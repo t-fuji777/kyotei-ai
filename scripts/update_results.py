@@ -124,7 +124,9 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
            "fuku_hit": 0, "sen_n": 0, "sen_hit": 0,
            "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
            "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0,
-           "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0}
+           "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0,
+           # 的中したのに購入額を下回った回数(recompute_sengen.pyと同一定義)
+           "sen_hitloss": 0, "prm_hitloss": 0}
     for v in pred.get("venues", []):
         for r in v["races"]:
             key = (v["code"], r["no"])
@@ -171,6 +173,8 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 if act in picks[:3]:
                     day["sen_hit"] += 1
                     day["sen_ret"] += pays.get(key, 0)
+                    if pays.get(key, 0) < 300:
+                        day["sen_hitloss"] += 1
             if "mt" in r:
                 is_mt = bool(r["mt"])
             elif "mt" in rres:
@@ -185,6 +189,8 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 if act in picks[:4]:
                     day["prm_hit"] += 1
                     day["prm_ret"] += pays.get(key, 0)
+                    if pays.get(key, 0) < 400:
+                        day["prm_hitloss"] += 1
             if picks and picks[0] == act:
                 day["top1_hit"] += 1
             # F/L等の異常艇が絡む組番は全額返還されるため、実投入額(返還されない点数)のみを
@@ -235,7 +241,8 @@ def main():
              "top10_hit": 0, "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
              "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
              "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0,
-             "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0}
+             "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0,
+             "sen_hitloss": 0, "prm_hitloss": 0}
         for d in acc["days"]:
             for k in t:
                 t[k] += d.get(k, 0)

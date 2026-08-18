@@ -39,9 +39,14 @@ def recompute_day(pred: dict):
     投資、的中時はpay3t(100円あたり払戻)回収というROI定義(update_results.evaluateと同一)。"""
     sen_n = 0
     sen_hit = 0
+    # 的中したのに購入額(竹300円/松400円)を下回った回数。竹の下限3.1倍は締切15分前の
+    # 板で判定するため、締切までにオッズが下がると的中しても損になる。実測で起きている
+    # 事象なので「的中すれば必ずプラス」と言わないために数える。
+    sen_hitloss = 0
     sen_pred_sum = 0.0
     prm_n = 0
     prm_hit = 0
+    prm_hitloss = 0
     prm_pred_sum = 0.0
     sen_stake = 0
     sen_ret = 0
@@ -91,6 +96,8 @@ def recompute_day(pred: dict):
                 if res["order"] in picks[:3]:
                     sen_hit += 1
                     sen_ret += res.get("pay3t") or 0
+                    if (res.get("pay3t") or 0) < 300:
+                        sen_hitloss += 1
 
             # プレミア価値フィルタ(update_results._matsu_okと同一ロジックをローカル実装):
             # 上位4点は全点オッズ取得済みが前提(t3.get(c)がNoneなら即対象外)。上限(10.0倍)
@@ -119,10 +126,13 @@ def recompute_day(pred: dict):
                 if res["order"] in picks[:4]:
                     prm_hit += 1
                     prm_ret += res.get("pay3t") or 0
+                    if (res.get("pay3t") or 0) < 400:
+                        prm_hitloss += 1
     return {"sen_n": sen_n, "sen_hit": sen_hit, "sen_pred_sum": sen_pred_sum,
             "prm_n": prm_n, "prm_hit": prm_hit, "prm_pred_sum": prm_pred_sum,
             "sen_stake": sen_stake, "sen_ret": sen_ret,
-            "prm_stake": prm_stake, "prm_ret": prm_ret}
+            "prm_stake": prm_stake, "prm_ret": prm_ret,
+            "sen_hitloss": sen_hitloss, "prm_hitloss": prm_hitloss}
 
 
 def main():
@@ -162,6 +172,8 @@ def main():
         day["sen_ret"] = agg["sen_ret"]
         day["prm_stake"] = agg["prm_stake"]
         day["prm_ret"] = agg["prm_ret"]
+        day["sen_hitloss"] = agg["sen_hitloss"]
+        day["prm_hitloss"] = agg["prm_hitloss"]
         n_updated += 1
         rate = (agg["sen_hit"] / agg["sen_n"] * 100) if agg["sen_n"] else 0.0
         prm_rate = (agg["prm_hit"] / agg["prm_n"] * 100) if agg["prm_n"] else 0.0
@@ -172,7 +184,8 @@ def main():
          "top10_hit": 0, "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
          "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
          "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0,
-         "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0}
+         "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0,
+         "sen_hitloss": 0, "prm_hitloss": 0}
     for d in acc.get("days", []):
         for k in t:
             t[k] += d.get(k, 0)

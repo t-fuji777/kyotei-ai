@@ -761,6 +761,17 @@ if(!accResizeBound){accResizeBound=true;
   if(window.ResizeObserver){new ResizeObserver(()=>fitMain()).observe(document.querySelector("header"));}
 }
 
+// 「的中したのに購入額を下回った」実測値の注記。accuracy.json の sen_hitloss/prm_hitloss
+// (的中のうち払戻が竹300円/松400円に満たなかった件数)から組み立てる。締切15分前の板で
+// 判定する以上ゼロにはできないので、固定文でなく実測をそのまま出す。
+function _lossNote(isTake){
+  const t=(VIEW.acc&&VIEW.acc.total)||null;
+  if(!t)return "";
+  const hit=isTake?t.sen_hit:t.prm_hit, loss=isTake?t.sen_hitloss:t.prm_hitloss;
+  if(!hit||loss==null)return "";
+  if(!loss)return `実測では的中${hit}件すべてがプラス。`;
+  return `締切までにオッズが下がることがあり、実測では的中${hit}件のうち${loss}件(${Math.round(loss/hit*1000)/10}%)が購入額を下回った。`;
+}
 function renderModel(rep){
   // 設定タブ: 通知/アプリ情報を上部に、表示的中率の検証を中段に、
   // モデル詳細(学習と精度)は折りたたみで下部に置く。
@@ -799,7 +810,7 @@ function renderModel(rep){
     <div class="kv"><span>学習日時</span><span class="num">${rep.trained_at||"-"}</span></div>
     <div class="kv"><span>学習期間</span><span class="num">${(rep.period||[]).join(" - ")}</span></div>
     <div class="kv"><span>学習行数</span><span class="num">${(rep.rows_train||0).toLocaleString()}</span></div>
-    <div class="kv"><span>プラン条件</span><span class="num">竹プラン: 5R以降・TOP3合計確率36%以上・全3点オッズ3.1倍以上・安定水面のみ<br>松プラン: 5R以降・TOP4合計確率36%以上・全4点4.1〜10倍(市場コンセンサス)<br>いずれも7,339レースのバックテストで決定</span></div>
+    <div class="kv"><span>プラン条件</span><span class="num">竹プラン: 5R以降・TOP3合計確率36%以上・全3点オッズ3.1倍以上・安定水面のみ<br>松プラン: 5R以降・TOP4合計確率36%以上・全4点4.1〜10倍(市場コンセンサス)<br>いずれも7,339レースのバックテストで決定<br>オッズは締切15分前時点の値で判定(締切までに変動します)</span></div>
     <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
     <div style="font-size:11px;color:var(--dim);margin:-2px 0 8px">学習時に測ったモデル単体の精度。すべてTOP5基準で、竹・松プランの成績とは別物です。プランの実績は的中実績タブをご覧ください。</div>
     <div class="kv"><span>1着的中率</span><span class="num">${pct(tm.win_hit_rate||0)} (基準 ${pct(bm.win_hit_rate||0)})</span></div>
@@ -816,8 +827,9 @@ function renderModel(rep){
     ["候補","竹/松プランの確率条件を満たし、締切15分前の最終判定(オッズ条件)を待っているレース。数値はまだ確定していない。「確定予定」に判定が行われる時刻を表示する。"],
     ["確定","締切15分前の時点でプラン対象に確定したレース。確定した内容と時刻はデータに記録され、以後の後出し変更はできない。"],
     ["見送り","候補だったが最終判定でオッズ条件を満たさなかったレース。見送った理由を明記する。"],
-    ["竹プラン","厳選3点買い(100円×3点)。的中すれば必ずプラスになるオッズ条件で選定。5R以降のみ。"],
-    ["松プラン","プレミア4点買い(100円×4点)。竹より厳しい条件に加え、市場評価との一致も確認したレースのみ。5R以降のみ。"],
+    ["竹プラン","厳選3点買い(100円×3点)。締切15分前のオッズで3点すべて3.1倍以上のレースだけを選ぶ。5R以降のみ。"+_lossNote(true)],
+    ["松プラン","プレミア4点買い(100円×4点)。竹より厳しい条件に加え、市場評価との一致も確認したレースのみ。5R以降のみ。"+_lossNote(false)],
+    ["矢印つきの倍率(4.5→2.9倍)","左が判定した時点(締切15分前)のオッズ、右が実際の払戻。判定は左の値で行っている。締切間際に人気が集まるとオッズは下がるため、この2つは一致しないことがある。"],
     ["判定/結果/払戻金","レース確定後の答え合わせ。予測TOP5内に的中したか・1〜3着の並び・3連単100円あたりの払戻額。"],
   ].map(t=>`<div class="term"><b>${t[0]}</b><span>${t[1]}</span></div>`).join("");
   let startTab="today";try{if(localStorage.getItem("aritei_start_tab")==="sen")startTab="sen";}catch(_){/*プライベートモード等*/}
@@ -964,6 +976,8 @@ async function show(tab){
       renderAcc(VIEW.acc);
     }else{
       if(!VIEW.model) VIEW.model=await fetchJSON("model_report.json").catch(()=>null);
+      // 用語説明に「的中したのに損になった割合」の実測値を出すため実績も読む
+      if(!VIEW.acc) VIEW.acc=await fetchJSON("accuracy.json").catch(()=>null);
       if(token!==showGen) return;
       renderModel(VIEW.model);
     }
