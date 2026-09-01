@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""竹/松プランの確定(conf)と結果(res)を外部Webhook/Web Pushへ通知する。
+"""厳選プランの確定(conf)と結果(res)を外部Webhook/Web Pushへ通知する。松は2026-09-01終売(mt=1は今後発生しない)。
 
 環境変数 NOTIFY_WEBHOOK が未設定/空ならWebhook送信は行わない。設定時のみ、
 送信先URLからTelegram(api.telegram.orgを含む)/ Discord互換 を自動判別してPOSTする。
@@ -93,9 +93,9 @@ def send_webhook(url: str, text: str) -> bool:
 def _plan_label(r: dict) -> str:
     tk, mt = r.get("tk") == 1, r.get("mt") == 1
     if tk and mt:
-        return "竹・松"
+        return "厳選・松"
     if tk:
-        return "竹"
+        return "厳選"
     if mt:
         return "松"
     return ""
@@ -123,7 +123,7 @@ def _conf_events(pred: dict, ymd: str):
 
 def _res_events(pred: dict, ymd: str):
     """結果イベント: tk==1 or mt==1のレースにresult.orderが付いたら(id, 文面)を返す。
-    竹=picks上位3点内、松=上位4点内で的中判定。両該当ならそれぞれ記載する。"""
+    厳選=picks上位3点内、(終売済みの)松=上位4点内で的中判定。両該当ならそれぞれ記載する。"""
     out = []
     for v in pred.get("venues") or []:
         vname = v.get("name", "")
@@ -142,7 +142,7 @@ def _res_events(pred: dict, ymd: str):
             pay = res.get("pay3t")
             plans = []
             if tk:
-                plans.append(("竹", order in picks[:3]))
+                plans.append(("厳選", order in picks[:3]))
             if mt:
                 plans.append(("松", order in picks[:4]))
             multi = len(plans) > 1

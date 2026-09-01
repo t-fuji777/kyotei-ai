@@ -236,16 +236,13 @@ const $=s=>document.querySelector(s);
 // 厳選: 3連単TOP3の3点(300円)買い。TOP3合計確率が高く・除外会場でなく・上位3点のオッズが一定以上の
 // 水面が安定したレースのみを厳選する。閾値/除外会場は過去実績のtrain/test検証で決定(scripts/common.py とミラー)。
 const SENGEN_TOP3P_MIN=0.36, SENGEN_MIN_ODDS=3.1, SENGEN_EXCLUDE=[3,4,14];
-// プレミア: 厳選の上位ティア。3連単TOP4の4点(400円)買い。TOP4合計確率が高く・除外会場でなく・
-// 上位4点全てのオッズが取得済みで4.1〜10.0倍の帯(市場の同意)に収まるレースのみを対象とする。
-// 7,339レースのバックテスト+時系列分割検証で確定した閾値(scripts/common.py とミラー)。
-const MATSU_TOP4P_MIN=0.36, MATSU_MIN_ODDS=4.1, MATSU_MAX_ODDS=10;
+// 松(プレミア・TOP4の4点買い)は2026-09-01で終売。判定ロジックは撤去済みで、過去実績は
+// accuracy.jsonのprm_*にそのまま残り実績表の松行(履歴のみ)に表示される。
 const VIEW={today:null,acc:null,model:null,calib:null};
 let cur="today", pred=null, selVenue=null, todayMode="time";
 let viewPred=null, dateList=null, latestDate=null, dateNavBusy=false, dnavDocBound=false, venDocBound=false;
 let CALIB=null; // 較正表(docs/calib.json、毎朝自動再計算)。起動時にfetchJSONで読み込み、失敗時はnullのまま(内蔵表にフォールバック)
 let showGen=0,autoRefreshing=false;
-let sengenTier="take";
 let accOpenM={},accResizeBound=false; // 的中実績: 過去月の折りたたみ開閉状態 / resizeリスナー二重登録防止
 const PREDS={};
 const _WD=["日","月","火","水","木","金","土"];
@@ -271,7 +268,6 @@ const windArrow=n=>(n==null||n>16)?"":` <span class="warr" style="transform:rota
 const confCls=p=>p>=0.9?"confA":p>=0.8?"confB":"confC";
 const top5p=r=>r.picks?r.picks.slice(0,5).reduce((a,p)=>a+(p.p||0),0):0;
 const top3p=r=>r.picks?r.picks.slice(0,3).reduce((a,p)=>a+(p.p||0),0):0;
-const top4p=r=>r.picks?r.picks.slice(0,4).reduce((a,p)=>a+(p.p||0),0):0;
 // バッジ色分け(較正後の実測確率基準): 金=50%以上(半分以上当たる帯のみ)/青=40〜49%/灰=それ未満
 const cumCls=p=>p>=0.5?"confA":p>=0.4?"confB":"confC";
 // 的中率バッジの較正: モデル確率(表示%)を過去8,418レースの実測的中率へ写像(区分線形)。
@@ -290,17 +286,15 @@ const _CAL_FALLBACK={t5e:CAL_T5E,t5l:CAL_T5L,t3e:CAL_T3E,t3l:CAL_T3L,t4e:CAL_T4E
 const _tb=k=>(CALIB&&CALIB[k]&&CALIB[k].length)?CALIB[k]:_CAL_FALLBACK[k];
 function calPct(p,tbl){const x=p*100;if(x<=tbl[0][0])return Math.round(tbl[0][1]*x/tbl[0][0]);for(let i=1;i<tbl.length;i++){if(x<=tbl[i][0]){const a=tbl[i-1],b=tbl[i];return Math.round(a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]));}}return Math.round(tbl[tbl.length-1][1]);}
 const calT5=r=>calPct(top5p(r),_tb(r.no<=4?"t5e":"t5l"));
-// 梅(当日予測)のバッジは「行動の推奨」を2段階で表示する。
+// 全レース(当日予測)のバッジは「行動の推奨」を2段階で表示する。
 // 注目=較正40%以上(買うか検討する価値。結果の約束は含まない語) / 様子見=それ以外。
-// 旧「勝負」(竹松条件そのもの)は有料プランの選定を無料タブに漏らすため廃止。
+// 旧「勝負」(厳選条件そのもの)は有料プランの選定を無料タブに漏らすため廃止。
 const actLbl=r=>calT5(r)>=40?"注目":"様子見";
-// 梅バッジ専用配色(竹松の%バッジの金/青/灰と混同しないよう別系統): 注目=紫/様子見=沈色
+// 全レースバッジ専用配色(厳選の%バッジの金/青/灰と混同しないよう別系統): 注目=紫/様子見=沈色
 const actCls=v=>v==="注目"?"actR":"actM";
 const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l"));
-const calT4=r=>calPct(top4p(r),_tb(r.no<=4?"t4e":"t4l"));
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
 const t3hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,3).some(p=>p.c===r.result.order));
-const t4hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,4).some(p=>p.c===r.result.order));
 
 function dayLabel(v){if(!v)return "";if(v.is_final)return " \u00b7 \u6700\u7d42\u65e5";if(v.day_n===1)return " \u00b7 \u521d\u65e5";if(v.day_n>1)return " \u00b7 "+v.day_n+"\u65e5\u76ee";return "";}
 function sortVenues(p){if(p&&Array.isArray(p.venues))p.venues.sort((a,b)=>(a.code||0)-(b.code||0));return p;}
@@ -326,17 +320,6 @@ function sengenOk(r,vcode){
   // 確定時スタンプ(旧・本日分互換。パイプライン競合による遡及改変から所属を守る)
   if(r.result&&!r.result.status&&r.result.tk!=null)return !!r.result.tk;
   if(r.no<5)return false;if(top3p(r)<SENGEN_TOP3P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;return r.picks.slice(0,3).every(function(p){var o=pickOdds(r,p.c);return o==null||o>=SENGEN_MIN_ODDS;});}
-// プレミア判定: 厳選と異なりオッズ必須(未取得=対象外)。上限(10.0)は取得オッズそのままで判定し、
-// 下限(4.1)のみ確定レースの的中買い目に限り実配当を優先する(pickOdds と同じ流儀)。
-// 厳選と同様、序盤1-4Rはモデルの高確率帯が信用できないため5R以降のみ対象とする。
-function matsuOk(r,vcode){
-  // チェックポイント確定スタンプ最優先(締切15分前に確定しレース直下へ焼き込み、以後不変)
-  if(r.mt!=null)return !!r.mt;
-  // 確定時スタンプ(旧・本日分互換。パイプライン競合による遡及改変から所属を守る)
-  if(r.result&&!r.result.status&&r.result.mt!=null)return !!r.result.mt;
-  if(r.no<5)return false;if(top4p(r)<MATSU_TOP4P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;
-  return r.picks.slice(0,4).every(function(p){var raw=r.odds&&r.odds.t3?r.odds.t3[p.c]:null;
-    if(raw==null||raw>MATSU_MAX_ODDS)return false;var o=pickOdds(r,p.c);return o>=MATSU_MIN_ODDS;});}
 function fitRtype(){document.querySelectorAll(".rtype").forEach(el=>{el.style.fontSize="";let fs=12,g=0;while(el.scrollWidth>el.clientWidth+0.5&&fs>8&&g<24){fs-=0.5;el.style.fontSize=fs+"px";g++;}});}
 // 買い目の実効オッズ(表示・厳選の価値判定の共通基準): 確定済みレース(中止除く)の
 // 的中買い目は、暫定オッズ(prov)が最終に更新されず残る場合があるため、実配当(pay3t/100)を
@@ -346,7 +329,7 @@ function pickOdds(r,c){
   if(r.result&&!r.result.status&&r.result.pay3t>0&&c===r.result.order){return Math.round(r.result.pay3t/10)/10;}
   return (r.odds&&r.odds.t3)?r.odds.t3[c]:null;
 }
-// 買い目行の表示用オッズ(文字列)。竹/松は締切15分前の板で判定するため、判定に使った
+// 買い目行の表示用オッズ(文字列)。厳選は締切15分前の板で判定するため、判定に使った
 // 値(r.os)を出さないと「3.1倍以上のはずなのに2.9倍と書いてある」という矛盾に見える。
 // 一方その板は締切までに動くので、的中買い目は「判定時→実配当」を併記して両方見せる。
 // odds.t3 は締切後に確定オッズへ書き換わるので決着後の表示には使わない。
@@ -370,17 +353,17 @@ function renderSengen(){
   // tk/mtどちらも成立していないレースのみ対象(成立したプランがあれば通常の候補/確定側に出る)。
   const skipList=[];
   (pred.venues||[]).forEach(v=>v.races.forEach(r=>{
-    const ok=sengenTier==="matsu"?matsuOk(r,v.code):sengenOk(r,v.code);
-    if(ok)list.push({v,r});
-    if(r.rs&&r.tk!==1&&r.mt!==1)skipList.push({v,r});
+    if(sengenOk(r,v.code))list.push({v,r});
+    // 見送りは厳選(竹)の理由のみ表示する。松の終売(2026-09-01)以前に焼き込まれた
+    // 松系の理由(帯超え/下限割れ/オッズ未達)は売っていないプランの見送りなので出さない。
+    if(r.rs&&r.rs.indexOf("3.1倍未満")===0&&r.tk!==1)skipList.push({v,r});
   }));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   skipList.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   {const _tm=$("#todayMeta");if(_tm){
-    const hit=list.filter(x=>sengenTier==="matsu"?t4hit(x.r):t3hit(x.r)).length;
+    const hit=list.filter(x=>t3hit(x.r)).length;
     _tm.innerHTML=`<span class="tml">本　日：</span><span class="tmv">${list.length}件</span><span class="tmn"></span><span class="tml">的　中：</span><span class="tmv">${hit}件</span><span class="tmn"></span>`;
   }}
-  const tierrow=`<div class="tierrow"><button class="tswb${sengenTier==='take'?' on':''}" data-t="take">竹プラン</button><button class="tswb${sengenTier==='matsu'?' on':''}" data-t="matsu">松プラン</button></div>`;
   // 見送りカード: racebody無しの1行カード。買い目が無く展開する中身が無いため、
   // カード全体をタップで当日予測の該当レースへ移動する(jumpcard)。
   const _skipCf=({v,r})=>{
@@ -395,11 +378,7 @@ function renderSengen(){
   };
   const skipHtml=skipList.length?(`<div class="skiphead">見送り</div>`+skipList.map(_skipCf).join("")):"";
   if(!list.length){
-    const note=sengenTier==="matsu"
-      ?"本日の松プラン対象レースはありません。"
-      :"本日の竹プラン対象レースはありません。";
-    m.innerHTML=tierrow+`<div class="note">${note}</div>`+(skipList.length?`<div class="racelist sengen">${skipHtml}</div>`:"");
-    m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
+    m.innerHTML=`<div class="note">本日の厳選対象レースはありません。</div>`+(skipList.length?`<div class="racelist sengen">${skipHtml}</div>`:"");
     if(skipList.length){
       requestAnimationFrame(fitRtype);
       _wireSengenJump(m);
@@ -407,17 +386,15 @@ function renderSengen(){
     return;
   }
   const _cf=({v,r})=>{
-    const isP=(sengenTier==="matsu");
-    const cp=isP?top4p(r):top3p(r);
-    const hit=isP?t4hit(r):t3hit(r);
+    const hit=t3hit(r);
     const fav=r.fuku||{};
     const fb=r.boats.find(b=>b.lane===fav.lane)||{};
     const top=r.picks[0]||{c:"-",p:0};
     // チェックポイント確定スタンプの有無(所属が締切15分前に確定済みか)。
     // 旧・res側スタンプ(本日分互換)のみで成立している場合は候補/確定どちらの表示も出さない
     // (従来通りの見た目を維持)。
-    const stampFixed=(r.tk!=null||r.mt!=null);
-    const legacyFixed=!!(r.result&&!r.result.status&&(isP?r.result.mt!=null:r.result.tk!=null));
+    const stampFixed=(r.tk!=null);
+    const legacyFixed=!!(r.result&&!r.result.status&&r.result.tk!=null);
     // 候補=未確定(スタンプ無し・結果も無し)。数字は確定するまで出さない:
     // 的中率枠には「候補」を表示し、確定/決着後に初めて較正%を刻む(以後不変)。
     const isCand=!stampFixed&&!legacyFixed&&!r.result;
@@ -428,8 +405,8 @@ function renderSengen(){
     const candHtml="";
     const badgeHtml=isCand
       ?`<span class="conf candb">候補</span>`
-      :`<span class="conf ${cumCls((isP?calT4(r):calT3(r))/100)}">${isP?calT4(r):calT3(r)}%</span>`;
-    const picks=r.picks.slice(0,isP?4:3).map((p,i)=>
+      :`<span class="conf ${cumCls(calT3(r)/100)}">${calT3(r)}%</span>`;
+    const picks=r.picks.slice(0,3).map((p,i)=>
       `<div class="pickrow${(r.result&&!r.result.status&&p.c===r.result.order)?' pwin':''}"><span class="prank num">${i+1}</span>
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
@@ -447,9 +424,7 @@ function renderSengen(){
   };
   const openL=list.filter(x=>_isOpen(x.r,pred.date)),doneL=list.filter(x=>!_isOpen(x.r,pred.date));
   const cards=doneL.map(_cf).join("")+openL.map(_cf).join("");
-  m.innerHTML=tierrow+`
-    <div class="racelist sengen">${cards}${skipHtml}</div>`;
-  m.querySelectorAll(".tswb").forEach(b=>b.onclick=()=>{if(sengenTier!==b.dataset.t){sengenTier=b.dataset.t;renderSengen();}});
+  m.innerHTML=`<div class="racelist sengen">${cards}${skipHtml}</div>`;
   requestAnimationFrame(fitRtype);
   _wireSengenJump(m);
 }
@@ -630,20 +605,20 @@ function renderToday(){
 
 function todayStats(){
   if(!pred||!pred.venues) return null;
-  let n=0,w=0,t1=0,t6=0,sn=0,sh=0,st=0,rt=0,sp=0,tp=0,mn=0,mh=0,mp=0,sst=0,sret=0,pst=0,pret=0;
+  let n=0,w=0,t1=0,t6=0,sn=0,sh=0,st=0,rt=0,sp=0,tp=0,sst=0,sret=0;
   for(const v of pred.venues)for(const r of v.races){const x=r.result;if(!x||x.status)continue;
     n++;if(x.hit_win)w++;const p5=top5p(r);tp+=p5;
     if(r.picks&&r.picks[0]&&r.picks[0].c===x.order)t1++;
     if(t5hit(r)){t6++;rt+=(x.pay3t||0)}st+=500;
-    if(sengenOk(r,v.code)){sn++;sp+=top3p(r);if(t3hit(r))sh++;sst+=300;if(t3hit(r))sret+=(x.pay3t||0);}
-    if(matsuOk(r,v.code)){mn++;mp+=top4p(r);if(t4hit(r))mh++;pst+=400;if(t4hit(r))pret+=(x.pay3t||0);}}
+    if(sengenOk(r,v.code)){sn++;sp+=top3p(r);if(t3hit(r))sh++;sst+=300;if(t3hit(r))sret+=(x.pay3t||0);}}
   if(!n) return null;
   const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
   const row=`<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
     <td class="num">${n}</td><td class="num">${Math.round(w/n*100)}%</td>
     <td class="num">${Math.round(t6/n*100)}%</td><td class="num">${sen}</td>
     <td class="num">${st?Math.round(rt/st*100):0}%</td></tr>`;
-  return {row,n,win_hit:w,top1_hit:t1,top5_hit:t6,sen_n:sn,sen_hit:sh,sen_pred_sum:sp,top5_pred_sum:tp,prm_n:mn,prm_hit:mh,prm_pred_sum:mp,stake5:st,return5:rt,sen_stake:sst,sen_ret:sret,prm_stake:pst,prm_ret:pret};
+  // 松は終売(2026-09-01)のため本日速報はprm系を常に0で返す(実績表の松行は履歴のみ)。
+  return {row,n,win_hit:w,top1_hit:t1,top5_hit:t6,sen_n:sn,sen_hit:sh,sen_pred_sum:sp,top5_pred_sum:tp,prm_n:0,prm_hit:0,prm_pred_sum:0,stake5:st,return5:rt,sen_stake:sst,sen_ret:sret,prm_stake:0,prm_ret:0};
 }
 function renderAcc(acc){
   const m=$("#main");
@@ -680,8 +655,9 @@ function renderAcc(acc){
     list.forEach(d=>{s.races+=d.races||0;s.top5_hit+=d.top5_hit||0;s.sen_n+=d.sen_n||0;s.sen_hit+=d.sen_hit||0;s.prm_n+=d.prm_n||0;s.prm_hit+=d.prm_hit||0;s.stake5+=d.stake5||0;s.return5+=d.return5||0;s.sen_stake+=d.sen_stake||0;s.sen_ret+=d.sen_ret||0;s.prm_stake+=d.prm_stake||0;s.prm_ret+=d.prm_ret||0;});
     return s;
   };
-  // プラン=行のブロック共通ビルダー: labelHTML(3行分rowspanの日付/月セル)+梅・竹・松の3行分の<tr>を返す。
-  // opts.cls: 3行全てに付与するclass名(空白区切り) / opts.dataM: 3行全てに付与するdata-m(月トグル判定・全行クリック対応用)
+  // プラン=行のブロック共通ビルダー: labelHTML(rowspanの日付/月セル)+全・厳選(+履歴期間のみ松)の<tr>を返す。
+  // 松は2026-09-01で終売: 実績がある日/月/累計だけ行を出し、以後の期間は全・厳選の2行になる。
+  // opts.cls: 全行に付与するclass名(空白区切り) / opts.dataM: 全行に付与するdata-m(月トグル判定・全行クリック対応用)
   const blockRows=(labelHTML,X,opts)=>{
     X=X||{};opts=opts||{};
     const races=X.races||0,t5=X.top5_hit||0,st5=X.stake5||0,rt5=X.return5||0;
@@ -691,15 +667,16 @@ function renderAcc(acc){
     const rate=(h,n)=>n?(h/n*100).toFixed(1)+"%":"-";
     const roi=(st,rt)=>st?Math.round((rt||0)/st*100)+"%":"-";
     const rows=[
-      {lab:"梅",cnt:cnt(t5,races),rate:rate(t5,races),roi:roi(st5,rt5)},
-      {lab:"竹",cnt:cnt(sh,sn),rate:rate(sh,sn),roi:roi(sst,sret)},
-      {lab:"松",cnt:cnt(ph,pn),rate:rate(ph,pn),roi:roi(pst,pret)}
+      {lab:"全",cnt:cnt(t5,races),rate:rate(t5,races),roi:roi(st5,rt5)},
+      {lab:"厳選",cnt:cnt(sh,sn),rate:rate(sh,sn),roi:roi(sst,sret)}
     ];
+    if(pn>0||pst>0)rows.push({lab:"松",cnt:cnt(ph,pn),rate:rate(ph,pn),roi:roi(pst,pret)});
     const dm=opts.dataM!=null?' data-m="'+opts.dataM+'"':'';
+    const last=rows.length-1;
     return rows.map((row,i)=>{
-      const cls=(opts.cls?opts.cls+" ":"")+(i===1?"pmid":"")+(i===2?"blast"+(opts.lastCls?" "+opts.lastCls:""):"");
+      const cls=(opts.cls?opts.cls+" ":"")+(i===last?"blast"+(opts.lastCls?" "+opts.lastCls:""):(i>0?"pmid":""));
       const clsAttr=cls.trim()?' class="'+cls.trim()+'"':'';
-      const dcell=i===0?'<td rowspan="3" class="dcell'+(opts.dcellCls?" "+opts.dcellCls:"")+'">'+labelHTML+'</td>':'';
+      const dcell=i===0?'<td rowspan="'+rows.length+'" class="dcell'+(opts.dcellCls?" "+opts.dcellCls:"")+'">'+labelHTML+'</td>':'';
       return '<tr'+clsAttr+dm+'>'+dcell+'<td class="plab">'+row.lab+'</td><td class="num">'+row.cnt+'</td><td class="num">'+row.rate+'</td><td class="num">'+row.roi+'</td></tr>';
     }).join("");
   };
@@ -722,7 +699,7 @@ function renderAcc(acc){
     return mrows+dayRows;
   }).join("");
   // プラン説明はヘッダ右の空き枠(旧カウンタ位置 #senCount)に表示し、表の上に新しい帯は作らない
-  {const sc=$("#senCount");if(sc)sc.innerHTML='<span class="anote">※梅=全レース・上位5点(500円)<br>竹=5R以降・上位3点・3.1倍以上(300円)<br>松=5R以降・上位4点・4.1〜10倍(400円)</span>';}
+  {const sc=$("#senCount");if(sc)sc.innerHTML='<span class="anote">※全=全レース・上位5点(500円)<br>厳選(旧: 竹)=5R以降・上位3点・3.1倍以上(300円)<br>松(旧: 上位4点・4.1〜10倍)=2026-09-01終売・履歴のみ</span>';}
   m.innerHTML=`<div class="accwrap"><table class="acctbl">
       <colgroup><col style="width:20%"><col style="width:12%"><col style="width:26%"><col style="width:21%"><col style="width:21%"></colgroup>
       ${headRow}${totalRows}${curMonthRows}${todayRows}${curDayRows}${pastRows}
@@ -761,7 +738,7 @@ if(!accResizeBound){accResizeBound=true;
 }
 
 // 「的中したのに購入額を下回った」実測値の注記。accuracy.json の sen_hitloss/prm_hitloss
-// (的中のうち払戻が竹300円/松400円に満たなかった件数)から組み立てる。締切15分前の板で
+// (的中のうち払戻が購入額の厳選300円(旧・松は400円)に満たなかった件数)から組み立てる。締切15分前の板で
 // 判定する以上ゼロにはできないので、固定文でなく実測をそのまま出す。
 function _lossNote(isTake){
   const t=(VIEW.acc&&VIEW.acc.total)||null;
@@ -804,14 +781,14 @@ function renderModel(rep){
   }
   const pushSec=PUSH_WORKER?'<div id="pushSec"></div>':`<div class="sec" style="margin-top:14px">通知</div>
     <div class="kv"><span>プッシュ通知</span><span class="num" style="color:var(--dim)">準備中</span></div>
-    <div style="font-size:11px;color:var(--dim);margin-top:6px">竹・松プランの確定と結果を端末に通知する機能を準備しています。公開時はここでオン/オフできます。</div>`;
+    <div style="font-size:11px;color:var(--dim);margin-top:6px">厳選プランの確定と結果を端末に通知する機能を準備しています。公開時はここでオン/オフできます。</div>`;
   const modelBody=rep?`
     <div class="kv"><span>学習日時</span><span class="num">${rep.trained_at||"-"}</span></div>
     <div class="kv"><span>学習期間</span><span class="num">${(rep.period||[]).join(" - ")}</span></div>
     <div class="kv"><span>学習行数</span><span class="num">${(rep.rows_train||0).toLocaleString()}</span></div>
-    <div class="kv"><span>プラン条件</span><span class="num">竹プラン: 5R以降・TOP3合計確率36%以上・全3点オッズ3.1倍以上・安定水面のみ<br>松プラン: 5R以降・TOP4合計確率36%以上・全4点4.1〜10倍(市場コンセンサス)<br>いずれも7,339レースのバックテストで決定<br>オッズは締切15分前時点の値で判定(締切までに変動します)</span></div>
+    <div class="kv"><span>プラン条件</span><span class="num">厳選プラン(旧: 竹): 5R以降・TOP3合計確率36%以上・全3点オッズ3.1倍以上・安定水面のみ<br>7,339レースのバックテストで決定<br>オッズは締切15分前時点の値で判定(締切までに変動します)<br>松プランは2026-09-01で終売(実績は的中実績タブに保存)</span></div>
     <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
-    <div style="font-size:11px;color:var(--dim);margin:-2px 0 8px">学習時に測ったモデル単体の精度。すべてTOP5基準で、竹・松プランの成績とは別物です。プランの実績は的中実績タブをご覧ください。</div>
+    <div style="font-size:11px;color:var(--dim);margin:-2px 0 8px">学習時に測ったモデル単体の精度。すべてTOP5基準で、厳選プランの成績とは別物です。プランの実績は的中実績タブをご覧ください。</div>
     <div class="kv"><span>1着的中率</span><span class="num">${pct(tm.win_hit_rate||0)} (基準 ${pct(bm.win_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 予測</span><span class="num">${pct(tm.top1_hit_rate||0)} (基準 ${pct(bm.top1_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 TOP5内</span><span class="num">${pct(tm.top5_hit_rate||0)} (基準 ${pct(bm.top5_hit_rate||0)})</span></div>
@@ -823,11 +800,11 @@ function renderModel(rep){
   const terms=[
     ["判断(注目/様子見)","全レースに付く参考判断。過去実測に較正した的中率(TOP5)が40%以上なら「注目」、未満なら「様子見」。"],
     ["的中率の%バッジ","AIの自己申告ではなく、過去全レースの実測的中率に補正(較正)した数値。金色は50%以上。下の「表示的中率の検証」で実測との一致を毎朝確認している。"],
-    ["候補","竹/松プランの確率条件を満たし、締切15分前の最終判定(オッズ条件)を待っているレース。数値はまだ確定していない。「確定予定」に判定が行われる時刻を表示する。"],
+    ["候補","厳選プランの確率条件を満たし、締切15分前の最終判定(オッズ条件)を待っているレース。数値はまだ確定していない。「確定予定」に判定が行われる時刻を表示する。"],
     ["確定","締切15分前の時点でプラン対象に確定したレース。確定した内容と時刻はデータに記録され、以後の後出し変更はできない。"],
     ["見送り","候補だったが最終判定でオッズ条件を満たさなかったレース。見送った理由を明記する。"],
-    ["竹プラン","厳選3点買い(100円×3点)。締切15分前のオッズで3点すべて3.1倍以上のレースだけを選ぶ。5R以降のみ。"+_lossNote(true)],
-    ["松プラン","プレミア4点買い(100円×4点)。竹より厳しい条件に加え、市場評価との一致も確認したレースのみ。5R以降のみ。"+_lossNote(false)],
+    ["厳選プラン(旧: 竹)","厳選3点買い(100円×3点)。締切15分前のオッズで3点すべて3.1倍以上のレースだけを選ぶ。5R以降のみ。"+_lossNote(true)],
+    ["松プラン(終売)","プレミア4点買い(100円×4点)として提供していたが、2026-09-01で新規選定を終了。締切15分前確定への移行で判定時のオッズ帯(4.1〜10倍)がほぼ成立しなくなったため。過去の実績は的中実績タブで公開を続ける。"],
     ["矢印つきの倍率(4.5→2.9倍)","左が判定した時点(締切15分前)のオッズ、右が実際の払戻。判定は左の値で行っている。締切間際に人気が集まるとオッズは下がるため、この2つは一致しないことがある。"],
     ["判定/結果/払戻金","レース確定後の答え合わせ。予測TOP5内に的中したか・1〜3着の並び・3連単100円あたりの払戻額。"],
   ].map(t=>`<div class="term"><b>${t[0]}</b><span>${t[1]}</span></div>`).join("");

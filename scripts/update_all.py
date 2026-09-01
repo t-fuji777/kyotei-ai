@@ -101,9 +101,9 @@ STAMP_LATE_MAX = 15
 
 
 def do_stamps(pred, now) -> int:
-    """締切15分前チェックポイント: まだ竹/松が確定していない(r["tk"]無し)かつ
+    """締切15分前チェックポイント: まだ厳選(竹)が確定していない(r["tk"]無し)かつ
     結果未確定のレースのうち、締切前後STAMP_LEAD_MIN/STAMP_LATE_MAX分以内の
-    ものへ、その時点のpicks/oddsで竹/松スタンプ(r["tk"]/r["mt"]/r["pt"])を
+    ものへ、その時点のpicks/oddsで厳選スタンプ(r["tk"]/r["pt"]。mtは終売につき常に0)を
     first-winsで焼き込む。窓を外したものはdo_results側のフォールバックで結果
     確定時に焼く。"""
     n = 0

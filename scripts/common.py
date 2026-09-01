@@ -79,24 +79,25 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None):
     締切15分前のチェックポイントで確定させ、以後は不変とするため)。
     now_hhmmを渡せばrace["pt"]に確定時刻("HH:MM")も記録する。
 
-    判定は既存ルール(is_sengen/is_matsu, update_results._picks_ok/_matsu_okと同一)を
+    判定は既存ルール(is_sengen, update_results._picks_okと同一)を
     その時点のrace(picks/odds/no)とres(order/pay3t、任意)から再現する。
     - resを渡した場合(結果確定後のフォールバック呼び出し): 的中買い目(c==order)は
       pay3t/100(確定実配当)を優先してオッズ判定する。
     - res無し(締切15分前チェックポイントの呼び出し): 取得済みt3オッズのみで判定する。
     resにorderが無い(中止/不成立等のstatusのみ)場合は何もしない(tk/mtを設定しない)。
 
-    見送り理由(rs)の焼き込み: 確率条件(top3p/top4pの閾値・5R以降・除外会場以外。
-    is_sengen/is_matsuがTrue)は通るがオッズ条件で不成立となった準候補には、tk/mt確定と
-    同時にrace["rs"]へ日本語の短い理由文字列を焼き込む(tk/mtと同じくfirst-wins。
-    raceに既に"rs"があれば上書きしない)。tk/mtのいずれかが成立(1)した場合や、確率条件
-    自体を満たさないレース(is_sengen/is_matsuとも不成立)にはrsを書かない。
-    理由の優先順位: 松が準候補ならまず松の理由、竹のみが準候補なら竹の理由
-    (両方準候補で両方不成立の場合も松の理由を優先する)。
-    - 松の理由: 上位4点にオッズ未取得があれば「オッズ未達」/ 上限10.0倍超があれば
-      「帯超え {最大値}倍」/ (未取得・上限超えが無く)下限4.1倍未満があれば
-      「下限割れ {最小値}倍」。
-    - 竹の理由: 上位3点の実効オッズに3.1倍未満があれば「3.1倍未満 {最小値}倍」。
+    松プランは2026-09-01で終売: 新規レースのmtは常に0を焼き込む(キー自体を省くと
+    集計側の動的フォールバックが旧ルールで松を復活させてしまうため、明示的な0で封じる)。
+    is_matsu等の定義は過去分(〜2026-08)の再集計用に残している。終売の経緯: T-15判定への
+    移行で判定時の板が締切板より系統的に高くなり、締切後オッズで較正された帯4.1〜10.0が
+    実質成立不能になった(候補の94%が帯超えでカット、選定0.15件/日)。
+
+    見送り理由(rs)の焼き込み: 確率条件(top3pの閾値・5R以降・除外会場以外。
+    is_sengenがTrue)は通るがオッズ条件で不成立となった準候補には、tk確定と
+    同時にrace["rs"]へ日本語の短い理由文字列を焼き込む(tkと同じくfirst-wins。
+    raceに既に"rs"があれば上書きしない)。tkが成立(1)した場合や、確率条件
+    自体を満たさないレースにはrsを書かない。
+    - 理由: 上位3点の実効オッズに3.1倍未満があれば「3.1倍未満 {最小値}倍」。
     数値は取得オッズ(生のt3値)を小数1桁で表記する。ただし的中買い目のオッズが
     pay3t由来の実効値に置き換わり、その実効値が閾値割れの原因である場合のみ実効値を使う
     (eff_oddsの返り値をそのまま用いる)。"""
@@ -141,47 +142,14 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None):
     if "os" not in race and not (race.get("odds") or {}).get("final"):
         race["os"] = {c: t3.get(c) for c in picks[:4]}
 
-    top4p = matsu_top4p(race.get("picks") or [])
-    matsu_quasi = is_matsu(top4p, vcode, rno)
-    mt = 0
-    matsu_missing = False  # 松: 上位4点にオッズ未取得のピックがあったか
-    matsu_over = []        # 松: 上限10.0倍超だった生のt3オッズ
-    matsu_below = []       # 松: (未取得/上限超え無しの上で)下限4.1倍未満だったeff_odds値
-    if matsu_quasi:
-        ok = True
-        for c in picks[:4]:
-            o = t3.get(c)
-            if o is None:
-                ok = False
-                matsu_missing = True
-                continue
-            if o > MATSU_MAX_ODDS:
-                ok = False
-                matsu_over.append(o)
-                continue
-            eo = eff_odds(c)
-            if eo is not None and eo < MATSU_MIN_ODDS:
-                ok = False
-                matsu_below.append(eo)
-        mt = 1 if ok else 0
-    race["mt"] = mt
+    # 松プランは終売(2026-09-01)。新規レースは常にmt=0を焼き込む。
+    race["mt"] = 0
 
     if now_hhmm:
         race["pt"] = now_hhmm
 
-    if tk != 1 and mt != 1 and "rs" not in race:
-        reason = None
-        if matsu_quasi:
-            if matsu_missing:
-                reason = "オッズ未達"
-            elif matsu_over:
-                reason = f"帯超え {max(matsu_over):.1f}倍"
-            elif matsu_below:
-                reason = f"下限割れ {min(matsu_below):.1f}倍"
-        elif take_quasi and take_below:
-            reason = f"3.1倍未満 {min(take_below):.1f}倍"
-        if reason:
-            race["rs"] = reason
+    if tk != 1 and "rs" not in race and take_quasi and take_below:
+        race["rs"] = f"3.1倍未満 {min(take_below):.1f}倍"
 
 
 def zen2han(s: str) -> str:
