@@ -879,16 +879,25 @@ function _screenInfo(){
 }
 
 // バージョン表示(sw.jsのCACHE_VERSIONを唯一の出所として取得): ロゴ横(#hdrVer)と
-// 設定タブ(#appVer)の両方を同じ値で埋める。数字はデプロイごとに+1してきた通し番号
-// なので、そのまま改修回数を表す。
+// 設定タブ(#appVer)を埋める。表示は「vメジャー.マイナー」形式。
+// メジャー=商品体系の世代(git履歴の節目で定義。新世代はこの表に追記する):
+//   1=初版・複勝90%型の厳選(2026-06-11, 通し番号v1〜)
+//   2=3連単TOP3方式+松竹梅3ティア(2026-08-02, v78〜)
+//   3=アリテイ改名+締切15分前確定方式(2026-08-04, v108〜)
+//   4=松終売・全レース/厳選の2ティア+バッジ実績(2026-09-01, v144〜)
+// マイナー=世代開始からのデプロイ数(sw.js通し番号の差。デプロイごとに自動で+1)。
+const GEN_STARTS=[[4,144],[3,108],[2,78],[1,1]];
 async function _renderAppVer(){
   const hv=document.getElementById("hdrVer"), el=document.getElementById("appVer");
   try{
     const t=await (await fetch("sw.js",{cache:"no-store"})).text();
     const mv=t.match(/kyotei-ai-v(\d+)/);
-    const v=mv?"v"+mv[1]:"-";
-    if(el)el.textContent=v;
-    if(hv&&mv)hv.textContent=v;
+    if(!mv){if(el)el.textContent="-";return;}
+    const n=+mv[1];
+    const g=GEN_STARTS.find(x=>n>=x[1])||[1,1];
+    const v=`v${g[0]}.${n-g[1]}`;
+    if(hv)hv.textContent=v;
+    if(el)el.textContent=`${v}(通算${n}版)`;
   }catch(_){if(el)el.textContent="-";}
 }
 async function _appReload(){
