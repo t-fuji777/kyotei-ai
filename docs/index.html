@@ -679,8 +679,8 @@ function renderAcc(acc){
     // 注目/様子見: 9/2以降はT-15打刻の実績、9/1以前は保存済み買い目への遡及集計
     // (2026-09-02に導入時点の較正で一括計算・以後再計算しない)。データのある期間のみ2行挿入。
     if(an+yn>0||ast+yst>0){
-      rows.push({lab:"注目",cnt:cnt(ah,an),rate:rate(ah,an),roi:roi(ast,aret)});
       rows.push({lab:"様子見",cnt:cnt(yh,yn),rate:rate(yh,yn),roi:roi(yst,yret)});
+      rows.push({lab:"注目",cnt:cnt(ah,an),rate:rate(ah,an),roi:roi(ast,aret)});
     }
     rows.push({lab:"厳選",cnt:cnt(sh,sn),rate:rate(sh,sn),roi:roi(sst,sret)});
     const dm=opts.dataM!=null?' data-m="'+opts.dataM+'"':'';
