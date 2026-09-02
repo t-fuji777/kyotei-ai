@@ -238,13 +238,14 @@ def predict_live(ymd, meta, models, sengen):
 
 # race-level fields holding observed data (results/odds/exhibition), attached by
 # the update loop -- these must survive a same-day regeneration (daily's retrain).
-# tk/mt/pt/rs はチェックポイント確定スタンプと見送り理由(first-wins・不変)のため、
-# 同日再生成で必ず引き継ぐ(消えると所属確定が失われる)。
+# tk/mt/pt/rs/att はチェックポイント確定スタンプと見送り理由(first-wins・不変)のため、
+# 同日再生成で必ず引き継ぐ(消えると所属確定が失われる)。att(注目/様子見バッジの打刻)は
+# 2026-09-02導入。導入直後、この一覧への追加漏れでライブ再予測のたびにattが消えていた。
 # os は判定時点の板(締切後に上書きされる odds.t3 と違い不変)。今はデータを貯め始めた
 # 段階で、消費側は docs/index.html の表示のみ。集計側(recompute_sengen/update_results/
 # build_calib)は依然 odds.t3 を読むため、そちらの移行は os が溜まってから行う。
 _OBSERVED_FIELDS = ("result", "odds", "st_ex", "ex", "weather", "wind", "wave",
-                    "tk", "mt", "pt", "rs", "os")
+                    "tk", "mt", "pt", "rs", "os", "att")
 # model-output fields; never re-issue them for a race already gone live
 # (exhibition-based) or finished (its result was scored against those picks).
 _PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "live", "live_at")
