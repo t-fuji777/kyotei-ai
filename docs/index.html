@@ -710,8 +710,9 @@ function renderAcc(acc){
     const dayRows=open?g.list.map(d=>blockRows(dlab2(d.date),d,{})).join(""):"";
     return mrows+dayRows;
   }).join("");
-  // プラン説明はヘッダ右の空き枠(旧カウンタ位置 #senCount)に表示し、表の上に新しい帯は作らない
-  {const sc=$("#senCount");if(sc)sc.innerHTML='<span class="anote">※全R=全レース・上位5点(500円)<br>注目/様子見=当日予測バッジ別の全R内訳(9/2以降は締切15分前確定、以前は保存済み買い目への遡及集計)<br>厳選=5R以降・上位3点・3.1倍以上(300円)</span>';}
+  // 凡例(※全R=…等)はマスターの指示で撤去(2026-09-02)。3行に伸びてヘッダの他要素と
+  // 重なって読めなくなっていた。各行の意味は設定タブの用語説明が担う。
+  // #senCountはタブ切替時の共通クリア処理(renderTab)で空になり、:emptyで非表示。
   m.innerHTML=`<div class="accwrap"><table class="acctbl">
       <colgroup><col style="width:20%"><col style="width:12%"><col style="width:26%"><col style="width:21%"><col style="width:21%"></colgroup>
       ${headRow}${totalRows}${curMonthRows}${todayRows}${curDayRows}${pastRows}
