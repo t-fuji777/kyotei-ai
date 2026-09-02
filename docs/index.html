@@ -34,6 +34,8 @@ header{position:sticky;top:0;z-index:20;background:#0B1B2B;
   padding:calc(10px + env(safe-area-inset-top)) 16px 4px}
 header h1{font-size:18px;font-weight:800;letter-spacing:.04em}
 header h1 span{color:var(--accent)}
+#hdrVer{flex:0 0 auto;font-size:10px;color:var(--dim);font-weight:600;align-self:flex-end;margin:0 0 2px -6px;letter-spacing:0}
+#hdrVer:empty{display:none}
 #hdrDate{color:var(--dim);font-size:12px;margin-top:2px}
 #hdrMeta{color:var(--dim);font-size:11px;margin-top:1.6px;display:block;position:relative}
 #hdrMetaTxt{white-space:pre-line}
@@ -211,7 +213,7 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
 <body>
 <div id="app">
   <header>
-    <div class="hdrtop"><img id="hdrIcon" src="icon-192.png" alt=""><h1>アリ<span>テイ</span></h1><span id="dateNav"></span><span id="senCount" class="num"></span></div>
+    <div class="hdrtop"><img id="hdrIcon" src="icon-192.png" alt=""><h1>アリ<span>テイ</span></h1><span id="hdrVer" class="num"></span><span id="dateNav"></span><span id="senCount" class="num"></span></div>
     <div id="hdrDate" class="num" hidden></div>
     <div id="hdrMeta" class="num"><span id="hdrMetaTxt"></span><div id="hdrChips"></div><span id="todayMeta" class="num"></span></div>
   </header>
@@ -876,14 +878,18 @@ function _screenInfo(){
   }catch(_){return "-";}
 }
 
-// 設定タブ: バージョン表示(sw.jsのCACHE_VERSIONを唯一の出所として取得)と手動更新
+// バージョン表示(sw.jsのCACHE_VERSIONを唯一の出所として取得): ロゴ横(#hdrVer)と
+// 設定タブ(#appVer)の両方を同じ値で埋める。数字はデプロイごとに+1してきた通し番号
+// なので、そのまま改修回数を表す。
 async function _renderAppVer(){
-  const el=document.getElementById("appVer");if(!el)return;
+  const hv=document.getElementById("hdrVer"), el=document.getElementById("appVer");
   try{
     const t=await (await fetch("sw.js",{cache:"no-store"})).text();
     const mv=t.match(/kyotei-ai-v(\d+)/);
-    el.textContent=mv?"v"+mv[1]:"-";
-  }catch(_){el.textContent="-";}
+    const v=mv?"v"+mv[1]:"-";
+    if(el)el.textContent=v;
+    if(hv&&mv)hv.textContent=v;
+  }catch(_){if(el)el.textContent="-";}
 }
 async function _appReload(){
   const b=document.getElementById("appReload");if(b){b.disabled=true;b.textContent="更新中…";}
@@ -1015,6 +1021,7 @@ if("serviceWorker" in navigator){
   // 初回訪問(controller無し)のclaimでは発火してもリロードしない(不要な二重読込を防止)。
   var _hadCtrl=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js");
+  _renderAppVer(); // ロゴ横のバージョンは起動時から表示(設定タブを開かなくても埋まる)
   let _swReloading=false;
   navigator.serviceWorker.addEventListener("controllerchange",()=>{
     if(!_hadCtrl||_swReloading) return; _swReloading=true; location.reload();
