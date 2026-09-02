@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import stamp_plans
+from common import stamp_plans, badge_attention
 from fetch_result import fetch_result, fetch_before_html, parse_before
 from fetch_odds import fetch_odds, fetch_racename, fetch_t3
 
@@ -107,10 +107,18 @@ def do_stamps(pred, now) -> int:
     first-winsで焼き込む。窓を外したものはdo_results側のフォールバックで結果
     確定時に焼く。"""
     n = 0
+    healed = 0
     now_hhmm = now.strftime("%H:%M")
     for v in pred["venues"]:
         for r in v["races"]:
             if "tk" in r:
+                # 自己修復: tk打刻済みなのにatt(注目/様子見バッジ)が無いレースへ補完する。
+                # 導入初日(2026-09-02)の引き継ぎ漏れ由来の欠落救済と、将来のフィールド
+                # 消失事故への恒久保険。tk打刻済みは買い目が凍結され較正表も当日固定の
+                # ため、凍結picksからのbadge_attentionは打刻時点の値と同一(後出しでない)。
+                if r.get("att") is None:
+                    r["att"] = badge_attention(r)
+                    healed += 1
                 continue
             if r.get("result"):
                 continue
@@ -121,7 +129,9 @@ def do_stamps(pred, now) -> int:
             n += 1
     if n:
         print(f"stamps: {n} race(s) checkpointed")
-    return n
+    if healed:
+        print(f"stamps: att healed on {healed} race(s)")
+    return n + healed
 
 
 def do_results(pred, now, ymd, max_fetch=RESULT_MAX_PER_RUN) -> int:
