@@ -124,9 +124,38 @@ def _mins_to_deadline(now, dl):
     return (t - now).total_seconds() / 60
 
 
-def predict_live(ymd, meta, models, sengen):
+def _live_window_has_targets(ymd):
+    """--live-window の事前チェック。モデル・番組表の読込前に latest.json だけで
+    対象の有無を判定し、対象ゼロの毎分呼び出しを数十msで終わらせる。
+    対象: 未決着・未打刻(tk無し)・未live で締切20分前以内のレース。"""
+    latest = ROOT / "docs" / "predictions" / "latest.json"
+    if not latest.exists():
+        return False
+    try:
+        old = json.loads(latest.read_text())
+    except Exception:
+        return False
+    if old.get("date") != ymd or not old.get("venues"):
+        return False
+    now = datetime.now(JST)
+    for v in old["venues"]:
+        for r in v["races"]:
+            if r.get("result") or "tk" in r:
+                continue
+            if r.get("live") and r.get("st_ex"):
+                continue
+            mins = _mins_to_deadline(now, r.get("deadline"))
+            if mins is not None and 0 <= mins <= 20:
+                return True
+    return False
+
+
+def predict_live(ymd, meta, models, sengen, window=False):
     """直前情報(展示タイム·風·波)を取得できたレースのみ再予測し、latest.jsonをin-place更新。
-    既存の結果(result)·オッズ(odds)は保持。再学習不要(モデルは展示特徴を保有)。"""
+    既存の結果(result)·オッズ(odds)は保持。再学習不要(モデルは展示特徴を保有)。
+    window=True(--live-window): 毎分呼び出しの軽量モード。打刻(T-15)前の締切20分前以内・
+    未liveのレースだけを対象にし、展示公開(実測で締切約20分前)から打刻までの約5分の窓を
+    取り切る。従来は10分間隔の重い周回頼みで、打刻の約8割が展示なしの予測のまま確定していた。"""
     import time
     latest = ROOT / "docs" / "predictions" / "latest.json"
     if not latest.exists():
@@ -142,7 +171,8 @@ def predict_live(ymd, meta, models, sengen):
     now = datetime.now(JST)
     LEAD, GRACE, CAP = 20, 4, 80
     nbf = 0
-    for v in old["venues"]:
+    # windowモードは再予測対象だけに絞る(展示バックフィルは毎分のdo_st_exが担う)
+    for v in ([] if window else old["venues"]):
         for r in v["races"]:
             if nbf >= 25:
                 break
@@ -180,10 +210,17 @@ def predict_live(ymd, meta, models, sengen):
         for r in v["races"]:
             if r.get("result"):
                 continue
+            # 打刻済み(tk有り)=販売確定。以後picksを差し替えない(締切15分前確定の約束)。
+            # 従来はこのガードが無く、打刻後のライブ再予測で買い目が入れ替わる事故が
+            # 松候補の26%で起きていた(2026-09-01の精査で判明)。
+            if "tk" in r:
+                continue
             if r.get("live") and r.get("st_ex"):
                 continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None or mins > LEAD or mins < -GRACE:
+                continue
+            if window and mins < 0:
                 continue
             key = (vc, r["no"])
             if key not in card:
@@ -306,8 +343,19 @@ def main():
     ap.add_argument("--date", default=datetime.now(JST).strftime("%Y%m%d"))
     ap.add_argument("--live", action="store_true",
                     help="直前情報(展示)で展示の出たレースのみ再予測")
+    ap.add_argument("--live-window", action="store_true",
+                    help="毎分呼び出し用の軽量ライブ再予測: 打刻(T-15)前・締切20分前以内・未liveのレースのみ")
     a = ap.parse_args()
     ymd = a.date
+
+    if a.live_window:
+        # 対象が無ければモデルも番組表も読まずに即終了(毎分呼ばれるため)
+        if not _live_window_has_targets(ymd):
+            print("live-window: 対象なし")
+            return
+        meta, models, sengen = load_models()
+        predict_live(ymd, meta, models, sengen, window=True)
+        return
 
     meta, models, sengen = load_models()
 

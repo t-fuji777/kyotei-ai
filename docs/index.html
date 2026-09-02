@@ -789,6 +789,27 @@ function renderModel(rep){
       <div class="kv"><span>対象レース数</span><span class="num">${nTotal.toLocaleString()}R</span></div>
       <table><tr><th>表示帯</th><th>直近30日 実測</th><th>全期間 実測</th></tr>${rows||'<tr><td colspan="3">データなし</td></tr>'}</table>`;
   }
+  // 打刻バッジの較正監視: 2026-09-02以降(T-15打刻レジーム)の注目/様子見の実測を、
+  // バッジの約束(注目=較正40%以上)と突き合わせる。遡及集計分(9/1以前)は混ぜない。
+  // n>=100でWilson 95%CIにより判定: 上限<40%なら警告、下限>=40%なら整合、他は保留。
+  {
+    const bdays=((VIEW.acc||{}).days||[]).filter(d=>d.date>="20260902");
+    const an=bdays.reduce((a,d)=>a+(d.att_n||0),0), ah=bdays.reduce((a,d)=>a+(d.att_hit||0),0);
+    const yn=bdays.reduce((a,d)=>a+(d.yos_n||0),0), yh=bdays.reduce((a,d)=>a+(d.yos_hit||0),0);
+    const wil=(h,n,sgn)=>{const z=1.96,p=h/n,dd=1+z*z/n;return (p+z*z/(2*n)+sgn*z*Math.sqrt((p*(1-p)+z*z/(4*n))/n))/dd;};
+    let judge='<span style="color:var(--dim)">蓄積中(n=100から自動判定)</span>';
+    if(an>=100){
+      judge = wil(ah,an,1)<0.40
+        ? '<span style="color:#E5484D;font-weight:700">警告: 注目の実測が40%を有意に下回っています(較正の再確認が必要)</span>'
+        : (wil(ah,an,-1)>=0.40 ? '<span style="color:#1FB97A">整合(実測40%以上を統計的に確認)</span>'
+                               : '<span style="color:var(--dim)">判定保留(40%と統計的に区別できない)</span>');
+    }
+    calibSec+=`<div class="sec" style="margin-top:18px">バッジ実測の監視(締切15分前確定分)</div>
+      <div style="font-size:11px;color:var(--dim);margin:-2px 0 8px">2026-09-02以降に打刻で確定したバッジの実測。「注目=較正40%以上」が実測で保たれているかを自動判定(遡及集計分は含めない)</div>
+      <div class="kv"><span>注目</span><span class="num">${an?`${ah}/${an} (${(ah/an*100).toFixed(1)}%)`:"-"}</span></div>
+      <div class="kv"><span>様子見</span><span class="num">${yn?`${yh}/${yn} (${(yh/yn*100).toFixed(1)}%)`:"-"}</span></div>
+      <div class="kv"><span>判定</span><span class="num">${judge}</span></div>`;
+  }
   const pushSec=PUSH_WORKER?'<div id="pushSec"></div>':`<div class="sec" style="margin-top:14px">通知</div>
     <div class="kv"><span>プッシュ通知</span><span class="num" style="color:var(--dim)">準備中</span></div>
     <div style="font-size:11px;color:var(--dim);margin-top:6px">厳選プランの確定と結果を端末に通知する機能を準備しています。公開時はここでオン/オフできます。</div>`;

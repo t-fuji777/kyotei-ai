@@ -63,6 +63,10 @@ jobs:
             M=$(TZ=Asia/Tokyo date +%M)
             HM=$((10#$H*60 + 10#$M))
             if [ "$HM" -ge 1410 ] || [ "$HM" -lt 420 ]; then echo "outside active hours, exit"; exit 0; fi
+            # 打刻(T-15)前の窓で展示を反映してから確定させる。展示は締切約20分前に
+            # 公開されるため、10分間隔の重い周回だけでは打刻の約8割が展示なしで
+            # 確定していた。対象が無い分には数十msで抜ける軽量モード。
+            python scripts/predict_today.py --live-window || true
             python scripts/update_all.py --results-only || true
             commit_push "auto results"
             NOW=$(date +%s)
