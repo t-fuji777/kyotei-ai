@@ -217,8 +217,10 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
             if act in picks[:10]:
                 day["top10_hit"] += 1
             # 当日予測バッジ(注目/様子見)別の全R実績。打刻値race["att"]のあるレースのみ。
-            # 事後の較正表で再分類すると数字が毎日動く(後出し)ため、過去分は再構成しない。
             # 基準はstake5/return5(TOP5・500円・返還控除)と同一で、両者の合計は全Rの内訳。
+            # 9/1以前の履歴はaccuracy.jsonへ一括遡及済み(2026-09-02、導入時点の較正を
+            # 全日に適用しevaluateで再集計・全81日で公表値と一致を検証)。較正表は毎朝
+            # 変わるため、遡及の再実行は数字を動かす=後出しになる。原則やらないこと。
             if r.get("att") is not None:
                 g = "att" if r["att"] else "yos"
                 day[g + "_n"] += 1
