@@ -32,6 +32,57 @@ SENGEN_EXCLUDE_VENUES = frozenset({3, 4, 14})  # 江戸川/平和島/鳴門(荒�
 SENGEN_MIN_RNO = 5  # 1-4Rはモデル過大評価のため両プラン(竹/松)対象外
 
 
+# 当日予測バッジ(注目/様子見)の実績記録(2026-09-02開始): 較正済みTOP5的中率
+# (docs/calib.json、フロントのcalT5と同一式)が BADGE_MIN_CAL 以上なら注目(att=1)、
+# 未満なら様子見(att=0)。バッジはライブ再予測で日中に動き得るため、T-15打刻時に
+# race["att"]へ焼き込み、実績集計(att_*/yos_*)は打刻値のみを使う(事後集計は後出しになる)。
+BADGE_MIN_CAL = 40
+
+# フロント内蔵のフォールバック較正表(index.htmlの_CAL_FALLBACKと同一値)。
+# calib.jsonが読めない場合のみ使い、バッジ判定がフロント表示とズレないようにする。
+_CAL_T5E = [[7.5, 11.2], [17.5, 20.8], [22.5, 26.1], [27.5, 32.9], [32.5, 39.6],
+            [37.5, 43.9], [42.5, 43.9], [47.5, 43.9], [75, 57.7]]
+_CAL_T5L = [[7.5, 4.6], [17.5, 17.8], [22.5, 21.3], [27.5, 30.3], [32.5, 37.9],
+            [37.5, 43.9], [42.5, 52.2], [47.5, 56.7], [75, 56.7]]
+_CALIB_CACHE = None
+
+
+def _calib_tbl(key):
+    global _CALIB_CACHE
+    if _CALIB_CACHE is None:
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+            _CALIB_CACHE = _json.loads(
+                (_Path(__file__).resolve().parent.parent / "docs" / "calib.json")
+                .read_text(encoding="utf-8"))
+        except Exception:
+            _CALIB_CACHE = {}
+    tbl = _CALIB_CACHE.get(key)
+    return tbl if tbl else {"t5e": _CAL_T5E, "t5l": _CAL_T5L}[key]
+
+
+def cal_pct(p, tbl):
+    """フロントのcalPct(index.html)と同一の折れ線補間。丸めはJSのMath.round
+    (0.5は常に切り上げ)に合わせてfloor(x+0.5)を使う(Pythonのround()は偶数丸めでズレる)。"""
+    import math
+    x = p * 100.0
+    if x <= tbl[0][0]:
+        return math.floor(tbl[0][1] * x / tbl[0][0] + 0.5)
+    for i in range(1, len(tbl)):
+        if x <= tbl[i][0]:
+            a, b = tbl[i - 1], tbl[i]
+            return math.floor(a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]) + 0.5)
+    return math.floor(tbl[-1][1] + 0.5)
+
+
+def badge_attention(race):
+    """注目=1/様子見=0。フロントのactLbl(calT5>=40。1-4Rはt5e表、5R以降はt5l表)と同一判定。"""
+    top5p = sum((p.get("p") or 0) for p in (race.get("picks") or [])[:5])
+    tbl = _calib_tbl("t5e" if (race.get("no") or 12) <= 4 else "t5l")
+    return 1 if cal_pct(top5p, tbl) >= BADGE_MIN_CAL else 0
+
+
 def sengen_top3p(picks):
     return sum((p.get("p") or 0) for p in (picks or [])[:3])
 
@@ -144,6 +195,10 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None):
 
     # 松プランは終売(2026-09-01)。新規レースは常にmt=0を焼き込む。
     race["mt"] = 0
+
+    # 当日予測バッジ(注目/様子見)も同時に焼き込む(first-winsはtkと共有)。
+    # 実績表のバッジ別集計はこの打刻値だけを使う。
+    race["att"] = badge_attention(race)
 
     if now_hhmm:
         race["pt"] = now_hhmm

@@ -179,7 +179,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
-th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:2px 3px;line-height:1.35;overflow-wrap:break-word;border-bottom:0}.acctbl tr.stkrow:first-child th{padding:6px 3px 4px}.acctbl tr.blast>th,.acctbl tr.blast>td{box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.dcell{vertical-align:middle;text-align:center;box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.plab{color:var(--dim);font-weight:700}
+th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:2px 3px;line-height:1.35;overflow-wrap:break-word;border-bottom:0}.acctbl tr.stkrow:first-child th{padding:6px 3px 4px}.acctbl tr.blast>th,.acctbl tr.blast>td{box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.dcell{vertical-align:middle;text-align:center;box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.plab{color:var(--dim);font-weight:700;white-space:nowrap}
 .acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background-color:var(--bg);border-bottom:0}.acctbl tr.tblk>th,.acctbl tr.tblk>td{background-color:var(--surface)}.acctbl tr.pmid>td{background-image:repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px),repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px);background-position:left top,left bottom;background-size:100% 1px,100% 1px;background-repeat:no-repeat}.acctbl tr.stkend>th,.acctbl tr.stkend>td{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl td.dcell.dend{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl tr.mrow{cursor:pointer}
 #senCount .anote{grid-column:1/-1;text-align:right;font-size:8px;line-height:1.45;font-weight:400;color:var(--dim);white-space:nowrap}
 .pad{padding:0 16px}
@@ -289,7 +289,9 @@ const calT5=r=>calPct(top5p(r),_tb(r.no<=4?"t5e":"t5l"));
 // 全レース(当日予測)のバッジは「行動の推奨」を2段階で表示する。
 // 注目=較正40%以上(買うか検討する価値。結果の約束は含まない語) / 様子見=それ以外。
 // 旧「勝負」(厳選条件そのもの)は有料プランの選定を無料タブに漏らすため廃止。
-const actLbl=r=>calT5(r)>=40?"注目":"様子見";
+// T-15打刻(r.att)があればそれを最優先(打刻後にライブ再予測で確率が動いても表示と
+// 実績集計が食い違わないように)。打刻前は従来通りその時点の較正値で判定する。
+const actLbl=r=>r.att!=null?(r.att?"注目":"様子見"):(calT5(r)>=40?"注目":"様子見");
 // 全レースバッジ専用配色(厳選の%バッジの金/青/灰と混同しないよう別系統): 注目=紫/様子見=沈色
 const actCls=v=>v==="注目"?"actR":"actM";
 const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l"));
@@ -605,12 +607,14 @@ function renderToday(){
 
 function todayStats(){
   if(!pred||!pred.venues) return null;
-  let n=0,w=0,t1=0,t6=0,sn=0,sh=0,st=0,rt=0,sp=0,tp=0,sst=0,sret=0;
+  let n=0,w=0,t1=0,t6=0,sn=0,sh=0,st=0,rt=0,sp=0,tp=0,sst=0,sret=0,an=0,ah=0,ast=0,aret=0,yn=0,yh=0,yst=0,yret=0;
   for(const v of pred.venues)for(const r of v.races){const x=r.result;if(!x||x.status)continue;
     n++;if(x.hit_win)w++;const p5=top5p(r);tp+=p5;
     if(r.picks&&r.picks[0]&&r.picks[0].c===x.order)t1++;
     if(t5hit(r)){t6++;rt+=(x.pay3t||0)}st+=500;
-    if(sengenOk(r,v.code)){sn++;sp+=top3p(r);if(t3hit(r))sh++;sst+=300;if(t3hit(r))sret+=(x.pay3t||0);}}
+    if(sengenOk(r,v.code)){sn++;sp+=top3p(r);if(t3hit(r))sh++;sst+=300;if(t3hit(r))sret+=(x.pay3t||0);}
+    // バッジ別(注目/様子見)の全R速報。T-15打刻(r.att)のあるレースのみ(集計側と同一基準)
+    if(r.att!=null){if(r.att){an++;ast+=500;if(t5hit(r)){ah++;aret+=(x.pay3t||0);}}else{yn++;yst+=500;if(t5hit(r)){yh++;yret+=(x.pay3t||0);}}}}
   if(!n) return null;
   const sen=sn?Math.round(sh/sn*100)+"%("+sh+"/"+sn+")":"-";
   const row=`<tr><td class="num">本日<span style="color:var(--dim);font-size:9px">速報</span></td>
@@ -618,7 +622,8 @@ function todayStats(){
     <td class="num">${Math.round(t6/n*100)}%</td><td class="num">${sen}</td>
     <td class="num">${st?Math.round(rt/st*100):0}%</td></tr>`;
   // 松は終売(2026-09-01)のため本日速報はprm系を常に0で返す(松は表示からも全撤去済み)。
-  return {row,n,win_hit:w,top1_hit:t1,top5_hit:t6,sen_n:sn,sen_hit:sh,sen_pred_sum:sp,top5_pred_sum:tp,prm_n:0,prm_hit:0,prm_pred_sum:0,stake5:st,return5:rt,sen_stake:sst,sen_ret:sret,prm_stake:0,prm_ret:0};
+  return {row,n,win_hit:w,top1_hit:t1,top5_hit:t6,sen_n:sn,sen_hit:sh,sen_pred_sum:sp,top5_pred_sum:tp,prm_n:0,prm_hit:0,prm_pred_sum:0,stake5:st,return5:rt,sen_stake:sst,sen_ret:sret,prm_stake:0,prm_ret:0,
+    att_n:an,att_hit:ah,att_stake:ast,att_ret:aret,yos_n:yn,yos_hit:yh,yos_stake:yst,yos_ret:yret};
 }
 function renderAcc(acc){
   const m=$("#main");
@@ -626,9 +631,9 @@ function renderAcc(acc){
   const days=(acc&&acc.days)?acc.days:[];
   const t0=(acc&&acc.total)?acc.total:null;
   const dup=pred&&days.some(d=>String(d.date)===String(pred.date));
-  const tj=(td&&!dup)?{races:td.n,top1_hit:td.top1_hit,top5_hit:td.top5_hit,sen_n:td.sen_n,sen_hit:td.sen_hit,prm_n:td.prm_n,prm_hit:td.prm_hit,stake5:td.stake5,return5:td.return5,sen_stake:td.sen_stake||0,sen_ret:td.sen_ret||0,prm_stake:td.prm_stake||0,prm_ret:td.prm_ret||0}:null;
+  const tj=(td&&!dup)?{races:td.n,top1_hit:td.top1_hit,top5_hit:td.top5_hit,sen_n:td.sen_n,sen_hit:td.sen_hit,prm_n:td.prm_n,prm_hit:td.prm_hit,stake5:td.stake5,return5:td.return5,sen_stake:td.sen_stake||0,sen_ret:td.sen_ret||0,prm_stake:td.prm_stake||0,prm_ret:td.prm_ret||0,att_n:td.att_n||0,att_hit:td.att_hit||0,att_stake:td.att_stake||0,att_ret:td.att_ret||0,yos_n:td.yos_n||0,yos_hit:td.yos_hit||0,yos_stake:td.yos_stake||0,yos_ret:td.yos_ret||0}:null;
   let tt=t0;
-  if(t0&&tj)tt={races:(t0.races||0)+tj.races,top1_hit:(t0.top1_hit||0)+tj.top1_hit,top5_hit:(t0.top5_hit||0)+tj.top5_hit,sen_n:(t0.sen_n||0)+tj.sen_n,sen_hit:(t0.sen_hit||0)+tj.sen_hit,prm_n:(t0.prm_n||0)+(tj.prm_n||0),prm_hit:(t0.prm_hit||0)+(tj.prm_hit||0),stake5:(t0.stake5||0)+tj.stake5,return5:(t0.return5||0)+tj.return5,sen_stake:(t0.sen_stake||0)+(tj.sen_stake||0),sen_ret:(t0.sen_ret||0)+(tj.sen_ret||0),prm_stake:(t0.prm_stake||0)+(tj.prm_stake||0),prm_ret:(t0.prm_ret||0)+(tj.prm_ret||0)};
+  if(t0&&tj)tt={races:(t0.races||0)+tj.races,top1_hit:(t0.top1_hit||0)+tj.top1_hit,top5_hit:(t0.top5_hit||0)+tj.top5_hit,sen_n:(t0.sen_n||0)+tj.sen_n,sen_hit:(t0.sen_hit||0)+tj.sen_hit,prm_n:(t0.prm_n||0)+(tj.prm_n||0),prm_hit:(t0.prm_hit||0)+(tj.prm_hit||0),stake5:(t0.stake5||0)+tj.stake5,return5:(t0.return5||0)+tj.return5,sen_stake:(t0.sen_stake||0)+(tj.sen_stake||0),sen_ret:(t0.sen_ret||0)+(tj.sen_ret||0),prm_stake:(t0.prm_stake||0)+(tj.prm_stake||0),prm_ret:(t0.prm_ret||0)+(tj.prm_ret||0),att_n:(t0.att_n||0)+(tj.att_n||0),att_hit:(t0.att_hit||0)+(tj.att_hit||0),att_stake:(t0.att_stake||0)+(tj.att_stake||0),att_ret:(t0.att_ret||0)+(tj.att_ret||0),yos_n:(t0.yos_n||0)+(tj.yos_n||0),yos_hit:(t0.yos_hit||0)+(tj.yos_hit||0),yos_stake:(t0.yos_stake||0)+(tj.yos_stake||0),yos_ret:(t0.yos_ret||0)+(tj.yos_ret||0)};
   else if(!t0)tt=tj;
   if(!tt||!tt.races){m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;}
   // 日別ラベル「3日(月)」形式(先頭ゼロ無しの日+曜)。曜日算出は旧dlabのロジックを流用。
@@ -651,8 +656,8 @@ function renderAcc(acc){
     return '<span style="white-space:nowrap">'+yy+'年'+mm+'月<span style="color:var(--dim);font-size:8px">'+(open?'▲':'▼')+'</span></span>';
   };
   const sumMonth=list=>{
-    const s={races:0,top5_hit:0,sen_n:0,sen_hit:0,prm_n:0,prm_hit:0,stake5:0,return5:0,sen_stake:0,sen_ret:0,prm_stake:0,prm_ret:0};
-    list.forEach(d=>{s.races+=d.races||0;s.top5_hit+=d.top5_hit||0;s.sen_n+=d.sen_n||0;s.sen_hit+=d.sen_hit||0;s.prm_n+=d.prm_n||0;s.prm_hit+=d.prm_hit||0;s.stake5+=d.stake5||0;s.return5+=d.return5||0;s.sen_stake+=d.sen_stake||0;s.sen_ret+=d.sen_ret||0;s.prm_stake+=d.prm_stake||0;s.prm_ret+=d.prm_ret||0;});
+    const s={races:0,top5_hit:0,sen_n:0,sen_hit:0,prm_n:0,prm_hit:0,stake5:0,return5:0,sen_stake:0,sen_ret:0,prm_stake:0,prm_ret:0,att_n:0,att_hit:0,att_stake:0,att_ret:0,yos_n:0,yos_hit:0,yos_stake:0,yos_ret:0};
+    list.forEach(d=>{s.races+=d.races||0;s.top5_hit+=d.top5_hit||0;s.sen_n+=d.sen_n||0;s.sen_hit+=d.sen_hit||0;s.prm_n+=d.prm_n||0;s.prm_hit+=d.prm_hit||0;s.stake5+=d.stake5||0;s.return5+=d.return5||0;s.sen_stake+=d.sen_stake||0;s.sen_ret+=d.sen_ret||0;s.prm_stake+=d.prm_stake||0;s.prm_ret+=d.prm_ret||0;s.att_n+=d.att_n||0;s.att_hit+=d.att_hit||0;s.att_stake+=d.att_stake||0;s.att_ret+=d.att_ret||0;s.yos_n+=d.yos_n||0;s.yos_hit+=d.yos_hit||0;s.yos_stake+=d.yos_stake||0;s.yos_ret+=d.yos_ret||0;});
     return s;
   };
   // プラン=行のブロック共通ビルダー: labelHTML(rowspanの日付/月セル)+全・厳選の2行分の<tr>を返す。
@@ -666,17 +671,23 @@ function renderAcc(acc){
     const cnt=(h,n)=>n?h+"/"+n:"-";
     const rate=(h,n)=>n?(h/n*100).toFixed(1)+"%":"-";
     const roi=(st,rt)=>st?Math.round((rt||0)/st*100)+"%":"-";
-    const rows=[
-      {lab:"全R",cnt:cnt(t5,races),rate:rate(t5,races),roi:roi(st5,rt5)},
-      {lab:"厳選",cnt:cnt(sh,sn),rate:rate(sh,sn),roi:roi(sst,sret)}
-    ];
+    const an=X.att_n||0,ah=X.att_hit||0,ast=X.att_stake||0,aret=X.att_ret||0;
+    const yn=X.yos_n||0,yh=X.yos_hit||0,yst=X.yos_stake||0,yret=X.yos_ret||0;
+    const rows=[{lab:"全R",cnt:cnt(t5,races),rate:rate(t5,races),roi:roi(st5,rt5)}];
+    // 注目/様子見はT-15打刻(2026-09-02開始)のあるレースのみ集計されるため、
+    // データのある期間だけ2行を挿入する(過去分は打刻が無く再構成もしない)。
+    if(an+yn>0||ast+yst>0){
+      rows.push({lab:"注目",cnt:cnt(ah,an),rate:rate(ah,an),roi:roi(ast,aret)});
+      rows.push({lab:"様子見",cnt:cnt(yh,yn),rate:rate(yh,yn),roi:roi(yst,yret)});
+    }
+    rows.push({lab:"厳選",cnt:cnt(sh,sn),rate:rate(sh,sn),roi:roi(sst,sret)});
     const dm=opts.dataM!=null?' data-m="'+opts.dataM+'"':'';
     const last=rows.length-1;
     return rows.map((row,i)=>{
       const cls=(opts.cls?opts.cls+" ":"")+(i===last?"blast"+(opts.lastCls?" "+opts.lastCls:""):(i>0?"pmid":""));
       const clsAttr=cls.trim()?' class="'+cls.trim()+'"':'';
       const dcell=i===0?'<td rowspan="'+rows.length+'" class="dcell'+(opts.dcellCls?" "+opts.dcellCls:"")+'">'+labelHTML+'</td>':'';
-      return '<tr'+clsAttr+dm+'>'+dcell+'<td class="plab">'+row.lab+'</td><td class="num">'+row.cnt+'</td><td class="num">'+row.rate+'</td><td class="num">'+row.roi+'</td></tr>';
+      return '<tr'+clsAttr+dm+'>'+dcell+'<td class="plab"'+(row.lab.length>2?' style="font-size:10.5px"':'')+'>'+row.lab+'</td><td class="num">'+row.cnt+'</td><td class="num">'+row.rate+'</td><td class="num">'+row.roi+'</td></tr>';
     }).join("");
   };
   const headRow='<tr class="stkrow blast"><th>日付</th><th>プラン</th><th>的中/件数</th><th>的中率</th><th>回収率</th></tr>';
@@ -698,7 +709,7 @@ function renderAcc(acc){
     return mrows+dayRows;
   }).join("");
   // プラン説明はヘッダ右の空き枠(旧カウンタ位置 #senCount)に表示し、表の上に新しい帯は作らない
-  {const sc=$("#senCount");if(sc)sc.innerHTML='<span class="anote">※全R=全レース・上位5点(500円)<br>厳選=5R以降・上位3点・3.1倍以上(300円)</span>';}
+  {const sc=$("#senCount");if(sc)sc.innerHTML='<span class="anote">※全R=全レース・上位5点(500円)<br>注目/様子見=当日予測バッジ別の全R内訳(2026-09-02から記録)<br>厳選=5R以降・上位3点・3.1倍以上(300円)</span>';}
   m.innerHTML=`<div class="accwrap"><table class="acctbl">
       <colgroup><col style="width:20%"><col style="width:12%"><col style="width:26%"><col style="width:21%"><col style="width:21%"></colgroup>
       ${headRow}${totalRows}${curMonthRows}${todayRows}${curDayRows}${pastRows}
@@ -797,7 +808,7 @@ function renderModel(rep){
     <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}`
     :'<div class="note">モデル情報がありません。<br>学習完了後に表示されます。</div>';
   const terms=[
-    ["判断(注目/様子見)","全レースに付く参考判断。過去実測に較正した的中率(TOP5)が40%以上なら「注目」、未満なら「様子見」。"],
+    ["判断(注目/様子見)","全レースに付く参考判断。過去実測に較正した的中率(TOP5)が40%以上なら「注目」、未満なら「様子見」。締切15分前に確定し以後変わらない。バッジ別の実績は的中実績タブに掲載(確定方式にした2026-09-02からの記録で、それ以前は遡って作らない)。"],
     ["的中率の%バッジ","AIの自己申告ではなく、過去全レースの実測的中率に補正(較正)した数値。金色は50%以上。下の「表示的中率の検証」で実測との一致を毎朝確認している。"],
     ["候補","厳選プランの確率条件を満たし、締切15分前の最終判定(オッズ条件)を待っているレース。数値はまだ確定していない。「確定予定」に判定が行われる時刻を表示する。"],
     ["確定","締切15分前の時点でプラン対象に確定したレース。確定した内容と時刻はデータに記録され、以後の後出し変更はできない。"],

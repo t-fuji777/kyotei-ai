@@ -126,7 +126,11 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
            "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0,
            "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0,
            # 的中したのに購入額を下回った回数(recompute_sengen.pyと同一定義)
-           "sen_hitloss": 0, "prm_hitloss": 0}
+           "sen_hitloss": 0, "prm_hitloss": 0,
+           # 当日予測バッジ別の全R実績(注目=att/様子見=yos)。T-15打刻のrace["att"]が
+           # あるレースのみ対象(2026-09-02打刻開始。過去分は打刻が無く集計しない)
+           "att_n": 0, "att_hit": 0, "att_stake": 0, "att_ret": 0,
+           "yos_n": 0, "yos_hit": 0, "yos_stake": 0, "yos_ret": 0}
     for v in pred.get("venues", []):
         for r in v["races"]:
             key = (v["code"], r["no"])
@@ -212,6 +216,16 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 day["return6"] += pays.get(key, 0)
             if act in picks[:10]:
                 day["top10_hit"] += 1
+            # 当日予測バッジ(注目/様子見)別の全R実績。打刻値race["att"]のあるレースのみ。
+            # 事後の較正表で再分類すると数字が毎日動く(後出し)ため、過去分は再構成しない。
+            # 基準はstake5/return5(TOP5・500円・返還控除)と同一で、両者の合計は全Rの内訳。
+            if r.get("att") is not None:
+                g = "att" if r["att"] else "yos"
+                day[g + "_n"] += 1
+                day[g + "_stake"] += 100 * sum(1 for c in picks[:5] if _combo_ok(c))
+                if act in picks[:5]:
+                    day[g + "_hit"] += 1
+                    day[g + "_ret"] += pays.get(key, 0)
     return day
 
 
@@ -242,7 +256,9 @@ def main():
              "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
              "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0,
              "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0,
-             "sen_hitloss": 0, "prm_hitloss": 0}
+             "sen_hitloss": 0, "prm_hitloss": 0,
+             "att_n": 0, "att_hit": 0, "att_stake": 0, "att_ret": 0,
+             "yos_n": 0, "yos_hit": 0, "yos_stake": 0, "yos_ret": 0}
         for d in acc["days"]:
             for k in t:
                 t[k] += d.get(k, 0)
