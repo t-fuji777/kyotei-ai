@@ -670,9 +670,9 @@ function renderAcc(acc){
     X=X||{};opts=opts||{};
     const races=X.races||0,t5=X.top5_hit||0,st5=X.stake5||0,rt5=X.return5||0;
     const sn=X.sen_n||0,sh=X.sen_hit||0,sst=X.sen_stake||0,sret=X.sen_ret||0;
-    const cnt=(h,n)=>n?h+"/"+n:"-";
+    const cnt=(h,n)=>n?h.toLocaleString()+"/"+n.toLocaleString():"-";
     const rate=(h,n)=>n?(h/n*100).toFixed(1)+"%":"-";
-    const roi=(st,rt)=>st?Math.round((rt||0)/st*100)+"%":"-";
+    const roi=(st,rt)=>st?((rt||0)/st*100).toFixed(1)+"%":"-";
     const an=X.att_n||0,ah=X.att_hit||0,ast=X.att_stake||0,aret=X.att_ret||0;
     const yn=X.yos_n||0,yh=X.yos_hit||0,yst=X.yos_stake||0,yret=X.yos_ret||0;
     const rows=[{lab:"全R",cnt:cnt(t5,races),rate:rate(t5,races),roi:roi(st5,rt5)}];
