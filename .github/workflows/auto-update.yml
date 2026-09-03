@@ -95,6 +95,11 @@ jobs:
             commit_push "auto results"
             NOW=$(date +%s)
             if [ $(( NOW - HEAVY_AT )) -ge 600 ]; then
+              # 重い周回のupdate_all(full)は内部で打刻も行うため、その直前にも展示反映の
+              # 先回りを入れる。これが無いと、fullのタイミングでT-15を跨いだレースが
+              # 展示なしで確定し、打刻後差し替え禁止ガードにより以後修正不能になる
+              # (2026-09-03実測: この経路の欠落で展示反映済み打刻が38%止まりだった)。
+              python scripts/predict_today.py --live-window || true
               python scripts/update_all.py || true
               python scripts/update_all.py --results-only || true
               commit_push "auto results"
