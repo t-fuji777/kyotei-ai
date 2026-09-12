@@ -203,8 +203,17 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None):
     if now_hhmm:
         race["pt"] = now_hhmm
 
-    if tk != 1 and "rs" not in race and take_quasi and take_below:
-        race["rs"] = f"3.1倍未満 {min(take_below):.1f}倍"
+    if tk != 1 and "rs" not in race:
+        if take_quasi and take_below:
+            race["rs"] = f"3.1倍未満 {min(take_below):.1f}倍"
+        elif race.get("qc") and not take_quasi:
+            # 確率ドリフトによる脱落。朝に「候補」として画面に出したレースが、
+            # 展示反映のライブ再予測でTOP3合計確率が閾値(0.36)を割り、打刻時には
+            # 候補ですらなくなった場合。理由を書かないと候補が痕跡なく消え、
+            # 「都合の悪いレースを無かったことにした」のと見分けがつかない
+            # (2026-09-12の多摩川8Rで発覚。10日で朝の候補9件中2件が該当していた)。
+            # qc/qp は do_stamps が毎周回で焼き込む「候補として公開した証跡」。
+            race["rs"] = f"確率低下 {race['qp'] * 100:.0f}%→{top3p * 100:.0f}%"
 
 
 def zen2han(s: str) -> str:

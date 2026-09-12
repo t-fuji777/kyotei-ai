@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import stamp_plans, badge_attention
+from common import stamp_plans, badge_attention, sengen_top3p, is_sengen
 from fetch_result import fetch_result, fetch_before_html, parse_before
 from fetch_odds import fetch_odds, fetch_racename, fetch_t3
 
@@ -122,6 +122,15 @@ def do_stamps(pred, now) -> int:
                 continue
             if r.get("result"):
                 continue
+            # 候補として公開した証跡(qc/qp)をfirst-winsで焼き込む。厳選一覧は打刻前の
+            # レースを「候補」として表示するため、一度でも確率条件を満たしたレースは
+            # 公開済みとして記録し、後で条件を外れたら見送り理由を書けるようにする
+            # (書かないと候補が痕跡なく消える。2026-09-12発覚)。
+            if "qc" not in r:
+                _p3 = sengen_top3p(r.get("picks") or [])
+                if is_sengen(_p3, v["code"], r["no"]):
+                    r["qc"] = 1
+                    r["qp"] = round(_p3, 4)
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None or mins > STAMP_LEAD_MIN or mins < -STAMP_LATE_MAX:
                 continue

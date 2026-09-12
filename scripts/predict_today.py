@@ -282,7 +282,7 @@ def predict_live(ymd, meta, models, sengen, window=False):
 # 段階で、消費側は docs/index.html の表示のみ。集計側(recompute_sengen/update_results/
 # build_calib)は依然 odds.t3 を読むため、そちらの移行は os が溜まってから行う。
 _OBSERVED_FIELDS = ("result", "odds", "st_ex", "ex", "weather", "wind", "wave",
-                    "tk", "mt", "pt", "rs", "os", "att")
+                    "tk", "mt", "pt", "rs", "os", "att", "qc", "qp")
 # model-output fields; never re-issue them for a race already gone live
 # (exhibition-based) or finished (its result was scored against those picks).
 _PICK_FIELDS = ("picks", "boats", "conf", "fuku", "sengen", "live", "live_at")
