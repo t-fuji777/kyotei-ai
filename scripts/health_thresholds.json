@@ -1,0 +1,16 @@
+{
+  "_note": "健全実測レンジ(2026-06〜09, 93日): wp_med 0.515-0.6045 / p1_med 0.0708-0.0863 / top3_med 0.1926-0.22375 / conf_C比率 0.4226-0.6667。2026-06-12の退化実測: 0.2695 / 0.027 / 0.073 / 1.00。下限は健全下限から約5%の安全マージンを取った値。",
+  "wp_med_min": 0.50,
+  "p1_med_min": 0.065,
+  "top3_med_min": 0.185,
+  "conf_c_ratio_max": 0.80,
+  "degrade_crit_hits": 2,
+  "late_warn_hhmm": "10:30",
+  "late_crit_hhmm": "16:00",
+  "morning_gate_hhmm": "09:00",
+  "races_per_venue_expect": 12,
+  "wp_sum_tol": 0.002,
+  "picks_len_expect": 10,
+  "struct_bad_ratio_max": 0.10,
+  "worker_dispatch_stale_hours": 36
+}
