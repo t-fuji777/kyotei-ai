@@ -1,0 +1,204 @@
+name: watchdog
+# 朝の予測が公開されているかをGitHubの中から独立に監視し、欠落していれば
+# daily を起動して復旧させ、それでも駄目ならIssue起票とジョブ失敗で通知する。
+#
+# 経緯(2026-09-12の監査):
+#   - これまで最終防衛線だったのはClaudeデスクトップアプリのスケジュールタスクで、
+#     アプリが開いている間しか動かなかった。それをGitHub側へ移したのがこのワークフロー。
+#   - 外部トリガのCloudflare Worker(kyotei-ai-trigger)は2026-09-08を最後に停止し、
+#     誰にも知らされないまま朝の公開が約2時間遅れる状態が続いていた。その死活も見る。
+#   - 既存のdaily/auto-updateは一切変更していない。このワークフローは検知と起動だけを行い、
+#     リポジトリへの書き込みは行わない(contents: read)。
+on:
+  workflow_dispatch:
+  schedule:
+    # このリポジトリのschedule配信は恒常的に約110分遅延している(2026-09-12実測)。
+    # 名目時刻ではなく「着弾する実効時刻」で設計する。
+    - cron: "11 22 * * *"   # 名目 JST 07:11 → 実効 09時台(朝の判定ゲート直後)
+    - cron: "11 1 * * *"    # 名目 JST 10:11 → 実効 12時台
+    - cron: "11 5 * * *"    # 名目 JST 14:11 → 実効 16時台
+permissions:
+  contents: read
+  issues: write
+  actions: write
+concurrency:
+  group: watchdog
+  cancel-in-progress: false
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      NOTIFY_WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK }}
+      NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
+      PUSH_SUBS_URL: ${{ vars.PUSH_SUBS_URL }}
+      PUSH_AUTH_KEY: ${{ secrets.PUSH_AUTH_KEY }}
+      VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # healthcheck.py は標準ライブラリのみ。pip install しないのは、依存の失敗で
+      # 監視そのものが落ちる(=無音になる)経路を作らないため。
+      - name: 公開JSONの健全性を判定
+        id: check
+        run: |
+          set +e
+          python scripts/healthcheck.py --source url --json > health.json
+          CODE=$?
+          set -e
+          cat health.json
+          LEVEL=$(jq -r '.level' health.json)
+          echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          {
+            echo "### 公開JSONの判定: \`$LEVEL\`"
+            echo ''
+            echo "- date: \`$(jq -r '.date' health.json)\`"
+            echo "- generated_at: \`$(jq -r '.generated_at' health.json)\`"
+            echo "- venues: \`$(jq -r '.venues' health.json)\` / races: \`$(jq -r '.metrics.races' health.json)\`"
+            jq -r '.criticals[]? | "- critical: " + .' health.json
+            jq -r '.warnings[]?  | "- warning : " + .' health.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Cloudflare Worker(kyotei-ai-trigger)の心拍。定刻dispatchが途絶えたこと自体を
+      # 検知する。2026-09-08の停止が3日以上誰にも気づかれなかったのはこの目が無かったため。
+      - name: 外部トリガ(Cloudflare Worker)の死活を確認
+        id: worker
+        run: |
+          STALE_H=$(jq -r '.worker_dispatch_stale_hours' scripts/health_thresholds.json)
+          LAST=$(gh api "repos/$REPO/actions/workflows/daily.yml/runs?event=workflow_dispatch&per_page=1" \
+                   --jq '.workflow_runs[0].created_at // empty')
+          if [ -z "$LAST" ]; then
+            echo "stale=true"  >> "$GITHUB_OUTPUT"
+            echo "age_h=never"  >> "$GITHUB_OUTPUT"
+            echo "- Worker: 定刻dispatchの記録が1件も無い" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          AGE_H=$(( ( $(date -u +%s) - $(date -u -d "$LAST" +%s) ) / 3600 ))
+          echo "age_h=$AGE_H" >> "$GITHUB_OUTPUT"
+          if [ "$AGE_H" -gt "$STALE_H" ]; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "- Worker最終dispatch: $LAST (${AGE_H}時間前 / 閾値 ${STALE_H}h)" >> "$GITHUB_STEP_SUMMARY"
+
+      # 暴走防止: 既にdailyが走っている、または直近90分に2回以上完走している場合は撃たない。
+      - name: 復旧のため daily を起動
+        id: heal
+        if: steps.check.outputs.level == 'critical'
+        run: |
+          CUT=$(date -u -d '90 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+          RUNS=$(gh api "repos/$REPO/actions/workflows/daily.yml/runs?per_page=30" \
+                   --jq "[.workflow_runs[] | select(.created_at > \"$CUT\")]")
+          BUSY=$(echo "$RUNS" | jq '[.[] | select(.status != "completed")] | length')
+          DONE=$(echo "$RUNS" | jq '[.[] | select(.status == "completed")] | length')
+          echo "直近90分: 実行中=$BUSY 完了=$DONE"
+          if [ "$BUSY" -gt 0 ]; then
+            echo "dispatched=skip-busy" >> "$GITHUB_OUTPUT"
+            echo "daily が実行中なので起動しない(完了を待つ)"
+            exit 0
+          fi
+          if [ "$DONE" -ge 2 ]; then
+            echo "dispatched=skip-loop" >> "$GITHUB_OUTPUT"
+            echo "直近90分で2回完走済み。暴走防止のため起動しない"
+            exit 0
+          fi
+          gh workflow run daily.yml --ref main
+          echo "dispatched=true" >> "$GITHUB_OUTPUT"
+
+      # 公開URLはGitHub Pagesのデプロイ待ちで数分遅れるため、復旧確認は origin/main の
+      # 実ファイルで行う(コミットされた時点で判定できる)。
+      - name: 復旧を確認
+        id: recheck
+        if: steps.check.outputs.level == 'critical'
+        run: |
+          echo "recovered=false" >> "$GITHUB_OUTPUT"
+          for i in $(seq 1 20); do
+            sleep 60
+            git fetch origin main -q || continue
+            git show origin/main:docs/predictions/latest.json > /tmp/latest.json 2>/dev/null || continue
+            set +e
+            python scripts/healthcheck.py --source local --file /tmp/latest.json --quiet
+            CODE=$?
+            set -e
+            if [ "$CODE" -le 1 ]; then
+              echo "${i}分後に復旧を確認 (healthcheck=$CODE)"
+              sed -i 's/^recovered=false$/recovered=true/' "$GITHUB_OUTPUT"
+              python scripts/healthcheck.py --source local --file /tmp/latest.json
+              exit 0
+            fi
+          done
+          echo "20分待っても復旧せず"
+
+      - name: 異常をIssueに起票
+        id: issue
+        if: >-
+          always() &&
+          ((steps.check.outputs.level == 'critical' && steps.recheck.outputs.recovered != 'true')
+           || steps.worker.outputs.stale == 'true')
+        run: |
+          YMD=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          TITLE="[アリテイ] 朝次処理の異常 $YMD"
+          BODY=$(mktemp)
+          {
+            echo "watchdog が異常を検知しました。"
+            echo ""
+            echo "## 公開JSONの判定"
+            echo '```'
+            jq -r '"level: " + .level, "date: " + (.date|tostring), "generated_at: " + (.generated_at|tostring)' health.json
+            jq -r '.criticals[]? | "critical: " + .' health.json
+            jq -r '.warnings[]?  | "warning : " + .' health.json
+            echo '```'
+            echo ""
+            echo "## 外部トリガ(Cloudflare Worker)"
+            echo "最終dispatchからの経過: ${{ steps.worker.outputs.age_h }} 時間 (stale=${{ steps.worker.outputs.stale }})"
+            echo ""
+            echo "## 復旧の試行"
+            echo "daily の起動: ${{ steps.heal.outputs.dispatched }}"
+            echo "15分以内の復旧: ${{ steps.recheck.outputs.recovered }}"
+            echo ""
+            echo "## 対処"
+            echo "1. まず Actions タブ > watchdog > Run workflow を押す(多くの場合これで直る)。"
+            echo "2. 直らなければ Actions タブで daily の直近の実行ログを開き、赤いステップを見る。"
+            echo "3. Worker が stale=true のときは https://dash.cloudflare.com の"
+            echo "   Workers & Pages > kyotei-ai-trigger > Logs を見る。"
+            echo "   実行記録が無ければ Cloudflare 側の cron 不発火、401/403 が並んでいれば GitHub トークンの失効。"
+            echo ""
+            echo "実行: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > "$BODY"
+
+          gh label create pipeline-alert --color B60205 --description "朝次処理の異常" 2>/dev/null || true
+          NUM=$(gh issue list --label pipeline-alert --state open --json number,title \
+                  --jq "[.[] | select(.title | contains(\"$YMD\"))] | .[0].number // empty")
+          if [ -z "$NUM" ]; then
+            # Issueの新規作成はリポジトリ所有者にメールで届く。これが設定ゼロで通知が出る経路。
+            gh issue create --title "$TITLE" --label pipeline-alert --body-file "$BODY"
+          elif [ "${{ steps.check.outputs.level }}" = "critical" ]; then
+            gh issue comment "$NUM" --body-file "$BODY"
+            echo "既存Issue #$NUM にコメントを追記"
+          else
+            # Worker停止のみで当日Issueが既にある場合は、同じ内容を連投しない
+            echo "既存Issue #$NUM に記載済みのためコメントしない"
+          fi
+
+          # Webhook / Web Push が設定されていれば即時通知も送る(未設定なら黙って何もしない)
+          python scripts/notify.py --text "$(printf '朝次処理の異常を検知しました。\n判定: %s / 復旧: %s / Worker停止: %s\nIssueを確認してください。' \
+            "${{ steps.check.outputs.level }}" "${{ steps.recheck.outputs.recovered }}" "${{ steps.worker.outputs.stale }}")" || true
+
+      # ジョブを赤くするのは「本当に当日の予測が無い」ときだけにする。
+      # continue-on-error を付けないことで、GitHub標準のワークフロー失敗メールが
+      # 設定ゼロの通知経路として機能する。Worker停止だけでは赤くしない(毎日3回の
+      # 失敗メールはノイズになり、やがて無視されて今回と同じ沈黙を生むため)。
+      - name: 当日予測が無い場合はジョブを失敗させる
+        if: >-
+          always() && steps.check.outputs.level == 'critical'
+          && steps.recheck.outputs.recovered != 'true'
+        run: |
+          echo "当日の予測が復旧しなかったため、このジョブを失敗として終了する"
+          exit 1

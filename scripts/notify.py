@@ -286,3 +286,31 @@ def notify_events(pred: dict, ymd: str) -> None:
         else:
             print(f"notify send failed: {len(ids)} event(s) will retry next cycle")
     _save_state({"sent": sorted(sent)})
+
+
+def notify_text(text: str) -> bool:
+    """運用アラート(パイプライン障害)の送信。厳選イベント通知とは別系統。
+
+    notify_events() の重複抑止state(notify_state.json)は通さない。連投の抑止は
+    呼び出し側(watchdog.yml は1日3回)で行い、ここには状態を持たせない。
+    NOTIFY_WEBHOOK / Web Push のいずれも未設定なら何もせず False を返すだけなので、
+    未設定環境での挙動は現行と変わらない。
+    """
+    if not text.startswith(APP_TAG):
+        text = APP_TAG + "\n" + text
+    url = (os.environ.get("NOTIFY_WEBHOOK") or "").strip()
+    ok = send_webhook(url, text) if url else False
+    if _push_ready():
+        ok = send_push(text) or ok
+    return ok
+
+
+if __name__ == "__main__":
+    import sys as _sys
+    # 運用アラート用: python scripts/notify.py --text "本文"
+    if len(_sys.argv) >= 3 and _sys.argv[1] == "--text":
+        sent = notify_text(_sys.argv[2])
+        print("notify_text: sent" if sent else "notify_text: 送信先未設定のため送信せず")
+        _sys.exit(0)
+    print("usage: python scripts/notify.py --text '本文'")
+    _sys.exit(2)
