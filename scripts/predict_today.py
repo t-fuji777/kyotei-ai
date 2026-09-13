@@ -374,6 +374,15 @@ def main():
         if _existing_has_venues(ymd):
             print(f"live: B(番組表)取得不可だが既存の{ymd}.jsonにvenuesあり; 上書きせずskip")
             return
+        # 早朝(10時前)の未取得は「未公開」とみなし、空ファイルを書かずに終了する。
+        # dailyを番組表公開(当日早朝)の直後に着弾させる設計のため、公開前に着弾した回が
+        # 空の予測を公開すると、アプリが前日表示より悪い「レース無し」表示になり、
+        # auto-updateの自己復旧(当日ファイルの有無で判定)も働かなくなる。次の回が拾う。
+        # --dateは既定値が本日なので値の有無では判別できない。明示指定(手動の日付指定
+        # 再生成)の時だけは従来通り書く。
+        if datetime.now(JST).hour < 10 and "--date" not in sys.argv:
+            print(f"B(番組表)未公開({ymd}): 早朝のため空ファイルを書かずに終了。次の回で再試行")
+            return
         out["note"] = "本日の番組表が取得できませんでした(開催なし or 未公開)"
         write(out, ymd)
         return
