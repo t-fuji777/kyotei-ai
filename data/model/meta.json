@@ -1,11 +1,11 @@
 {
- "trained_at": "2026-09-23 10:44 JST",
+ "trained_at": "2026-09-24 07:37 JST",
  "rows_train": 1336590,
  "rows_valid": 161880,
- "rows_test": 174936,
+ "rows_test": 175872,
  "period": [
   "20210611",
-  "20260922"
+  "20260923"
  ],
  "best_iterations": {
   "win": 421,
@@ -17,34 +17,34 @@
   "valid_rate": 0.495
  },
  "test_metrics": {
-  "races": 28863,
-  "win_hit_rate": 0.5696,
-  "fuku_hit_rate": 0.7493,
-  "top1_hit_rate": 0.1004,
-  "top6_hit_rate": 0.3916,
-  "top10_hit_rate": 0.5157,
-  "top18_hit_rate": 0.6666,
+  "races": 29019,
+  "win_hit_rate": 0.5697,
+  "fuku_hit_rate": 0.7494,
+  "top1_hit_rate": 0.1001,
+  "top6_hit_rate": 0.3915,
+  "top10_hit_rate": 0.5155,
+  "top18_hit_rate": 0.6667,
   "top6_roi": 0.7844,
   "top5_hit_rate": 0.3512,
-  "top5_roi": 0.7915,
+  "top5_roi": 0.7918,
   "sengen": {
-   "races": 4581,
-   "races_per_day": 23.7,
+   "races": 4609,
+   "races_per_day": 23.8,
    "top5_min": 0.4,
-   "top5_hit_rate": 0.5232
+   "top5_hit_rate": 0.5229
   }
  },
  "baseline_metrics": {
-  "races": 28863,
-  "win_hit_rate": 0.5453,
-  "fuku_hit_rate": 0.7197,
-  "top1_hit_rate": 0.0732,
-  "top6_hit_rate": 0.2896,
-  "top10_hit_rate": 0.4,
-  "top18_hit_rate": 0.5488,
-  "top6_roi": 0.7195,
-  "top5_hit_rate": 0.2567,
-  "top5_roi": 0.732,
+  "races": 29019,
+  "win_hit_rate": 0.5456,
+  "fuku_hit_rate": 0.7198,
+  "top1_hit_rate": 0.0731,
+  "top6_hit_rate": 0.2898,
+  "top10_hit_rate": 0.4001,
+  "top18_hit_rate": 0.5489,
+  "top6_roi": 0.7216,
+  "top5_hit_rate": 0.2569,
+  "top5_roi": 0.734,
   "sengen": {
    "races": 0,
    "races_per_day": 0.0,
