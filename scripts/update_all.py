@@ -134,7 +134,7 @@ def do_stamps(pred, now) -> int:
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None or mins > STAMP_LEAD_MIN or mins < -STAMP_LATE_MAX:
                 continue
-            stamp_plans(r, v["code"], None, now_hhmm)
+            stamp_plans(r, v["code"], None, now_hhmm, late=(mins < 0))
             n += 1
     if n:
         print(f"stamps: {n} race(s) checkpointed")

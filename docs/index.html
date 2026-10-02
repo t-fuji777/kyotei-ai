@@ -419,10 +419,10 @@ function renderSengen(){
         <span class="bp num">${pct(p.p)}</span>${(()=>{const _o=decOddsText(r,p.c);return _o?`<span class="oddv num">${_o}</span>`:"";})()}</div>`).join("");
     // 締切時の払戻の目安(判定時オッズ×過去の変動幅)。確定済みで結果待ちの間だけ出す。
     const prHtml=(r.pr&&!r.result)?`<div class="prnote">締切時の払戻の目安: ${r.picks.slice(0,3).filter(p=>r.pr[p.c]).map(p=>`${esc(p.c)} ${r.pr[p.c][0]}〜${r.pr[p.c][1]}倍`).join(" / ")}</div>`:"";
-    // 締切15分前の確定に間に合わず結果確定後に判定したレース(r.ph、または打刻が締切の15分超後)。
+    // 締切15分前の確定に間に合わず締切後に判定したレース(r.ph、または打刻時刻が締切より後)。
     const _mm=x=>{const q=String(x||"").split(":");return q.length===2?(+q[0])*60+(+q[1]):null;};
-    const _ph=!!r.ph||(r.pt&&r.deadline&&_mm(r.pt)-_mm(r.deadline)>15);
-    const phHtml=_ph?`<div class="prnote">締切15分前の確定に間に合わず、結果が出た後に同じ条件で判定した記録です。</div>`:"";
+    const _ph=!!r.ph||(r.pt&&r.deadline&&_mm(r.pt)-_mm(r.deadline)>0);
+    const phHtml=_ph?`<div class="prnote">締切15分前の確定に間に合わず、締切後に同じ条件で判定した記録です。</div>`:"";
     return `<div class="race open${isCand?' cand':''}">
       <div class="racehead">
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
