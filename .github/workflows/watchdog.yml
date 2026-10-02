@@ -38,6 +38,10 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
+      # Issueの割り当て先兼メンション先。リポジトリをウォッチしていない持ち主には、
+      # botが作ったIssueは通知されない(2026-10-02の実地テストで通知0件を確認)。
+      # 割り当てとメンションは、ウォッチの有無に関わらず通知される。
+      OWNER: ${{ github.repository_owner }}
       # 手動起動時のテストモード。schedule起動では常に空で、通常の監視として動く。
       TEST_MODE: ${{ github.event.inputs.test }}
       NOTIFY_WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK }}
@@ -174,7 +178,7 @@ jobs:
               echo "**これは動作テストです。実際の異常ではなく、対処は不要です。**"
               echo ""
             fi
-            echo "watchdog が異常を検知しました。"
+            echo "@$OWNER watchdog が異常を検知しました。"
             echo ""
             echo "## 公開JSONの判定"
             echo '```'
@@ -205,10 +209,10 @@ jobs:
                   --jq "[.[] | select(.title | contains(\"$YMD\"))] | .[0].number // empty")
           if [ -n "$TEST_MODE" ]; then
             # テストは常に新規起票(当日の本物のIssueへコメントを混ぜない)
-            gh issue create --title "$TITLE" --label pipeline-alert --body-file "$BODY"
+            gh issue create --title "$TITLE" --label pipeline-alert --assignee "$OWNER" --body-file "$BODY"
           elif [ -z "$NUM" ]; then
             # Issueの新規作成はリポジトリ所有者にメールで届く。これが設定ゼロで通知が出る経路。
-            gh issue create --title "$TITLE" --label pipeline-alert --body-file "$BODY"
+            gh issue create --title "$TITLE" --label pipeline-alert --assignee "$OWNER" --body-file "$BODY"
           elif [ "${{ steps.check.outputs.level }}" = "critical" ]; then
             gh issue comment "$NUM" --body-file "$BODY"
             echo "既存Issue #$NUM にコメントを追記"
