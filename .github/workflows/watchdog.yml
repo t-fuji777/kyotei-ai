@@ -12,11 +12,13 @@ name: watchdog
 on:
   workflow_dispatch:
   schedule:
-    # このリポジトリのschedule配信は恒常的に約110分遅延している(2026-09-12実測)。
-    # 名目時刻ではなく「着弾する実効時刻」で設計する。
-    - cron: "11 22 * * *"   # 名目 JST 07:11 → 実効 09時台(朝の判定ゲート直後)
-    - cron: "11 1 * * *"    # 名目 JST 10:11 → 実効 12時台
-    - cron: "11 5 * * *"    # 名目 JST 14:11 → 実効 16時台
+    # このリポジトリのschedule配信は約110〜250分遅延する(2026-09〜10実測。幅は日によって変わる)。
+    # 名目時刻ではなく「着弾する実効時刻」で設計する。判定ゲート(7:30)より前に着弾した回は
+    # 日付の判定をしないだけで無害。
+    - cron: "11 19 * * *"   # 名目 JST 04:11 → 実効 6:00〜8:20(ゲート後なら最速の検知・復旧)
+    - cron: "11 22 * * *"   # 名目 JST 07:11 → 実効 9:00〜11:20
+    - cron: "11 1 * * *"    # 名目 JST 10:11 → 実効 12時〜14時台
+    - cron: "11 5 * * *"    # 名目 JST 14:11 → 実効 16時〜18時台
 permissions:
   contents: read
   issues: write
@@ -138,10 +140,12 @@ jobs:
 
       - name: 異常をIssueに起票
         id: issue
+        # 外部トリガ(Cloudflare Worker)の停止だけでは起票しない。Workerは2026-09-09から
+        # 止まったままで、朝の公開はdailyの多重cron(2026-10-02)で賄っているため、
+        # 停止を条件にすると毎日Issueが立ってしまう。死活は実行サマリーにだけ残す。
         if: >-
           always() &&
-          ((steps.check.outputs.level == 'critical' && steps.recheck.outputs.recovered != 'true')
-           || steps.worker.outputs.stale == 'true')
+          (steps.check.outputs.level == 'critical' && steps.recheck.outputs.recovered != 'true')
         run: |
           YMD=$(TZ=Asia/Tokyo date +%Y-%m-%d)
           TITLE="[アリテイ] 朝次処理の異常 $YMD"
