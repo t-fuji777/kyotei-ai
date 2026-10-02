@@ -8,8 +8,10 @@ runs a separate results workflow would commit the same latest.json, causing
 merge conflicts on push. Doing both here and committing once avoids that."""
 import json
 import os
+import subprocess
 import sys
 import time
+import traceback
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -100,7 +102,7 @@ STAMP_LEAD_MIN = 15  # 締切何分前からチェックポイント確定を打
 STAMP_LATE_MAX = 15
 
 
-def do_stamps(pred, now) -> int:
+def do_stamps(pred, now, skip=None, only=None) -> int:
     """締切15分前チェックポイント: まだ厳選(竹)が確定していない(r["tk"]無し)かつ
     結果未確定のレースのうち、締切前後STAMP_LEAD_MIN/STAMP_LATE_MAX分以内の
     ものへ、その時点のpicks/oddsで厳選スタンプ(r["tk"]/r["pt"]。mtは終売につき常に0)を
@@ -134,6 +136,13 @@ def do_stamps(pred, now) -> int:
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None or mins > STAMP_LEAD_MIN or mins < -STAMP_LATE_MAX:
                 continue
+            # skip: この実行でオッズを取り直す予定のレース。取り終えるまで打刻を待つ
+            # (判定に使うオッズを従来=do_odds完了後の値と同じに保つ)。
+            if skip and (v["code"], r["no"]) in skip:
+                continue
+            # only: 条件を満たすレースだけ打刻する(--results-only 末尾の追い打刻用)。
+            if only is not None and not only(r):
+                continue
             stamp_plans(r, v["code"], None, now_hhmm, late=(mins < 0))
             n += 1
     if n:
@@ -143,7 +152,89 @@ def do_stamps(pred, now) -> int:
     return n + healed
 
 
-def do_results(pred, now, ymd, max_fetch=RESULT_MAX_PER_RUN) -> int:
+# ---- full の取得ループの合間に行う打刻(2026-10-02) ----
+# 止めたいときはここを False にして main へ入れる。実行中のループは毎周回 scripts/ を
+# 取り直すので、1周回(約1〜3分)以内に従来の動き(full の中では開始時刻で1回だけ判定)へ戻る。
+MIDRUN_STAMP = True     # full の取得の合間に時刻を取り直して打刻する
+MIDRUN_PUBLISH = False  # 合間の打刻をその場で commit/push する(auto-update ループ内のみ)
+TAIL_STAMP = True       # --results-only の末尾で、買い目もオッズも動かないレースだけ追い打刻する
+
+
+def _ts(now) -> str:
+    # 合間の書き込みは同じ分に2回起こり得る。画面(docs/index.html の refreshLatest)は
+    # *_updated_at の文字列が変わった時だけ再描画するので、秒まで入れて必ず変える。
+    return now.strftime("%Y-%m-%d %H:%M:%S JST")
+
+
+def _publish_midrun() -> None:
+    """合間の打刻をその場で公開する。開催中ループ(auto-update)の中でだけ動く。
+    scripts/publish_stamps.sh が add / commit / push を1回だけ行い、終わるまで待つ。
+    fetch・rebase・reset はしない(作業ツリーを書き換える git 操作を full の途中に挟まない)。
+    push が通らなかった分は、周回末尾の commit_push(yml 側)が従来どおり rebase して送る。
+    失敗しても取得は続ける。"""
+    if not MIDRUN_PUBLISH or os.environ.get("GITHUB_WORKFLOW") != "auto-update":
+        return
+    sh = Path(__file__).parent / "publish_stamps.sh"
+    try:
+        sys.stdout.flush()
+        rc = subprocess.run(["bash", str(sh), "auto stamps"], cwd=str(ROOT), timeout=120).returncode
+        print(f"midrun publish: rc={rc}", flush=True)
+    except Exception as e:
+        print(f"::warning::midrun publish failed: {e}", flush=True)
+
+
+class _Ticker:
+    """full の取得ループの合間に呼ぶ。時刻を取り直し、締切15分前を跨いだレースを
+    その場で打刻する。full は開始時刻の now を最後まで使い回すため、従来はオッズ取得中
+    (1レース約50秒x最大8件+朝オッズ・レース名で最大約11分)に跨いだレースが full の中では
+    打刻されず、直後の --results-only まで待たされていた。
+    pending はこの実行でオッズ取得待ちのレース。取り終えるまで打刻しない。
+    --results-only の取得ループからは呼ばない: 軽い周回は直後に --live-window が走るので、
+    そこで先に打刻すると展示を反映する最後の機会を潰す。full の直後は --results-only が
+    続くだけで --live-window を挟まないため、ここで前倒ししても買い目は変わらない。
+    打刻の失敗で取得を止めない: 例外は握って以後の合間打刻をやめ、ログに警告を出す。"""
+
+    def __init__(self, pred, ymd):
+        self.pred, self.ymd = pred, ymd
+        self.stamps = 0
+        self.dead = False
+
+    def __call__(self, pending=None) -> int:
+        if self.dead:
+            return 0
+        try:
+            now = datetime.now(JST)
+            if now.strftime("%Y%m%d") != self.ymd:
+                return 0
+            n = do_stamps(self.pred, now, skip=pending)
+            if n:
+                self.stamps += n
+                # 以降の取得で落ちても打刻と取得済みオッズが残るよう、先に書く。
+                self.pred["results_updated_at"] = _ts(now)
+                write(self.pred, self.ymd)
+                print(f"stamp-tick {now.strftime('%H:%M:%S')}: {n}", flush=True)
+                _publish_midrun()
+            return n
+        except Exception:
+            self.dead = True
+            print("::warning::update_all: stamp tick failed; mid-run stamping disabled for this run",
+                  flush=True)
+            traceback.print_exc()
+            sys.stderr.flush()
+            return 0
+
+
+def _settled(r) -> bool:
+    """次の打刻機会までに買い目もオッズも動かないレースか。
+    live かつ st_ex あり = --live-window / --live の対象外(買い目が動かない)。
+    本オッズ取得済み(prov でない) = 締切前は do_odds が取り直さない(候補の締切10分前
+    再取得は打刻より後)。この条件を満たすレースは、いま打刻しても次の周回で打刻しても
+    判定内容が同じになる。"""
+    o = r.get("odds") or {}
+    return bool(r.get("live") and r.get("st_ex") and o.get("t3") and not o.get("prov"))
+
+
+def do_results(pred, now, ymd, max_fetch=RESULT_MAX_PER_RUN, tick=None) -> int:
     n = 0
     tried = 0
     for v in pred["venues"]:
@@ -156,6 +247,8 @@ def do_results(pred, now, ymd, max_fetch=RESULT_MAX_PER_RUN) -> int:
             if tried >= max_fetch:
                 break
             tried += 1
+            if tick:
+                tick()
             res = fetch_result(ymd, v["code"], r["no"])
             time.sleep(0.3)
             if not res:
@@ -196,7 +289,7 @@ def _has_odds(r):
     return len(t3) > 0
 
 
-def do_odds(pred, now, ymd) -> int:
+def do_odds(pred, now, ymd, tick=None) -> int:
     # Fetch odds for EVERY race that doesn't yet have them, regardless of whether
     # the race has finished -- boatrace keeps the odds page up for the whole day,
     # so finished races still return their final (confirmed) odds. Skip only races
@@ -242,6 +335,7 @@ def do_odds(pred, now, ymd) -> int:
           flush=True)
     n = 0
     fetched = 0
+    pending = set(targets)  # まだ取得していないレース。取り終えるまで合間の打刻を待たせる
     for v in pred["venues"]:
         for r in v["races"]:
             if (v["code"], r["no"]) not in targets:
@@ -249,8 +343,11 @@ def do_odds(pred, now, ymd) -> int:
             if fetched >= ODDS_MAX_PER_RUN:
                 break
             fetched += 1
+            if tick:
+                tick(pending)
             odds = fetch_odds(ymd, v["code"], r["no"])
             time.sleep(0.3)
+            pending.discard((v["code"], r["no"]))  # 取得に失敗しても外す(従来も既存オッズで打刻していた)
             if not odds or not (odds.get("t3") or odds.get("fuku")):
                 print(f"  odds {v['code']}-{r['no']}R: none yet")
                 continue
@@ -267,7 +364,7 @@ def do_odds(pred, now, ymd) -> int:
     return n
 
 
-def do_morning_odds(pred, now, ymd) -> int:
+def do_morning_odds(pred, now, ymd, tick=None) -> int:
     # Early-morning provisional sweep. Once advance (zen-uri) odds are published
     # (~7:45 JST), fetch lightweight trifecta-only odds for EVERY race that has no
     # odds yet, no matter how far its deadline is, and mark them provisional.
@@ -294,6 +391,8 @@ def do_morning_odds(pred, now, ymd) -> int:
         for r in v["races"]:
             if (v["code"], r["no"]) not in targets:
                 continue
+            if tick:
+                tick()
             t3 = fetch_t3(ymd, v["code"], r["no"])
             time.sleep(0.3)
             if not t3:
@@ -310,7 +409,7 @@ def do_morning_odds(pred, now, ymd) -> int:
 RACENAME_MAX_PER_RUN = 12
 
 
-def do_racenames(pred, ymd) -> int:
+def do_racenames(pred, ymd, tick=None) -> int:
     # B-program race names are truncated to ~6 chars; fetch the full name from
     # the official racelist page and overwrite. Names are day-invariant, so once
     # stored (rn_full flag) we never re-fetch.
@@ -322,6 +421,8 @@ def do_racenames(pred, ymd) -> int:
             if tried >= RACENAME_MAX_PER_RUN:
                 print(f"racenames: {updated} updated (cap)", flush=True)
                 return updated
+            if tick:
+                tick()
             nm = fetch_racename(ymd, v["code"], r["no"])
             tried += 1
             time.sleep(0.3)
@@ -475,8 +576,22 @@ def main():
         n_stp = do_stamps(pred, now)
         n_res = do_results(pred, now, ymd)
         n_stx = do_st_ex(pred, now, ymd)
+        if TAIL_STAMP:
+            # 結果・展示の取得(20〜170秒)の間に締切15分前を跨いだレースのうち、買い目も
+            # オッズももう動かないものだけ、時刻を取り直して打刻する。それ以外は従来どおり
+            # 次の周回(--live-window の後)に回す。
+            try:
+                now2 = datetime.now(JST)
+                if now2.strftime("%Y%m%d") == ymd:
+                    n_tail = do_stamps(pred, now2, only=_settled)
+                    if n_tail:
+                        print(f"stamp-tail {now2.strftime('%H:%M:%S')}: {n_tail}", flush=True)
+                    n_stp += n_tail
+            except Exception:
+                print("::warning::update_all: tail stamp failed", flush=True)
+                traceback.print_exc()
         if n_res or n_stx or n_stp:
-            pred["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
+            pred["results_updated_at"] = _ts(datetime.now(JST))
             write(pred, ymd)
         try:
             from notify import notify_events
@@ -488,11 +603,20 @@ def main():
     # オッズ取得を結果確定より先に行う(確定時スタンプ(stamp_plans)が同一サイクルで
     # 取得した直前オッズを反映して判定できるように)。do_stampsはdo_odds直後・
     # do_resultsの前に置き、その時点の最新オッズでチェックポイント確定させる。
-    n_odds = do_odds(pred, now, ymd)
-    n_stp = do_stamps(pred, now)
-    n_res = do_results(pred, now, ymd)
-    n_morn = do_morning_odds(pred, now, ymd)
-    n_name = do_racenames(pred, ymd)
+    if MIDRUN_STAMP:
+        tick = _Ticker(pred, ymd)
+        n_odds = do_odds(pred, now, ymd, tick=tick)
+        tick()  # 従来の do_stamps の位置。開始時刻ではなく今の時刻で判定する
+        n_res = do_results(pred, now, ymd, tick=tick)
+        n_morn = do_morning_odds(pred, now, ymd, tick=tick)
+        n_name = do_racenames(pred, ymd, tick=tick)
+        n_stp = tick.stamps
+    else:
+        n_odds = do_odds(pred, now, ymd)
+        n_stp = do_stamps(pred, now)
+        n_res = do_results(pred, now, ymd)
+        n_morn = do_morning_odds(pred, now, ymd)
+        n_name = do_racenames(pred, ymd)
     if n_res == 0 and n_odds == 0 and n_morn == 0 and n_name == 0 and n_stp == 0:
         print("nothing to update")
         try:
@@ -501,8 +625,9 @@ def main():
         except Exception as e:
             print(f"notify skip: {e}")
         return
-    if n_res:
-        pred["results_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
+    if n_res or n_stp:
+        # 打刻だけでも画面が再描画されるよう時刻を進める(--results-only 側と同じ扱い)。
+        pred["results_updated_at"] = _ts(datetime.now(JST))
     if n_odds or n_morn:
         pred["odds_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
     write(pred, ymd)

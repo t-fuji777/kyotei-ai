@@ -43,8 +43,15 @@ jobs:
           git config user.email github-actions@github.com
           commit_push() {
             git add docs/predictions
-            if git diff --cached --quiet; then echo "nothing to commit"; return; fi
-            git commit -m "$1"
+            if git diff --cached --quiet; then
+              # update_all.py が取得の合間に行う公開(scripts/publish_stamps.sh)は push を1回しか
+              # 試さず、断られたらコミットをローカルに残す。差分が無くても、未送信のコミットが
+              # あれば下の手順(rebase して push)で送る。無ければ従来どおり何もしない。
+              if [ -z "$(git rev-list -n 1 origin/main..HEAD 2>/dev/null)" ]; then echo "nothing to commit"; return; fi
+              echo "no new changes, but local commits are not pushed yet"
+            else
+              git commit -m "$1"
+            fi
             for attempt in 1 2 3 4 5; do
               git fetch origin main || true
               git rebase -X theirs origin/main || { echo "rebase failed, syncing to remote"; git rebase --abort || true; git reset --hard origin/main || true; return; }
