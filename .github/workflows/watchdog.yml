@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       test:
-        description: "動作テスト(空=通常の監視)。recover: 異常を模擬して復旧経路を通す / alert: 復旧しなかった想定で通知経路を通す(テスト用Issueを起票しジョブを失敗させる)"
+        description: "動作テスト(空=通常の監視)。recover: 異常を模擬して復旧経路を通す / alert: 復旧しなかった想定で通知経路を通す / model: モデル配布の異常を模擬して通知経路を通す(alert と model はテスト用Issueを起票しジョブを失敗させる)"
         required: false
         default: ""
   schedule:
@@ -102,10 +102,12 @@ jobs:
       # 使えるモデルの学習が止まっていないかを確かめる(scripts/model_store.py verify。標準
       # ライブラリのみ)。公開JSONの model_trained_at は配布の失敗を映さないので別に見る。
       # verify や jq が壊れても無音にならないよう、判定を読めない時は critical として扱う。
-      # テストモードでは実行しない(既存の復旧・通知経路のテストに影響させない)。
+      # recover / alert のテストでは実行しない(既存の復旧・通知経路のテストに影響させない)。
+      # model のテストでは、実際の判定を行ったうえで critical を模擬し、通知経路だけを通す
+      # (daily は起動しない)。
       - name: モデルの配布を確認
         id: model
-        if: github.event.inputs.test == ''
+        if: github.event.inputs.test == '' || github.event.inputs.test == 'model'
         run: |
           # verify が固まっても後続(朝の復旧)を止めないよう時間切れを付ける。打ち切られると
           # model.json が空になり、下の case で critical になる。
@@ -132,6 +134,12 @@ jobs:
           # 学習が止まっているだけ(M2)の時は false で、監視からは起動しない。
           REPUB=$(jq -r 'if .needs_republish == true then "true" else "false" end' model.json 2>/dev/null || echo false)
           [ "$REPUB" = "true" ] || REPUB=false
+          if [ "$TEST_MODE" = "model" ]; then
+            echo "テストモード(model): 実際の判定は $LEVEL。モデル配布の異常(critical)を模擬して通知経路を通す"
+            echo "### テストモード: \`model\` (実際の判定は \`$LEVEL\`、異常を模擬)" >> "$GITHUB_STEP_SUMMARY"
+            LEVEL=critical
+            REPUB=false
+          fi
           echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
           echo "republish=$REPUB" >> "$GITHUB_OUTPUT"
           {
