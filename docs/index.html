@@ -181,7 +181,7 @@ nav button svg{display:block;margin:0 auto 2px;width:20px;height:20px;
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:600;font-size:11px}
-th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:2px 3px;line-height:1.35;overflow-wrap:break-word;border-bottom:0}.acctbl tr.stkrow:first-child th{padding:6px 3px 4px}.acctbl tr.blast>th,.acctbl tr.blast>td{box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.dcell{vertical-align:middle;text-align:center;box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.plab{color:var(--dim);font-weight:700;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:2px 3px;line-height:1.35;overflow-wrap:break-word;border-bottom:0}.acctbl tr.stkrow:first-child th{padding:6px 3px 4px}.acctbl tr.blast>th,.acctbl tr.blast>td{box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.dcell{vertical-align:middle;text-align:center;box-shadow:inset 0 -1px 0 var(--line)}.prnote{font-size:10.5px;color:var(--dim);line-height:1.55;padding:7px 0 0}.acctbl td.plab{color:var(--dim);font-weight:700;white-space:nowrap}
 .acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background-color:var(--bg);border-bottom:0}.acctbl tr.tblk>th,.acctbl tr.tblk>td{background-color:var(--surface)}.acctbl tr.pmid>td{background-image:repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px),repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px);background-position:left top,left bottom;background-size:100% 1px,100% 1px;background-repeat:no-repeat}.acctbl tr.stkend>th,.acctbl tr.stkend>td{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl td.dcell.dend{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl tr.mrow{cursor:pointer}
 #senCount .anote{grid-column:1/-1;text-align:right;font-size:8px;line-height:1.45;font-weight:400;color:var(--dim);white-space:nowrap}
 .pad{padding:0 16px}
@@ -417,6 +417,12 @@ function renderSengen(){
         <span class="honmei">${comboChips(p.c,true)}</span>
         <span class="bar"><i style="width:${Math.min(100,p.p/r.picks[0].p*100)}%"></i></span>
         <span class="bp num">${pct(p.p)}</span>${(()=>{const _o=decOddsText(r,p.c);return _o?`<span class="oddv num">${_o}</span>`:"";})()}</div>`).join("");
+    // 締切時の払戻の目安(判定時オッズ×過去の変動幅)。確定済みで結果待ちの間だけ出す。
+    const prHtml=(r.pr&&!r.result)?`<div class="prnote">締切時の払戻の目安: ${r.picks.slice(0,3).filter(p=>r.pr[p.c]).map(p=>`${esc(p.c)} ${r.pr[p.c][0]}〜${r.pr[p.c][1]}倍`).join(" / ")}</div>`:"";
+    // 締切15分前の確定に間に合わず結果確定後に判定したレース(r.ph、または打刻が締切の15分超後)。
+    const _mm=x=>{const q=String(x||"").split(":");return q.length===2?(+q[0])*60+(+q[1]):null;};
+    const _ph=!!r.ph||(r.pt&&r.deadline&&_mm(r.pt)-_mm(r.deadline)>15);
+    const phHtml=_ph?`<div class="prnote">締切15分前の確定に間に合わず、結果が出た後に同じ条件で判定した記録です。</div>`:"";
     return `<div class="race open${isCand?' cand':''}">
       <div class="racehead">
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
@@ -425,7 +431,7 @@ function renderSengen(){
         <span class="hjp"><span class="hjc"><span class="hjl">${isCand?"判　断":"的中率"}</span><span class="hjv">${badgeHtml}</span></span>${etaTime?`<span class="hjc"><span class="hjl">確定予定</span><span class="hjv stfixc stfixe num">${esc(etaTime)}</span></span>`:`<span class="hjc"><span class="hjl">判定</span><span class="hjv">${(r.result&&!r.result.status)?`<span class="rj2 ${hit?"jhit":"jmiss"}">${hit?"〇":"✕"}</span>`:'<span class="rwait">—</span>'}</span></span><span class="hjc"><span class="hjl">結果</span><span class="hjv hjw">${(r.result&&r.result.status)?'<span class="voidchip">'+esc(r.result.status)+'</span>':r.result?comboChips(r.result.order,true):((r.live||r.st_ex)?'<span class="livechip">展示反映</span>':'<span class="lane s lph"></span><span class="lane s lph"></span><span class="lane s lph"></span>')}</span></span>`}<span class="hjc"><span class="hjl">払戻金</span><span class="hjv" style="font-weight:700;min-width:58px;justify-content:center;font-variant-numeric:tabular-nums">${r.result&&r.result.pay3t!=null?'¥'+r.result.pay3t.toLocaleString():'<span class="rwait">—</span>'}</span><span class="hjl" style="margin-top:-6px">${r.result&&r.result.ninki!=null?r.result.ninki+'番人気':''}</span></span></span>
       </div>
       <div class="racebody">
-        ${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}
+        ${picks||'<div class="note" style="padding:6px 0;text-align:left">買い目データなし</div>'}${prHtml}${phHtml}
       </div></div>`;
   };
   const openL=list.filter(x=>_isOpen(x.r,pred.date)),doneL=list.filter(x=>!_isOpen(x.r,pred.date));
@@ -514,7 +520,6 @@ function _wireTodayTog(m){
 function shiftYmd(s,delta){const y=+s.slice(0,4),m=+s.slice(4,6),da=+s.slice(6,8);const dt=new Date(y,m-1,da+delta);const z=n=>String(n).padStart(2,"0");return ""+dt.getFullYear()+z(dt.getMonth()+1)+z(dt.getDate());}
 function fmtSel(s){return s.slice(0,4)+"/"+s.slice(4,6)+"/"+s.slice(6,8);}
 function fmtOpt(s){const y=+s.slice(0,4),m=+s.slice(4,6),da=+s.slice(6,8);return s.slice(0,4)+"/"+s.slice(4,6)+"/"+s.slice(6,8)+" ("+_WD[new Date(y,m-1,da).getDay()]+")";}
-async function predExists(d){try{const r=await fetch("predictions/"+d+".json?h="+Date.now(),{method:"HEAD"});return r.ok;}catch(_){return false;}}
 async function ensureDateList(){
   if(dateList)return dateList;
   const set=new Set();
@@ -523,7 +528,9 @@ async function ensureDateList(){
   if(!acc){try{acc=await fetchJSON("accuracy.json");VIEW.acc=acc;}catch(_){acc=null;}}
   if(acc&&acc.days)acc.days.forEach(d=>{if(d&&d.date)set.add(String(d.date));});
   let dl=[...set].sort();
-  if(dl.length){let p=shiftYmd(dl[0],-1),g=0;while(g++<10){if(await predExists(p)){dl.unshift(p);p=shiftYmd(p,-1);}else break;}}
+  // 予測ファイルの最古日は2026-06-12で固定(実績は翌13日から)。以前は1日ずつ存在確認で
+  // 遡っていたため、起動のたびに存在しない6/11へ読み込みを1回試み、エラーが1件記録されていた。
+  if(dl.length&&dl[0]>"20260612")dl.unshift("20260612");
   dateList=dl;latestDate=(pred&&pred.date)||(dl.length?dl[dl.length-1]:null);
   return dl;
 }
@@ -632,13 +639,20 @@ function todayStats(){
 function renderAcc(acc){
   const m=$("#main");
   const td=todayStats();
-  const days=(acc&&acc.days)?acc.days:[];
+  // 厳選は2026-08-04に締切15分前の確定方式へ移行した。それ以前は締切後のオッズで事後に判定
+  // しており条件が違うため、8/3以前の分は sen_old_* へ移して「旧厳選」として別行に出す。
+  const SEN_NEW_FROM="20260804";
+  const days=((acc&&acc.days)?acc.days:[]).map(d=>String(d.date)>=SEN_NEW_FROM?d:Object.assign({},d,{_old:true,sen_n:0,sen_hit:0,sen_stake:0,sen_ret:0,sen_old_n:d.sen_n||0,sen_old_hit:d.sen_hit||0,sen_old_stake:d.sen_stake||0,sen_old_ret:d.sen_ret||0}));
   const t0=(acc&&acc.total)?acc.total:null;
   const dup=pred&&days.some(d=>String(d.date)===String(pred.date));
   const tj=(td&&!dup)?{races:td.n,top1_hit:td.top1_hit,top5_hit:td.top5_hit,sen_n:td.sen_n,sen_hit:td.sen_hit,prm_n:td.prm_n,prm_hit:td.prm_hit,stake5:td.stake5,return5:td.return5,sen_stake:td.sen_stake||0,sen_ret:td.sen_ret||0,prm_stake:td.prm_stake||0,prm_ret:td.prm_ret||0,att_n:td.att_n||0,att_hit:td.att_hit||0,att_stake:td.att_stake||0,att_ret:td.att_ret||0,yos_n:td.yos_n||0,yos_hit:td.yos_hit||0,yos_stake:td.yos_stake||0,yos_ret:td.yos_ret||0}:null;
   let tt=t0;
   if(t0&&tj)tt={races:(t0.races||0)+tj.races,top1_hit:(t0.top1_hit||0)+tj.top1_hit,top5_hit:(t0.top5_hit||0)+tj.top5_hit,sen_n:(t0.sen_n||0)+tj.sen_n,sen_hit:(t0.sen_hit||0)+tj.sen_hit,prm_n:(t0.prm_n||0)+(tj.prm_n||0),prm_hit:(t0.prm_hit||0)+(tj.prm_hit||0),stake5:(t0.stake5||0)+tj.stake5,return5:(t0.return5||0)+tj.return5,sen_stake:(t0.sen_stake||0)+(tj.sen_stake||0),sen_ret:(t0.sen_ret||0)+(tj.sen_ret||0),prm_stake:(t0.prm_stake||0)+(tj.prm_stake||0),prm_ret:(t0.prm_ret||0)+(tj.prm_ret||0),att_n:(t0.att_n||0)+(tj.att_n||0),att_hit:(t0.att_hit||0)+(tj.att_hit||0),att_stake:(t0.att_stake||0)+(tj.att_stake||0),att_ret:(t0.att_ret||0)+(tj.att_ret||0),yos_n:(t0.yos_n||0)+(tj.yos_n||0),yos_hit:(t0.yos_hit||0)+(tj.yos_hit||0),yos_stake:(t0.yos_stake||0)+(tj.yos_stake||0),yos_ret:(t0.yos_ret||0)+(tj.yos_ret||0)};
   else if(!t0)tt=tj;
+  if(tt){
+    const o=days.reduce((x,d)=>{x.n+=d.sen_old_n||0;x.h+=d.sen_old_hit||0;x.s+=d.sen_old_stake||0;x.r+=d.sen_old_ret||0;return x;},{n:0,h:0,s:0,r:0});
+    tt=Object.assign({},tt,{sen_n:(tt.sen_n||0)-o.n,sen_hit:(tt.sen_hit||0)-o.h,sen_stake:(tt.sen_stake||0)-o.s,sen_ret:(tt.sen_ret||0)-o.r,sen_old_n:o.n,sen_old_hit:o.h,sen_old_stake:o.s,sen_old_ret:o.r});
+  }
   if(!tt||!tt.races){m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;}
   // 日別ラベル「3日(月)」形式(先頭ゼロ無しの日+曜)。曜日算出は旧dlabのロジックを流用。
   const dlab2=ymd=>{const s=String(ymd);const w=_WD[new Date(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8)).getDay()];return (+s.slice(6,8))+"日("+w+")";};
@@ -660,8 +674,8 @@ function renderAcc(acc){
     return '<span style="white-space:nowrap">'+yy+'年'+mm+'月<span style="color:var(--dim);font-size:8px">'+(open?'▲':'▼')+'</span></span>';
   };
   const sumMonth=list=>{
-    const s={races:0,top5_hit:0,sen_n:0,sen_hit:0,prm_n:0,prm_hit:0,stake5:0,return5:0,sen_stake:0,sen_ret:0,prm_stake:0,prm_ret:0,att_n:0,att_hit:0,att_stake:0,att_ret:0,yos_n:0,yos_hit:0,yos_stake:0,yos_ret:0};
-    list.forEach(d=>{s.races+=d.races||0;s.top5_hit+=d.top5_hit||0;s.sen_n+=d.sen_n||0;s.sen_hit+=d.sen_hit||0;s.prm_n+=d.prm_n||0;s.prm_hit+=d.prm_hit||0;s.stake5+=d.stake5||0;s.return5+=d.return5||0;s.sen_stake+=d.sen_stake||0;s.sen_ret+=d.sen_ret||0;s.prm_stake+=d.prm_stake||0;s.prm_ret+=d.prm_ret||0;s.att_n+=d.att_n||0;s.att_hit+=d.att_hit||0;s.att_stake+=d.att_stake||0;s.att_ret+=d.att_ret||0;s.yos_n+=d.yos_n||0;s.yos_hit+=d.yos_hit||0;s.yos_stake+=d.yos_stake||0;s.yos_ret+=d.yos_ret||0;});
+    const s={_old:list.length>0&&list.every(d=>d._old),sen_old_n:0,sen_old_hit:0,sen_old_stake:0,sen_old_ret:0,races:0,top5_hit:0,sen_n:0,sen_hit:0,prm_n:0,prm_hit:0,stake5:0,return5:0,sen_stake:0,sen_ret:0,prm_stake:0,prm_ret:0,att_n:0,att_hit:0,att_stake:0,att_ret:0,yos_n:0,yos_hit:0,yos_stake:0,yos_ret:0};
+    list.forEach(d=>{s.sen_old_n+=d.sen_old_n||0;s.sen_old_hit+=d.sen_old_hit||0;s.sen_old_stake+=d.sen_old_stake||0;s.sen_old_ret+=d.sen_old_ret||0;s.races+=d.races||0;s.top5_hit+=d.top5_hit||0;s.sen_n+=d.sen_n||0;s.sen_hit+=d.sen_hit||0;s.prm_n+=d.prm_n||0;s.prm_hit+=d.prm_hit||0;s.stake5+=d.stake5||0;s.return5+=d.return5||0;s.sen_stake+=d.sen_stake||0;s.sen_ret+=d.sen_ret||0;s.prm_stake+=d.prm_stake||0;s.prm_ret+=d.prm_ret||0;s.att_n+=d.att_n||0;s.att_hit+=d.att_hit||0;s.att_stake+=d.att_stake||0;s.att_ret+=d.att_ret||0;s.yos_n+=d.yos_n||0;s.yos_hit+=d.yos_hit||0;s.yos_stake+=d.yos_stake||0;s.yos_ret+=d.yos_ret||0;});
     return s;
   };
   // プラン=行のブロック共通ビルダー: labelHTML(rowspanの日付/月セル)+全・厳選の2行分の<tr>を返す。
@@ -684,7 +698,10 @@ function renderAcc(acc){
       rows.push({lab:"様子見",cnt:cnt(yh,yn),rate:rate(yh,yn),roi:roi(yst,yret)});
       rows.push({lab:"注目",cnt:cnt(ah,an),rate:rate(ah,an),roi:roi(ast,aret)});
     }
-    rows.push({lab:"厳選",cnt:cnt(sh,sn),rate:rate(sh,sn),roi:roi(sst,sret)});
+    // 8/3以前だけの期間(6月・7月とその日別)は「旧厳選」行のみ、8月と累計は両方、9月以降は「厳選」のみ。
+    const on=X.sen_old_n||0,oh=X.sen_old_hit||0,ost=X.sen_old_stake||0,oret=X.sen_old_ret||0;
+    if(!X._old)rows.push({lab:"厳選",cnt:cnt(sh,sn),rate:rate(sh,sn),roi:roi(sst,sret)});
+    if(X._old||on>0)rows.push({lab:"旧厳選",cnt:cnt(oh,on),rate:rate(oh,on),roi:roi(ost,oret)});
     const dm=opts.dataM!=null?' data-m="'+opts.dataM+'"':'';
     const last=rows.length-1;
     return rows.map((row,i)=>{
@@ -756,12 +773,15 @@ if(!accResizeBound){accResizeBound=true;
 // (的中のうち払戻が購入額の厳選300円(旧・松は400円)に満たなかった件数)から組み立てる。締切15分前の板で
 // 判定する以上ゼロにはできないので、固定文でなく実測をそのまま出す。
 function _lossNote(isTake){
-  const t=(VIEW.acc&&VIEW.acc.total)||null;
-  if(!t)return "";
-  const hit=isTake?t.sen_hit:t.prm_hit, loss=isTake?t.sen_hitloss:t.prm_hitloss;
-  if(!hit||loss==null)return "";
-  if(!loss)return `実測では的中${hit}件すべてがプラス。`;
-  return `締切までにオッズが下がることがあり、実測では的中${hit}件のうち${loss}件(${Math.round(loss/hit*1000)/10}%)が購入額を下回った。`;
+  // 分母は締切15分前の確定方式(2026-08-04〜)以降だけ。それ以前は締切後のオッズで事後に判定
+  // しており、払戻が下限を割ったレースは自動的に対象外になっていた(=購入額割れが仕組み上
+  // 記録されない)。含めると割合が実態より低く出るため除外する(2026-10-02是正。
+  // 全期間88件中5件=5.7%と表示していたが、確定方式以降は47件中5件=10.6%だった)。
+  const ds=((VIEW.acc&&VIEW.acc.days)||[]).filter(d=>String(d.date)>="20260804");
+  const hit=ds.reduce((x,d)=>x+(d.sen_hit||0),0), loss=ds.reduce((x,d)=>x+(d.sen_hitloss||0),0);
+  if(!hit)return "";
+  if(!loss)return `締切15分前に確定する方式(2026年8月〜)の実測では、的中${hit}件すべてがプラス。`;
+  return `締切までにオッズが下がることがあり、締切15分前に確定する方式(2026年8月〜)の実測では、的中${hit}件のうち${loss}件(${Math.round(loss/hit*1000)/10}%)が購入額を下回った。`;
 }
 function renderModel(rep){
   // 設定タブ: 通知/アプリ情報を上部に、表示的中率の検証を中段に、
@@ -840,6 +860,8 @@ function renderModel(rep){
     ["確定","締切15分前の時点でプラン対象に確定したレース。確定した内容と時刻はデータに記録され、以後の後出し変更はできない。"],
     ["見送り","候補として表示したが、締切15分前の最終判定で条件を満たさず選ばなかったレース。理由は「3.1倍未満 ○倍」(オッズが下限割れ)か「確率低下 ○%→○%」(展示を反映した再予測でTOP3合計確率が36%を割った)。候補に出した以上、選ばなかったレースも理由とともに残す。"],
     ["厳選プラン","厳選3点買い(100円×3点)。締切15分前のオッズで3点すべて3.1倍以上のレースだけを選ぶ。5R以降のみ。"+_lossNote(true)],
+    ["旧厳選","2026年8月3日以前の厳選の記録。当時は締切後のオッズで事後に判定しており、締切15分前に確定する現在の厳選とは条件が違うため、的中実績では別の行に分けている。"],
+    ["払戻の目安","厳選が確定してから結果が出るまで表示する幅。判定時(締切15分前)のオッズに、過去の厳選相当レースで実際に起きた締切までの変動を掛けたもの。過去の半分はこの幅に収まり、4回に1回はこれより下がった。保証ではない。"],
     ["矢印つきの倍率(4.5→2.9倍)","左が判定した時点(締切15分前)のオッズ、右が実際の払戻。判定は左の値で行っている。締切間際に人気が集まるとオッズは下がるため、この2つは一致しないことがある。"],
     ["判定/結果/払戻金","レース確定後の答え合わせ。予測TOP5内に的中したか・1〜3着の並び・3連単100円あたりの払戻額。"],
   ].map(t=>`<div class="term"><b>${t[0]}</b><span>${t[1]}</span></div>`).join("");
