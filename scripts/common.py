@@ -182,6 +182,7 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None, late=False):
     raceに既に"rs"があれば上書きしない)。tkが成立(1)した場合や、確率条件
     自体を満たさないレースにはrsを書かない。
     - 理由: 上位3点の実効オッズに3.1倍未満があれば「3.1倍未満 {最小値}倍」。
+      3.1倍未満は無いがオッズを取得できていない買い目があれば「オッズ未取得」(成立させない)。
     数値は取得オッズ(生のt3値)を小数1桁で表記する。ただし的中買い目のオッズが
     pay3t由来の実効値に置き換わり、その実効値が閾値割れの原因である場合のみ実効値を使う
     (eff_oddsの返り値をそのまま用いる)。"""
@@ -206,11 +207,18 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None, late=False):
     take_quasi = is_sengen(top3p, vcode, rno)
     tk = 0
     take_below = []  # 竹: 実効オッズが下限3.1倍未満だったピックのeff_odds値
+    take_missing = False  # 上位3点のどれかのオッズが取得できていない
     if take_quasi:
         ok = True
         for c in picks[:3]:
             o = eff_odds(c)
-            if o is not None and o < SENGEN_MIN_ODDS:
+            if o is None:
+                # オッズが無い買い目は「3.1倍以上」を確かめられないので成立させない。
+                # 以前は無いものを素通りさせており、周回が止まってオッズを1枚も取れなかった
+                # レースが、確かめないまま厳選になっていた(2026-08-28 尼崎6R・10R)。
+                ok = False
+                take_missing = True
+            elif o < SENGEN_MIN_ODDS:
                 ok = False
                 take_below.append(o)
         tk = 1 if ok else 0
@@ -253,6 +261,8 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None, late=False):
     if tk != 1 and "rs" not in race:
         if take_quasi and take_below:
             race["rs"] = f"3.1倍未満 {min(take_below):.1f}倍"
+        elif take_quasi and take_missing:
+            race["rs"] = "オッズ未取得"
         elif race.get("qc") and not take_quasi:
             # 確率ドリフトによる脱落。朝に「候補」として画面に出したレースが、
             # 展示反映のライブ再予測でTOP3合計確率が閾値(0.36)を割り、打刻時には
