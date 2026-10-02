@@ -119,7 +119,8 @@ jobs:
             echo "daily が実行中なので起動しない(完了を待つ)"
             exit 0
           fi
-          if [ "$DONE" -ge 2 ]; then
+          # recoverテストでは暴走防止を外し、実際に起動できること(権限)まで確かめる
+          if [ "$DONE" -ge 2 ] && [ "$TEST_MODE" != "recover" ]; then
             echo "dispatched=skip-loop" >> "$GITHUB_OUTPUT"
             echo "直近90分で2回完走済み。暴走防止のため起動しない"
             exit 0
