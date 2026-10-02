@@ -134,8 +134,13 @@ def evaluate(pred, th, now=None, gate=True):
     ga = pred.get("generated_at") or ""
     if len(ga) >= 16 and ":" in ga[11:16]:
         gmin = hhmm_to_min(ga[11:16])
+        # 以前は late_crit_hhmm 超えを critical(C4)にしていたが、warning へ下げた(2026-10-02)。
+        # generated_at は「最後に作り直した時刻」で、critical にすると watchdog が daily を
+        # 起動して作り直す → 時刻がさらに遅くなる → 復旧確認が必ず失敗する、という
+        # 直しようのない異常になる(午後に復旧した日や、午後に手動で作り直した日に誤報)。
+        # 当日分が公開されているかは C1/C2 が見ている。
         if gmin > hhmm_to_min(th["late_crit_hhmm"]):
-            crit.append("C4 generated_at=%s が %s より遅い" % (ga[11:16], th["late_crit_hhmm"]))
+            warn.append("W4 generated_at=%s が %s より遅い" % (ga[11:16], th["late_crit_hhmm"]))
         elif gmin > hhmm_to_min(th["late_warn_hhmm"]):
             warn.append("W1 generated_at=%s が %s より遅い" % (ga[11:16], th["late_warn_hhmm"]))
 
