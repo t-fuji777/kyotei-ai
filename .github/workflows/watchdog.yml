@@ -5,8 +5,11 @@ name: watchdog
 # 経緯(2026-09-12の監査):
 #   - これまで最終防衛線だったのはClaudeデスクトップアプリのスケジュールタスクで、
 #     アプリが開いている間しか動かなかった。それをGitHub側へ移したのがこのワークフロー。
-#   - 外部トリガのCloudflare Worker(kyotei-ai-trigger)は2026-09-08を最後に停止し、
-#     誰にも知らされないまま朝の公開が約2時間遅れる状態が続いていた。その死活も見る。
+#   - 外部トリガのCloudflare Worker(kyotei-ai-trigger)は2026-09-08を最後に停止したまま。
+#     朝の公開は daily の多重cronとこの監視で賄っており、Workerはもう使っていない。
+#     以前はその死活(dailyの最終workflow_dispatchからの経過)も表示していたが、この監視や
+#     手動の起動も同じworkflow_dispatchなので区別できず、当てにならない表示になっていたため
+#     2026-10-02に削除した。
 #   - 既存のdaily/auto-updateは一切変更していない。このワークフローは検知と起動だけを行い、
 #     リポジトリへの書き込みは行わない(contents: read)。
 on:
@@ -83,29 +86,6 @@ jobs:
             jq -r '.warnings[]?  | "- warning : " + .' health.json
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Cloudflare Worker(kyotei-ai-trigger)の心拍。定刻dispatchが途絶えたこと自体を
-      # 検知する。2026-09-08の停止が3日以上誰にも気づかれなかったのはこの目が無かったため。
-      - name: 外部トリガ(Cloudflare Worker)の死活を確認
-        id: worker
-        run: |
-          STALE_H=$(jq -r '.worker_dispatch_stale_hours' scripts/health_thresholds.json)
-          LAST=$(gh api "repos/$REPO/actions/workflows/daily.yml/runs?event=workflow_dispatch&per_page=1" \
-                   --jq '.workflow_runs[0].created_at // empty')
-          if [ -z "$LAST" ]; then
-            echo "stale=true"  >> "$GITHUB_OUTPUT"
-            echo "age_h=never"  >> "$GITHUB_OUTPUT"
-            echo "- Worker: 定刻dispatchの記録が1件も無い" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          AGE_H=$(( ( $(date -u +%s) - $(date -u -d "$LAST" +%s) ) / 3600 ))
-          echo "age_h=$AGE_H" >> "$GITHUB_OUTPUT"
-          if [ "$AGE_H" -gt "$STALE_H" ]; then
-            echo "stale=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "stale=false" >> "$GITHUB_OUTPUT"
-          fi
-          echo "- Worker最終dispatch: $LAST (${AGE_H}時間前 / 閾値 ${STALE_H}h)" >> "$GITHUB_STEP_SUMMARY"
-
       # 開催中ループ(auto-update)が止まっていれば起動する。止まっている間のレースは
       # 締切15分前に確定できず事後判定になるが、公開JSONの日付は正常なままなので
       # 上の判定では見つからない。時間外(5:00前・23:00以降)と稼働中は何もしない。
@@ -172,9 +152,6 @@ jobs:
 
       - name: 異常をIssueに起票
         id: issue
-        # 外部トリガ(Cloudflare Worker)の停止だけでは起票しない。Workerは2026-09-09から
-        # 止まったままで、朝の公開はdailyの多重cron(2026-10-02)で賄っているため、
-        # 停止を条件にすると毎日Issueが立ってしまう。死活は実行サマリーにだけ残す。
         if: >-
           always() &&
           (steps.check.outputs.level == 'critical' && steps.recheck.outputs.recovered != 'true')
@@ -197,19 +174,13 @@ jobs:
             jq -r '.warnings[]?  | "warning : " + .' health.json
             echo '```'
             echo ""
-            echo "## 外部トリガ(Cloudflare Worker)"
-            echo "最終dispatchからの経過: ${{ steps.worker.outputs.age_h }} 時間 (stale=${{ steps.worker.outputs.stale }})"
-            echo ""
             echo "## 復旧の試行"
             echo "daily の起動: ${{ steps.heal.outputs.dispatched }}"
-            echo "15分以内の復旧: ${{ steps.recheck.outputs.recovered }}"
+            echo "20分以内の復旧: ${{ steps.recheck.outputs.recovered }}"
             echo ""
             echo "## 対処"
             echo "1. まず Actions タブ > watchdog > Run workflow を押す(多くの場合これで直る)。"
             echo "2. 直らなければ Actions タブで daily の直近の実行ログを開き、赤いステップを見る。"
-            echo "3. Worker が stale=true のときは https://dash.cloudflare.com の"
-            echo "   Workers & Pages > kyotei-ai-trigger > Logs を見る。"
-            echo "   実行記録が無ければ Cloudflare 側の cron 不発火、401/403 が並んでいれば GitHub トークンの失効。"
             echo ""
             echo "実行: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } > "$BODY"
@@ -223,22 +194,18 @@ jobs:
           elif [ -z "$NUM" ]; then
             # Issueの新規作成はリポジトリ所有者にメールで届く。これが設定ゼロで通知が出る経路。
             gh issue create --title "$TITLE" --label pipeline-alert --assignee "$OWNER" --body-file "$BODY"
-          elif [ "${{ steps.check.outputs.level }}" = "critical" ]; then
+          else
             gh issue comment "$NUM" --body-file "$BODY"
             echo "既存Issue #$NUM にコメントを追記"
-          else
-            # Worker停止のみで当日Issueが既にある場合は、同じ内容を連投しない
-            echo "既存Issue #$NUM に記載済みのためコメントしない"
           fi
 
           # Webhook / Web Push が設定されていれば即時通知も送る(未設定なら黙って何もしない)
-          python scripts/notify.py --text "$(printf '朝次処理の異常を検知しました。\n判定: %s / 復旧: %s / Worker停止: %s\nIssueを確認してください。' \
-            "${{ steps.check.outputs.level }}" "${{ steps.recheck.outputs.recovered }}" "${{ steps.worker.outputs.stale }}")" || true
+          python scripts/notify.py --text "$(printf '朝次処理の異常を検知しました。\n判定: %s / 復旧: %s\nIssueを確認してください。' \
+            "${{ steps.check.outputs.level }}" "${{ steps.recheck.outputs.recovered }}")" || true
 
       # ジョブを赤くするのは「本当に当日の予測が無い」ときだけにする。
       # continue-on-error を付けないことで、GitHub標準のワークフロー失敗メールが
-      # 設定ゼロの通知経路として機能する。Worker停止だけでは赤くしない(毎日3回の
-      # 失敗メールはノイズになり、やがて無視されて今回と同じ沈黙を生むため)。
+      # 設定ゼロの通知経路として機能する。
       - name: 当日予測が無い場合はジョブを失敗させる
         if: >-
           always() && steps.check.outputs.level == 'critical'
