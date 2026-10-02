@@ -16,8 +16,23 @@
 |---|---|---|
 | sample.yml | 指定日の生B/Kテキストを `sample_raw/` に保存(パーサ検証用) | 手動 |
 | backfill.yml | 期間指定でB/K取得・解析 → `data/races/entries_YYYY.csv.gz` | 手動 |
-| train.yml | 学習 → `data/model/` + `docs/model_report.json` | 手動 |
+| train.yml | 学習 → Release(`model-live`)へ配布 + `data/model/`(予備)更新 + `docs/model_report.json` | 手動 |
 | daily.yml | 前日結果反映 + 当日予測 → `docs/predictions/` `docs/accuracy.json` | 毎日 6:30 / 8:55 JST |
+
+## モデルの置き場
+
+学習済みモデル(約10MB)は毎朝ほぼ全体が変わるため、git には積まず GitHub Release に置く(`scripts/model_store.py`)。
+
+- Release `model-live`(prerelease)の資産 `model-YYYYMMDD-HHMM-<sha256先頭12桁>.tar.gz`: 毎日のモデル。daily が配布し、直近7個を残す
+- `data/model/live_pointer.json`: 現行の資産名と sha256(参照先)。開催中ループなどはこれを見て資産を `data/model_live/` へ取得する
+- `data/model/`: 凍結した予備(30日ごとに更新)。資産を取得できない時はこれで動く
+- `data/model_build/` `data/model_live/`: 学習の出力と取得物(gitignore)
+
+運用上の注意:
+
+- 特徴量(`scripts/features.py` の `FEATURES`)を変えたら train.yml を手動実行する(取得済みの版や予備が新しいコードと合わなくなるため)
+- リポジトリ設定で immutable releases を有効にしない(資産を追加・整理できなくなる)
+- 履歴を書き換える時は、先に `model-live` のリリースとタグを消す(タグが古い履歴を保持する。次の daily が作り直す)
 
 ## 初期セットアップ手順
 
@@ -34,6 +49,7 @@
 - `scripts/features.py` 特徴量(選手成績365/180/90日窓、会場×枠など27項目)
 - `scripts/train.py` 学習・λ最適化・バックテスト
 - `scripts/predict_today.py` 当日予測JSON生成
+- `scripts/model_store.py` 学習済みモデルの配布(Release)・取得・検証・予備更新
 - `scripts/update_results.py` 結果反映・的中実績更新
 
 ## 免責

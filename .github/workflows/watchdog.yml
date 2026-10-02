@@ -12,6 +12,8 @@ name: watchdog
 #     2026-10-02に削除した。
 #   - 既存のdaily/auto-updateは一切変更していない。このワークフローは検知と起動だけを行い、
 #     リポジトリへの書き込みは行わない(contents: read)。
+#   - 2026-10-02: 学習済みモデルを git の外(Release の資産)で配布するようにしたため、
+#     その配布が健全か(資産を取得・照合できるか、学習が止まっていないか)も独立に確かめる。
 on:
   workflow_dispatch:
     inputs:
@@ -96,11 +98,42 @@ jobs:
           bash scripts/ensure_loop.sh | tee loop.txt
           echo "- $(tail -n 1 loop.txt)" >> "$GITHUB_STEP_SUMMARY"
 
+      # 参照先(data/model/live_pointer.json)が指す資産を公開URLから実際に取得・照合できるか、
+      # 使えるモデルの学習が止まっていないかを確かめる(scripts/model_store.py verify。標準
+      # ライブラリのみ)。公開JSONの model_trained_at は配布の失敗を映さないので別に見る。
+      # verify や jq が壊れても無音にならないよう、判定を読めない時は critical として扱う。
+      # テストモードでは実行しない(既存の復旧・通知経路のテストに影響させない)。
+      - name: モデルの配布を確認
+        id: model
+        if: github.event.inputs.test == ''
+        run: |
+          set +e
+          python scripts/model_store.py verify --json > model.json
+          set -e
+          cat model.json || true
+          LEVEL=$(jq -r '.level // "critical"' model.json 2>/dev/null || echo critical)
+          case "$LEVEL" in
+            ok|warning|critical) ;;
+            *) LEVEL=critical ;;
+          esac
+          echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
+          {
+            echo ''
+            echo "### モデル配布の判定: \`$LEVEL\`"
+            echo ''
+            echo "- effective_trained_at: \`$(jq -r '.effective_trained_at' model.json 2>/dev/null || true)\`"
+            jq -r '.criticals[]? | "- critical: " + .' model.json 2>/dev/null || true
+            jq -r '.warnings[]?  | "- warning : " + .' model.json 2>/dev/null || true
+          } >> "$GITHUB_STEP_SUMMARY" || true
+
       # 暴走防止: 既にdailyが走っている、または直近90分に2回以上完走している場合は撃たない。
+      # モデル配布の異常(資産が消えた等)も daily の再配布でしか直らないので、同じく起動する。
       - name: 復旧のため daily を起動
         id: heal
         # alertテストでは起動しない(通知経路だけを確かめるため、不要なdaily実行を避ける)
-        if: steps.check.outputs.level == 'critical' && github.event.inputs.test != 'alert'
+        if: >-
+          (steps.check.outputs.level == 'critical' || steps.model.outputs.level == 'critical')
+          && github.event.inputs.test != 'alert'
         run: |
           CUT=$(date -u -d '90 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
           RUNS=$(gh api "repos/$REPO/actions/workflows/daily.yml/runs?per_page=30" \
@@ -154,8 +187,10 @@ jobs:
         id: issue
         if: >-
           always() &&
-          (steps.check.outputs.level == 'critical' && steps.recheck.outputs.recovered != 'true')
+          ((steps.check.outputs.level == 'critical' && steps.recheck.outputs.recovered != 'true')
+          || steps.model.outputs.level == 'critical')
         run: |
+          MODEL_LEVEL="${{ steps.model.outputs.level }}"
           YMD=$(TZ=Asia/Tokyo date +%Y-%m-%d)
           TITLE="[アリテイ] 朝次処理の異常 $YMD"
           BODY=$(mktemp)
@@ -174,6 +209,16 @@ jobs:
             jq -r '.warnings[]?  | "warning : " + .' health.json
             echo '```'
             echo ""
+            if [ -n "$MODEL_LEVEL" ]; then
+              echo "## モデル配布"
+              echo '```'
+              echo "level: $MODEL_LEVEL"
+              jq -r '"effective_trained_at: " + (.effective_trained_at|tostring)' model.json 2>/dev/null || echo "(model.json を読めない)"
+              jq -r '.criticals[]? | "critical: " + .' model.json 2>/dev/null || true
+              jq -r '.warnings[]?  | "warning : " + .' model.json 2>/dev/null || true
+              echo '```'
+              echo ""
+            fi
             echo "## 復旧の試行"
             echo "daily の起動: ${{ steps.heal.outputs.dispatched }}"
             echo "20分以内の復旧: ${{ steps.recheck.outputs.recovered }}"
@@ -181,6 +226,9 @@ jobs:
             echo "## 対処"
             echo "1. まず Actions タブ > watchdog > Run workflow を押す(多くの場合これで直る)。"
             echo "2. 直らなければ Actions タブで daily の直近の実行ログを開き、赤いステップを見る。"
+            if [ -n "$MODEL_LEVEL" ]; then
+              echo "3. モデル配布の異常は Actions タブ > daily > Run workflow でやり直す。Releases の model-live が消えていても daily が作り直す。"
+            fi
             echo ""
             echo "実行: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } > "$BODY"
@@ -200,16 +248,21 @@ jobs:
           fi
 
           # Webhook / Web Push が設定されていれば即時通知も送る(未設定なら黙って何もしない)
-          python scripts/notify.py --text "$(printf '朝次処理の異常を検知しました。\n判定: %s / 復旧: %s\nIssueを確認してください。' \
-            "${{ steps.check.outputs.level }}" "${{ steps.recheck.outputs.recovered }}")" || true
+          TEXT="$(printf '朝次処理の異常を検知しました。\n判定: %s / 復旧: %s\nIssueを確認してください。' \
+            "${{ steps.check.outputs.level }}" "${{ steps.recheck.outputs.recovered }}")"
+          if [ -n "$MODEL_LEVEL" ]; then
+            TEXT="$(printf '%s\nモデル配布の判定: %s' "$TEXT" "$MODEL_LEVEL")"
+          fi
+          python scripts/notify.py --text "$TEXT" || true
 
-      # ジョブを赤くするのは「本当に当日の予測が無い」ときだけにする。
+      # ジョブを赤くするのは「本当に当日の予測が無い」とき、またはモデルの配布が異常なときだけにする。
       # continue-on-error を付けないことで、GitHub標準のワークフロー失敗メールが
       # 設定ゼロの通知経路として機能する。
-      - name: 当日予測が無い場合はジョブを失敗させる
+      - name: 当日予測またはモデル配布が復旧しない場合はジョブを失敗させる
         if: >-
-          always() && steps.check.outputs.level == 'critical'
-          && steps.recheck.outputs.recovered != 'true'
+          always() &&
+          ((steps.check.outputs.level == 'critical' && steps.recheck.outputs.recovered != 'true')
+          || steps.model.outputs.level == 'critical')
         run: |
-          echo "当日の予測が復旧しなかったため、このジョブを失敗として終了する"
+          echo "当日の予測またはモデルの配布が復旧しなかったため、このジョブを失敗として終了する"
           exit 1

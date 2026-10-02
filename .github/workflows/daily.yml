@@ -79,11 +79,27 @@ jobs:
         continue-on-error: true
         run: python scripts/build_calib.py
       - name: retrain model (daily)
+        id: train
         if: steps.gate.outputs.skip != 'true'
         run: python scripts/train.py
         continue-on-error: true
-      # 予測より前の成果物(前日結果・実績・較正・モデル)を先に確定させる。ここまでの手順は
+      # 学習したモデル(data/model_build。git には入れない)を Release の資産として配布する。
+      # 公開URLから読み戻して sha256 が合った後にだけ、参照先(data/model/live_pointer.json)を
+      # 書く。参照先と、30日ごとの予備(data/model)の更新は、次の commit ステップで main に入る。
+      # ここが失敗しても朝の予測は止めない(predict today は手元の data/model_build を使い、
+      # 開催中ループは前回の資産で動き続ける)。失敗は末尾のステップでジョブを赤くして知らせる。
+      - name: モデルを配布 (Release資産)
+        id: publish
+        if: steps.gate.outputs.skip != 'true' && steps.train.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          python scripts/model_store.py publish
+          python scripts/model_store.py freeze
+      # 予測より前の成果物(前日結果・実績・較正・モデルの参照先)を先に確定させる。ここまでの手順は
       # 当日の予測ファイルに触れないので、開催中ループの書き込みとは衝突しない。
+      # pull と push の間に開催中ループのコミットが入ると push が拒否されるので、3回まで
+      # やり直す(ここで落ちると、資産だけ上がって参照先が main に届かない状態になる)。
       - name: commit (前日結果・実績・モデル)
         if: steps.gate.outputs.skip != 'true'
         run: |
@@ -91,8 +107,13 @@ jobs:
           git config user.email github-actions@github.com
           git add data/races data/fan data/model docs
           git diff --cached --quiet || git commit -m "daily data $(TZ=Asia/Tokyo date +%Y%m%d)"
-          git pull --rebase --autostash -X theirs
-          git push
+          for i in 1 2 3; do
+            if git pull --rebase --autostash -X theirs && git push; then break; fi
+            git rebase --abort 2>/dev/null || true
+            if [ "$i" = 3 ]; then echo "3回試しても push できなかった"; exit 1; fi
+            echo "pull/push に失敗した(try $i)。やり直す"
+            sleep 3
+          done
       # 当日の予測は「最新の状態を取り直す → 予測を重ねて書く → そのままpush」で公開する。
       # predict_today は手元の当日ファイルから打刻・結果・展示反映を引き継ぐので、
       # 直前に取り直せば開催中ループの書き込みを保てる。pushが競合したら(ループが先に
@@ -127,3 +148,13 @@ jobs:
       - name: 開催中ループ(auto-update)が動いていなければ起動
         if: always()
         run: bash scripts/ensure_loop.sh
+      # 学習や配布が失敗しても、予測の公開とループの起動までは済ませてから、ここでジョブを
+      # 赤くする(GitHub標準の失敗メールが届く)。配布されていない間は daily_gate.py が
+      # 省かないので、次に着弾した回が学習からやり直す。
+      - name: 学習または配布の失敗を知らせる
+        if: >-
+          always() && steps.gate.outputs.skip != 'true'
+          && (steps.train.outcome == 'failure' || steps.publish.outcome == 'failure')
+        run: |
+          echo "::error title=モデルの学習または配布に失敗::train=${{ steps.train.outcome }} publish=${{ steps.publish.outcome }}。予測の公開とループ起動は済んでいる。次の回が学習からやり直す"
+          exit 1

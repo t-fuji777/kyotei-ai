@@ -66,8 +66,9 @@ jobs:
           # 走り続け、後から差分が出た瞬間に rebase -X theirs で他runnerの新しい
           # データを巻き戻す事故が起きていた(2026-08-05: 70レース巻き戻し・
           # 打刻36件を改竄)。未pushのローカルコミットがある時だけ reset を見送る。
+          # fetch に失敗した時は 0 で戻る(非0で戻ると bash -e によりループ全体が終了する)。
           sync_remote() {
-            git fetch origin main || return
+            git fetch origin main || return 0
             if git merge-base --is-ancestor HEAD FETCH_HEAD 2>/dev/null; then
               git reset --hard FETCH_HEAD
             else
@@ -95,6 +96,9 @@ jobs:
           HEAL_AT=0
           while true; do
             sync_remote
+            # 参照先(data/model/live_pointer.json)が指すモデルを取得する。取得済みなら通信しない。
+            # 失敗しても前回の取得分か git の予備(data/model)で動き続ける。
+            python scripts/model_store.py fetch || true
             H=$(TZ=Asia/Tokyo date +%H)
             M=$(TZ=Asia/Tokyo date +%M)
             HM=$((10#$H*60 + 10#$M))

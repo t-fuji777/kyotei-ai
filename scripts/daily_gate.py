@@ -12,7 +12,10 @@ daily はschedule遅延対策で1日7回予約されており、最初に成功�
   1. latest.json が本日の日付で、レースが入っている
   2. 本日学習したモデルで作られている(自己復旧は前日モデルで代行するため、
      その場合は省かず、再学習と作り直しを1回行う)
-  3. 前日の結果が実績(accuracy.json)に反映済み(前日に予測があった場合)
+  3. 本日学習したモデルが配布済み(data/model/live_pointer.json の trained_at が本日)。
+     配布に失敗した回のあとは省かず、次に着弾した回が学習と配布をやり直す。
+     参照先がまだ無い導入直後も省かない(最初に着弾した回が配布まで行う)
+  4. 前日の結果が実績(accuracy.json)に反映済み(前日に予測があった場合)
 手動起動(workflow_dispatch)では呼ばれない。必ず最後まで実行する。
 """
 import json
@@ -47,6 +50,10 @@ def decide(now=None, root=ROOT):
     if trained != today:
         return False, "当日の予測が本日学習のモデルで作られていない(model_trained_at=%s)" % (
             latest.get("model_trained_at"),)
+    ptr = _load(root / "data" / "model" / "live_pointer.json")
+    ptr_at = ptr.get("trained_at") if isinstance(ptr, dict) else None
+    if not isinstance(ptr_at, str) or ptr_at[:10].replace("-", "") != today:
+        return False, "本日学習のモデルが未配布(参照先 trained_at=%s)" % (ptr_at,)
 
     yp = _load(pdir / (yday + ".json"))
     if yp and any(v.get("races") for v in yp.get("venues") or []):

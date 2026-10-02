@@ -29,10 +29,45 @@ def load_hist() -> pd.DataFrame:
     return df[~df["abnormal"].isin(["K0", "K1"])]
 
 
+def _model_candidates():
+    """使うモデルの候補を、優先順に [(ディレクトリ, 種別)] で返す。
+
+    置き場と選び方は scripts/model_store.py を参照(この場で学習した data/model_build、
+    Release から取得した data/model_live、git の予備 data/model のうち、検査を通るものを
+    学習時刻の新しい順に)。参照先(data/model/live_pointer.json)が無い間は予備だけになる。
+    取得や候補選びの不具合では予測を止めない。
+    """
+    try:
+        import model_store
+    except Exception as e:
+        print(f"model: model_store を読み込めない({type(e).__name__}: {e})。git の data/model を使う", flush=True)
+        return [(ROOT / "data" / "model", "frozen")]
+    try:
+        model_store.fetch()
+    except Exception as e:
+        print(f"model: 取得の不具合({type(e).__name__}: {e})。予測は止めず、手元にあるモデルで続行する", flush=True)
+    try:
+        return [(d, kind) for d, _meta, kind in model_store.candidates()]
+    except Exception as e:
+        print(f"model: 候補を選べない({type(e).__name__}: {e})。git の data/model を使う", flush=True)
+        return [(ROOT / "data" / "model", "frozen")]
+
+
 def load_models():
-    meta = json.loads((ROOT / "data" / "model" / "meta.json").read_text())
-    models = {t: lgb.Booster(model_file=str(ROOT / "data" / "model" / f"model_{t}.txt"))
-              for t in ("win", "top2", "top3")}
+    meta = models = None
+    for d, kind in _model_candidates():
+        try:
+            m = json.loads((Path(d) / "meta.json").read_text(encoding="utf-8"))
+            b = {t: lgb.Booster(model_file=str(Path(d) / f"model_{t}.txt"))
+                 for t in ("win", "top2", "top3")}
+            print(f"model: {kind} trained_at={m['trained_at']}", flush=True)
+        except Exception as e:
+            print(f"model: {kind} を読めない({type(e).__name__}: {e})。次の候補へ", flush=True)
+            continue
+        meta, models = m, b
+        break
+    if models is None:
+        raise SystemExit("使えるモデルが無い(data/model_build / data/model_live / data/model のどれも読めない)")
     # sengen(厳選)判定は common.is_sengen()に統一(top3p閾値+除外会場)。
     # ここで組み立てるsengen dictはload_models呼び出し元との互換のため残すが、
     # is_senの判定自体には使わない(meta由来のvenues許可リストは廃止)。

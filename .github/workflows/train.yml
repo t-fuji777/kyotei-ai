@@ -10,6 +10,8 @@ jobs:
   train:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,6 +20,14 @@ jobs:
       - run: pip install pandas numpy lightgbm
       - name: train model
         run: python scripts/train.py
+      # 学習の出力は data/model_build(gitignore)。Release へ配布して参照先
+      # (data/model/live_pointer.json)を書き、git の予備(data/model)も更新する。
+      # どちらかが失敗したらジョブを失敗させる(何もコミットしない)。
+      - name: モデルを配布 (Release資産) と予備の更新
+        timeout-minutes: 10
+        run: |
+          python scripts/model_store.py publish
+          python scripts/model_store.py freeze --force
       - name: commit
         run: |
           git config user.name github-actions

@@ -11,5 +11,7 @@
   "races_per_venue_expect": 12,
   "wp_sum_tol": 0.002,
   "picks_len_expect": 10,
-  "struct_bad_ratio_max": 0.10
+  "struct_bad_ratio_max": 0.10,
+  "model_stale_crit_days": 2,
+  "model_frozen_warn_days": 45
 }

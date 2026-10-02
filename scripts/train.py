@@ -200,8 +200,13 @@ def main():
     rep_base = report(race_eval_rows(te2), sengen)
     print("BASELINE:", json.dumps(rep_base, ensure_ascii=False))
 
-    out = ROOT / "data" / "model"
+    # 出力先は data/model_build(gitignore)。ここから scripts/model_store.py publish が Release へ
+    # 配布する。data/model は凍結した予備で、学習では書き換えない。
+    out = ROOT / "data" / "model_build"
     out.mkdir(parents=True, exist_ok=True)
+    # meta.json は最後に書くので、これが「一式が完成した」目印になる。先に消しておけば、
+    # 途中で落ちた時に古い meta と新しいモデルが混ざった状態を完成品と見誤らない。
+    (out / "meta.json").unlink(missing_ok=True)
     for tgt in TARGETS:
         models[tgt].save_model(str(out / f"model_{tgt}.txt"))
     imp = dict(zip(FEATURES, models["win"].feature_importance("gain").round(1).tolist()))
