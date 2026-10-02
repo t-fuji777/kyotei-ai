@@ -32,48 +32,94 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: write
+  actions: write
 jobs:
   daily:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install lhafile pandas numpy lightgbm pillow requests
+      # 1日7回の予約のうち、最初に成功した回のあとに着弾した回はここで終わる。
+      # 遅い回(実着10〜12時)が開催中ループの打刻・結果を古い状態で上書きして消していた
+      # ため(2026-08-04〜09-30で打刻110件・結果63件)。手動起動とwatchdogからの起動は
+      # 省かずに最後まで実行する。判定の中身は scripts/daily_gate.py。
+      - name: 当日分が公開済みなら以降を省く
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python scripts/daily_gate.py >> "$GITHUB_OUTPUT" || echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.gate.outputs.skip != 'true'
+        run: pip install lhafile pandas numpy lightgbm pillow requests
       - name: ensure icons
+        if: steps.gate.outputs.skip != 'true'
         run: python scripts/make_icons.py
         continue-on-error: true
       - name: fetch latest fan data
+        if: steps.gate.outputs.skip != 'true'
         run: python scripts/fetch_fan.py --latest
         continue-on-error: true
       - name: update yesterday results
+        if: steps.gate.outputs.skip != 'true'
         run: python scripts/update_results.py
         continue-on-error: true
       - name: build calibration
+        if: steps.gate.outputs.skip != 'true'
         continue-on-error: true
         run: python scripts/build_calib.py
       - name: retrain model (daily)
+        if: steps.gate.outputs.skip != 'true'
         run: python scripts/train.py
         continue-on-error: true
-      - name: predict today
-        env:
-          IN_DATE: ${{ github.event.inputs.date }}
-        run: |
-          if [ -n "$IN_DATE" ]; then
-            if ! [[ "$IN_DATE" =~ ^[0-9]{8}$ ]]; then
-              echo "invalid date '$IN_DATE' (expected YYYYMMDD)"; exit 1
-            fi
-            python scripts/predict_today.py --date "$IN_DATE"
-          else
-            python scripts/predict_today.py
-          fi
-      - name: commit
+      # 予測より前の成果物(前日結果・実績・較正・モデル)を先に確定させる。ここまでの手順は
+      # 当日の予測ファイルに触れないので、開催中ループの書き込みとは衝突しない。
+      - name: commit (前日結果・実績・モデル)
+        if: steps.gate.outputs.skip != 'true'
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add data/races data/fan data/model docs
-          git diff --cached --quiet || git commit -m "daily update $(TZ=Asia/Tokyo date +%Y%m%d)"
+          git diff --cached --quiet || git commit -m "daily data $(TZ=Asia/Tokyo date +%Y%m%d)"
           git pull --rebase --autostash -X theirs
           git push
+      # 当日の予測は「最新の状態を取り直す → 予測を重ねて書く → そのままpush」で公開する。
+      # predict_today は手元の当日ファイルから打刻・結果・展示反映を引き継ぐので、
+      # 直前に取り直せば開催中ループの書き込みを保てる。pushが競合したら(ループが先に
+      # 書いた)、上書きで押し切らずに取り直してやり直す。以前は学習(約10分)の前に
+      # 取り出した古い状態で作り、rebase -X theirs で押し切っていた。
+      - name: predict today
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          IN_DATE: ${{ github.event.inputs.date }}
+        run: |
+          ARGS=""
+          if [ -n "$IN_DATE" ]; then
+            if ! [[ "$IN_DATE" =~ ^[0-9]{8}$ ]]; then
+              echo "invalid date '$IN_DATE' (expected YYYYMMDD)"; exit 1
+            fi
+            ARGS="--date $IN_DATE"
+          fi
+          for attempt in 1 2 3 4 5 6; do
+            git fetch origin main
+            git reset --hard origin/main
+            python scripts/predict_today.py $ARGS
+            git add docs/predictions
+            if git diff --cached --quiet; then echo "予測に変更なし"; exit 0; fi
+            git commit -m "daily update $(TZ=Asia/Tokyo date +%Y%m%d)"
+            if git push origin HEAD:main; then echo "pushed (try $attempt)"; exit 0; fi
+            echo "pushが競合した(try $attempt)。最新を取り直して予測をやり直す"
+            sleep 2
+          done
+          echo "6回試しても公開できなかった"; exit 1
+      # 開催中ループをscheduleの遅延に任せず、ここから起動する(動いていれば何もしない)。
+      # 省いた回でも実行するので、1日7回の着弾がそのままループの死活確認になる。
+      - name: 開催中ループ(auto-update)が動いていなければ起動
+        if: always()
+        run: bash scripts/ensure_loop.sh

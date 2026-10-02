@@ -8,6 +8,9 @@ on:
     # 9:30〜10:50になり、朝一番のレース(締切8:30〜)が締切15分前に確定できず結果確定後の
     # 事後打刻になっていた(1日4〜11レース)。名目3:07〜6:37を追加し、7:00より前に着弾した
     # 回はループ内で7:00まで待機させる(5:00より前の着弾は従来通り即終了)。
+    # 同日追記: scheduleは起動の保険に格下げした。主経路は workflow_dispatch で、
+    # daily の末尾・watchdog・ループ自身の5時間引き継ぎが scripts/ensure_loop.sh で起動する
+    # (30分おきの予約に対し実着は1日4回前後しかなく、遅延も数時間あるため)。
     - cron: "7,37 18-21 * * *"
     - cron: "7,37 22-23 * * *"
     - cron: "7,37 0-13 * * *"
@@ -16,6 +19,7 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: write
+  actions: write
 jobs:
   loop:
     runs-on: ubuntu-latest
@@ -28,6 +32,7 @@ jobs:
       - run: pip install pandas numpy lightgbm lhafile requests pywebpush
       - name: loop results + live re-predict
         env:
+          GH_TOKEN: ${{ github.token }}
           NOTIFY_WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK }}
           NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
           PUSH_SUBS_URL: ${{ vars.PUSH_SUBS_URL }}
@@ -117,6 +122,14 @@ jobs:
               HEAVY_AT=$(date +%s)
             fi
             E=$(( $(date +%s) - START ))
-            if [ "$E" -ge 17400 ]; then echo "5h cap, exit for handoff"; exit 0; fi
+            # 5時間で後継へ引き継ぐ。以前は次のschedule着弾を待つだけで、着弾が遅い日は
+            # 20〜45分の無人時間ができ、その間のレースが締切15分前に確定できなかった
+            # (2026-09-21〜10-01で5日、19〜20時台に1〜9件)。後継は自分で起動する。
+            # 起動した回は concurrency によりこの回の終了を待ってから走り出す。
+            if [ "$E" -ge 17400 ]; then
+              echo "5h cap, exit for handoff"
+              bash scripts/ensure_loop.sh --handoff || true
+              exit 0
+            fi
             sleep 60
           done

@@ -106,6 +106,16 @@ jobs:
           fi
           echo "- Worker最終dispatch: $LAST (${AGE_H}時間前 / 閾値 ${STALE_H}h)" >> "$GITHUB_STEP_SUMMARY"
 
+      # 開催中ループ(auto-update)が止まっていれば起動する。止まっている間のレースは
+      # 締切15分前に確定できず事後判定になるが、公開JSONの日付は正常なままなので
+      # 上の判定では見つからない。時間外(5:00前・23:00以降)と稼働中は何もしない。
+      - name: 開催中ループ(auto-update)の死活を確認
+        id: loop
+        if: github.event.inputs.test == ''
+        run: |
+          bash scripts/ensure_loop.sh | tee loop.txt
+          echo "- $(tail -n 1 loop.txt)" >> "$GITHUB_STEP_SUMMARY"
+
       # 暴走防止: 既にdailyが走っている、または直近90分に2回以上完走している場合は撃たない。
       - name: 復旧のため daily を起動
         id: heal
