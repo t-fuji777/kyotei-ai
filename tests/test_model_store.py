@@ -593,15 +593,27 @@ def test_verify_always_outputs_json_even_on_exception():
 
 
 def test_cli_verify_subprocess_outputs_utf8_json():
-    """watchdog と同じ呼び方(別プロセス・標準出力をファイルへ)で、UTF-8 の JSON が出ること。"""
-    env = dict(os.environ, MODEL_BASE_URL="file:///nonexistent")
+    """watchdog と同じ呼び方(別プロセス・標準出力をそのまま受ける)で、UTF-8 の JSON が出ること。
+    リポジトリの状態に左右されないよう、別プロセスの側でも根を一時ディレクトリへ差し替える。"""
+    root, rel = sandbox()
+    ptr = fake_publish(rel, "2026-10-03 06:12 JST", "d1")
+    drop_build()
+    (rel / ptr["asset"]).unlink()                                   # 資産が消えた → critical(理由は日本語)
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); import model_store as ms; "
+            "from pathlib import Path; ms.ROOT = Path(sys.argv[2]); ms._sleep = lambda sec: None; "
+            "sys.exit(ms.main(['verify', '--json']))")
+    env = dict(os.environ)
     env.pop("PYTHONIOENCODING", None)
     env.pop("PYTHONUTF8", None)
-    r = subprocess.run([sys.executable, str(REPO / "scripts" / "model_store.py"), "verify", "--json"],
+    r = subprocess.run([sys.executable, "-c", code, str(REPO / "scripts"), str(root)],
                        capture_output=True, env=env, timeout=120)
     out = json.loads(r.stdout.decode("utf-8"))
-    assert out["level"] in ("ok", "warning", "critical")
-    assert r.returncode == {"ok": 0, "warning": 1, "critical": 2}[out["level"]]
+    assert r.returncode == 2 and out["level"] == "critical", (r.returncode, out)
+    assert any(c.startswith("M1 配布物") for c in out["criticals"]), out
+    # スクリプトとして直接実行できること(status は通信しない)
+    r = subprocess.run([sys.executable, str(REPO / "scripts" / "model_store.py"), "status"],
+                       capture_output=True, env=dict(env, PYTHONUTF8="1"), timeout=120)
+    assert r.returncode == 0 and "candidates" in json.loads(r.stdout.decode("utf-8"))
 
 
 # ------------------------------------------------------------------ 配布(gh は偽物)
