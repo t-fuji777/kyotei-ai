@@ -27,6 +27,10 @@ on:
       date:
         description: "予測対象日 YYYYMMDD (省略=本日JST)"
         required: false
+      gate:
+        description: "動作テスト用。true にすると schedule 起動と同じく「公開済みなら省く」判定を行う"
+        required: false
+        default: ""
 concurrency:
   group: data
   cancel-in-progress: false
@@ -51,7 +55,7 @@ jobs:
       - name: 当日分が公開済みなら以降を省く
         id: gate
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event.inputs.gate }}" = "true" ]; then
             python scripts/daily_gate.py >> "$GITHUB_OUTPUT" || echo "skip=false" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
