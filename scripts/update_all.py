@@ -156,7 +156,7 @@ def do_stamps(pred, now, skip=None, only=None) -> int:
 # 止めたいときはここを False にして main へ入れる。実行中のループは毎周回 scripts/ を
 # 取り直すので、1周回(約1〜3分)以内に従来の動き(full の中では開始時刻で1回だけ判定)へ戻る。
 MIDRUN_STAMP = True     # full の取得の合間に時刻を取り直して打刻する
-MIDRUN_PUBLISH = False  # 合間の打刻をその場で commit/push する(auto-update ループ内のみ)
+MIDRUN_PUBLISH = True   # 合間の打刻をその場で commit/push する(auto-update ループ内のみ)
 TAIL_STAMP = True       # --results-only の末尾で、買い目もオッズも動かないレースだけ追い打刻する
 
 
