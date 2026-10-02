@@ -1,0 +1,15 @@
+{
+ "v": 1,
+ "tag": "model-live",
+ "asset": "model-20261002-1225-c738829443d0.tar.gz",
+ "sha256": "c738829443d04d47b7353ae42d9ac2b58dd8349c4693d790fe13838b9b780b31",
+ "size": 4537977,
+ "trained_at": "2026-10-02 12:25 JST",
+ "period_end": "20261001",
+ "files": {
+  "meta.json": "820e9c03d908f7cab47d22637a9b32e045295c611229709267cd0665870acf67",
+  "model_top2.txt": "0bdd1d2ea5fe0ff4c86694933a131e060b5ad9a111d28793051613cfdbf49d2e",
+  "model_top3.txt": "069c76c5f7be4845f40b34c9aa234deba6f8e5333a310251608bb26696bd0d34",
+  "model_win.txt": "a26c996be21fb7e381598317cc0351f62f038188635fb9cc32a746c72434d1df"
+ }
+}
