@@ -35,6 +35,7 @@ REAL_VALID_DIR = ms.valid_dir
 REAL_READ_POINTER = ms.read_pointer
 NET = {"n": 0}
 TMP_ROOTS = []
+SKIPPED = []           # 環境の都合で飛ばした確認(末尾の集計に出す。REQUIRE_REAL_MODEL=1 なら飛ばさず失敗にする)
 
 HEAD = b"tree\nversion=v4\nnum_class=1\n"
 TAIL = b"\nend of parameters\n\npandas_categorical:[]\n"
@@ -525,6 +526,126 @@ def test_freeze_rules():
     assert code == 0 and "更新しない" in out
 
 
+def test_freeze_replaces_meta_last_and_keeps_tmp_out_of_git_dir():
+    """置き換えは meta.json が最後(途中で止まっても古い meta のままなので次回やり直す)。
+    一時ファイルは git 管理下の data/model に作らない。"""
+    root, rel = sandbox()
+    frozen = ms._p("frozen")
+    make_model(ms._p("build"), "2026-10-03 06:10 JST", "new")
+    order, seen_in_frozen = [], []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        order.append(Path(dst).name)
+        seen_in_frozen.append(sorted(p.name for p in frozen.iterdir()))
+        return real_replace(src, dst)
+
+    ms.os.replace = spy
+    try:
+        assert ms.freeze(now=datetime(2026, 10, 3, 7, 0, tzinfo=ms.JST))[0] is True
+    finally:
+        ms.os.replace = real_replace
+    assert order[-1] == "meta.json" and sorted(order) == sorted(ms.FILES), order
+    assert all(names == sorted(ms.FILES) for names in seen_in_frozen), seen_in_frozen
+    assert not [p for p in ms._p("live").iterdir() if p.name.startswith(".freeze-")]
+
+
+def test_freeze_does_not_downgrade():
+    """予備が30日以上前でも、元のモデルが予備より新しくなければ更新しない。"""
+    root, rel = sandbox()
+    frozen = ms._p("frozen")                                  # 2026-09-01 学習
+    make_model(ms._p("build"), "2026-08-15 06:00 JST", "older")
+    before = tree_hash(frozen)
+    changed, msg = ms.freeze(now=datetime(2026, 10, 20, 7, 0, tzinfo=ms.JST))
+    assert changed is False and "新しくない" in msg and tree_hash(frozen) == before, msg
+
+
+def test_pointer_trained_at_mismatch_is_rejected():
+    """参照先の trained_at だけが資産の中身と違う場合も取得を拒否し、CURRENT は変えない。"""
+    root, rel = sandbox()
+    ptr = fake_publish(rel, "2026-10-03 06:12 JST", "a")
+    drop_build()
+    assert quiet(ms.fetch)[0][0]
+    cur = ms.live_current()
+    ptr2 = fake_publish(rel, "2026-10-04 06:12 JST", "b")
+    drop_build()
+    bad = dict(ptr2, trained_at="2026-10-04 06:13 JST")
+    ms._atomic_write(ms._p("pointer"), json.dumps(bad, indent=1) + "\n")
+    (ok, msg), out = quiet(ms.fetch, force=True)
+    assert not ok and "trained_at が参照先と違う" in msg, msg
+    assert ms.live_current() == cur
+
+
+def test_install_keeps_existing_same_version():
+    """同じ版が既に置いてある時は消さずに使う(同時に取得した別のプロセスが読んでいる版を消さない)。"""
+    root, rel = sandbox()
+    ptr = fake_publish(rel, "2026-10-03 06:12 JST", "a")
+    drop_build()
+    assert quiet(ms.fetch)[0][0]
+    cur = ms.live_current()
+    marker = cur / "model_win.txt"
+    ino_before = (marker.stat().st_mtime_ns, marker.stat().st_size)
+    removed = []
+    real_rmtree = shutil.rmtree
+
+    def spy(path, *a, **kw):
+        removed.append(Path(path).name)
+        return real_rmtree(path, *a, **kw)
+
+    ms.shutil.rmtree = spy
+    try:
+        ms.install(rel / ptr["asset"], ptr)
+    finally:
+        ms.shutil.rmtree = real_rmtree
+    assert cur.name not in removed, removed
+    assert (marker.stat().st_mtime_ns, marker.stat().st_size) == ino_before
+    assert ms.live_current() == cur
+    # 置いてある版が壊れていれば置き直す
+    marker.write_bytes(b"broken")
+    ms.install(rel / ptr["asset"], ptr)
+    assert ms.live_current() == cur and tree_hash(cur) == ptr["files"]
+
+
+def test_verify_needs_republish_only_for_asset_or_backup_problems():
+    root, rel = sandbox()
+    ptr = fake_publish(rel, "2026-10-03 06:12 JST", "a")
+    drop_build()
+    make_model(ms._p("frozen"), "2026-10-01 06:00 JST", "frozen")
+    th = {"model_stale_crit_days": 2, "model_frozen_warn_days": 45}
+    ok = ms.verify(now=datetime(2026, 10, 3, 9, 0, tzinfo=ms.JST), thresholds=th)
+    assert ok["level"] == "ok" and ok["needs_republish"] is False, ok
+    stale = ms.verify(now=datetime(2026, 10, 5, 9, 0, tzinfo=ms.JST), thresholds=th)      # 学習が止まっているだけ
+    assert stale["level"] == "critical" and stale["needs_republish"] is False, stale
+    assert any(c.startswith("M2") for c in stale["criticals"])
+    (rel / ptr["asset"]).unlink()                                                          # 資産が消えた
+    gone = ms.verify(now=datetime(2026, 10, 3, 9, 0, tzinfo=ms.JST), thresholds=th)
+    assert gone["level"] == "critical" and gone["needs_republish"] is True, gone
+    ms._p("pointer").write_text("{broken", encoding="utf-8")                              # 参照先が不正
+    badp = ms.verify(now=datetime(2026, 10, 3, 9, 0, tzinfo=ms.JST), thresholds=th)
+    assert badp["level"] == "critical" and badp["needs_republish"] is True, badp
+
+
+def test_age_days_counts_in_jst():
+    from datetime import timedelta, timezone
+    utc = timezone(timedelta(0))
+    now_utc = datetime(2026, 10, 2, 15, 1, tzinfo=utc)                 # JST では 10/03 00:01
+    assert ms._age_days("2026-10-01 23:58 JST", now_utc) == 2
+    assert ms._age_days("2026-10-01 23:58 JST", datetime(2026, 10, 3, 0, 1, tzinfo=ms.JST)) == 2
+    assert ms._age_days("壊れた値", now_utc) is None
+
+
+def test_valid_dir_accepts_long_tail_after_end_of_parameters():
+    """'end of parameters' の後ろに長い pandas_categorical の行が続いても、正常なモデルとして通す。"""
+    root, rel = sandbox()
+    d = make_model(root / "_long", "2026-10-03 06:12 JST", "x")
+    long_tail = b"\nend of parameters\n\npandas_categorical:[" + b"1234," * 4000 + b"0]\n"
+    for n in ms.MODEL_FILES:
+        (d / n).write_bytes(HEAD + FILLER + long_tail)
+    assert len(long_tail) > 4096 * 4 and ms.valid_dir(d) is not None
+    (d / "model_win.txt").write_bytes(HEAD + FILLER)                   # 末尾の印が無い(書きかけ)
+    assert ms.valid_dir(d) is None
+
+
 # ------------------------------------------------------------------ 健全性の判定
 
 def test_verify_levels():
@@ -893,7 +1014,10 @@ def real_model_dir():
 def test_real_model_roundtrip_is_identical():
     real = real_model_dir()
     if real is None:
+        if os.environ.get("REQUIRE_REAL_MODEL"):
+            raise AssertionError("実物のモデルを取り出せない(REQUIRE_REAL_MODEL 指定時は飛ばさない)")
         print("     (飛ばす: git から実物のモデルを取り出せない)")
+        SKIPPED.append("test_real_model_roundtrip_is_identical")
         return
     root, rel = sandbox()
     shutil.copytree(real, ms._p("build"))
@@ -912,7 +1036,10 @@ def test_real_model_roundtrip_is_identical():
         import lightgbm as lgb
         import numpy as np
     except Exception:
+        if os.environ.get("REQUIRE_REAL_MODEL"):
+            raise
         print("     (予測の一致は飛ばす: lightgbm / numpy が無い)")
+        SKIPPED.append("test_real_model_roundtrip_is_identical(予測の一致・load_models)")
         return
     rng = np.random.default_rng(0)
     for n in ms.MODEL_FILES:
@@ -925,7 +1052,10 @@ def test_real_model_roundtrip_is_identical():
     try:
         import predict_today as pt
     except Exception as e:
+        if os.environ.get("REQUIRE_REAL_MODEL"):
+            raise
         print("     (load_models は飛ばす: predict_today を読み込めない: %s)" % type(e).__name__)
+        SKIPPED.append("test_real_model_roundtrip_is_identical(load_models)")
         return
     old_root = pt.ROOT
     pt.ROOT = root
@@ -955,6 +1085,16 @@ def test_real_model_roundtrip_is_identical():
         finally:
             pt.lgb.Booster = real_booster
         assert "build を読めない" in out and "model: live trained_at=%s" % ptr["trained_at"] in out, out
+        # 改行が CRLF のモデルは LightGBM に渡さず、次の候補へ落ちる(渡すとプロセスごと落ちる)
+        bw = ms._p("build") / "model_win.txt"
+        lf = bw.read_bytes()
+        bw.write_bytes(lf.replace(b"\n", b"\r\n"))
+        try:
+            (meta, models, sengen), out = quiet(pt.load_models)
+        finally:
+            bw.write_bytes(lf)
+        assert "build は改行が CRLF なので使えない" in out, out
+        assert "model: live trained_at=%s" % ptr["trained_at"] in out, out
         # 取得処理が例外を出しても予測は止まらない
         real_fetch = ms.fetch
 
@@ -1005,5 +1145,9 @@ if __name__ == "__main__":
             fn()
             n += 1
             print("ok   " + name)
-    print("%d tests passed" % n)
-    print("ALL OK")
+    if SKIPPED:
+        print("%d tests run, 一部を飛ばした: %s" % (n, " / ".join(SKIPPED)))
+        print("OK (一部未確認)")
+    else:
+        print("%d tests passed" % n)
+        print("ALL OK")

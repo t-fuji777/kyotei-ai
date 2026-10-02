@@ -57,6 +57,12 @@ def load_models():
     meta = models = None
     for d, kind in _model_candidates():
         try:
+            # 改行が CRLF のモデル(Windows の作業ツリーにある git の予備など)を LightGBM に渡すと、
+            # 例外にならずプロセスごと落ちる。渡す前に弾く(Actions 上のファイルは LF なので該当しない)。
+            with open(Path(d) / "model_win.txt", "rb") as f:
+                if f.read(6) == b"tree\r\n":
+                    print(f"model: {kind} は改行が CRLF なので使えない。次の候補へ", flush=True)
+                    continue
             m = json.loads((Path(d) / "meta.json").read_text(encoding="utf-8"))
             b = {t: lgb.Booster(model_file=str(Path(d) / f"model_{t}.txt"))
                  for t in ("win", "top2", "top3")}
@@ -304,6 +310,7 @@ def predict_live(ymd, meta, models, sengen, window=False):
             n_upd += 1
     if n_upd:
         old["live_updated_at"] = now.strftime("%Y-%m-%d %H:%M JST")
+        old["live_model_trained_at"] = meta.get("trained_at")
         write(old, ymd)
     print(f"live update: fetched={n_fetch} ready={len(targets)} updated={n_upd}")
 
@@ -355,7 +362,7 @@ def _merge_existing(out, ymd):
                 for k in _PICK_FIELDS:
                     if k in o:
                         r[k] = o[k]
-    for k in ("results_updated_at", "odds_updated_at", "live_updated_at"):
+    for k in ("results_updated_at", "odds_updated_at", "live_updated_at", "live_model_trained_at"):
         if k in old:
             out[k] = old[k]
 

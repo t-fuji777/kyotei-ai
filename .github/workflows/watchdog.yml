@@ -107,16 +107,33 @@ jobs:
         id: model
         if: github.event.inputs.test == ''
         run: |
-          set +e
-          python scripts/model_store.py verify --json > model.json
-          set -e
+          # verify が固まっても後続(朝の復旧)を止めないよう時間切れを付ける。打ち切られると
+          # model.json が空になり、下の case で critical になる。
+          run_verify() {
+            set +e
+            timeout 300 python scripts/model_store.py verify --json > model.json
+            set -e
+            LEVEL=$(jq -r '.level // "critical"' model.json 2>/dev/null || echo critical)
+            case "$LEVEL" in
+              ok|warning|critical) ;;
+              *) LEVEL=critical ;;
+            esac
+          }
+          run_verify
+          if [ "$LEVEL" = "critical" ]; then
+            # この実行機からの一時的な通信不調で誤報を出さないよう、2分おいてもう1度だけ確かめる。
+            echo "1回目の判定が critical。120秒後にもう1度確かめる"
+            cat model.json || true
+            sleep 120
+            run_verify
+          fi
           cat model.json || true
-          LEVEL=$(jq -r '.level // "critical"' model.json 2>/dev/null || echo critical)
-          case "$LEVEL" in
-            ok|warning|critical) ;;
-            *) LEVEL=critical ;;
-          esac
+          # daily を起動して配布し直せば直る異常か(資産・参照先・予備そのものの異常)。
+          # 学習が止まっているだけ(M2)の時は false で、監視からは起動しない。
+          REPUB=$(jq -r 'if .needs_republish == true then "true" else "false" end' model.json 2>/dev/null || echo false)
+          [ "$REPUB" = "true" ] || REPUB=false
           echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
+          echo "republish=$REPUB" >> "$GITHUB_OUTPUT"
           {
             echo ''
             echo "### モデル配布の判定: \`$LEVEL\`"
@@ -127,12 +144,15 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY" || true
 
       # 暴走防止: 既にdailyが走っている、または直近90分に2回以上完走している場合は撃たない。
-      # モデル配布の異常(資産が消えた等)も daily の再配布でしか直らないので、同じく起動する。
+      # モデル配布の異常のうち、資産・参照先・予備そのものの異常は daily の再配布でしか直らないので、
+      # 同じく起動する。学習が止まっているだけの時は起動しない(毎朝の daily 自体が失敗し続けている
+      # 状態で、ここから重ねて起動しても直らず、失敗の通知だけが増える)。
       - name: 復旧のため daily を起動
         id: heal
         # alertテストでは起動しない(通知経路だけを確かめるため、不要なdaily実行を避ける)
         if: >-
-          (steps.check.outputs.level == 'critical' || steps.model.outputs.level == 'critical')
+          (steps.check.outputs.level == 'critical'
+          || (steps.model.outputs.level == 'critical' && steps.model.outputs.republish == 'true'))
           && github.event.inputs.test != 'alert'
         run: |
           CUT=$(date -u -d '90 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
@@ -193,6 +213,9 @@ jobs:
           MODEL_LEVEL="${{ steps.model.outputs.level }}"
           YMD=$(TZ=Asia/Tokyo date +%Y-%m-%d)
           TITLE="[アリテイ] 朝次処理の異常 $YMD"
+          if [ "${{ steps.check.outputs.level }}" != "critical" ] && [ "$MODEL_LEVEL" = "critical" ]; then
+            TITLE="[アリテイ] モデル配布の異常 $YMD"
+          fi
           BODY=$(mktemp)
           {
             if [ -n "$TEST_MODE" ]; then
@@ -226,7 +249,7 @@ jobs:
             echo "## 対処"
             echo "1. まず Actions タブ > watchdog > Run workflow を押す(多くの場合これで直る)。"
             echo "2. 直らなければ Actions タブで daily の直近の実行ログを開き、赤いステップを見る。"
-            if [ -n "$MODEL_LEVEL" ]; then
+            if [ "$MODEL_LEVEL" = "critical" ]; then
               echo "3. モデル配布の異常は Actions タブ > daily > Run workflow でやり直す。Releases の model-live が消えていても daily が作り直す。"
             fi
             echo ""

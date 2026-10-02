@@ -34,6 +34,18 @@ def _load(p):
         return None
 
 
+def _load_pointer(path):
+    """検証を通った参照先(dict)。無い・不正なら None。model_store を読めない時は中身をそのまま返す。"""
+    try:
+        here = str(Path(__file__).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import model_store
+        return model_store.load_pointer(path)
+    except Exception:
+        return _load(path)
+
+
 def decide(now=None, root=ROOT):
     """(skip, reason) を返す。"""
     now = now or datetime.now(JST)
@@ -50,7 +62,9 @@ def decide(now=None, root=ROOT):
     if trained != today:
         return False, "当日の予測が本日学習のモデルで作られていない(model_trained_at=%s)" % (
             latest.get("model_trained_at"),)
-    ptr = _load(root / "data" / "model" / "live_pointer.json")
+    # 参照先は model_store と同じ検証で読む。日付だけ本日でも、形式が不正な参照先は
+    # ループが使わない(前回の取得分か予備で動く)ので「未配布」として扱い、省かない。
+    ptr = _load_pointer(root / "data" / "model" / "live_pointer.json")
     ptr_at = ptr.get("trained_at") if isinstance(ptr, dict) else None
     if not isinstance(ptr_at, str) or ptr_at[:10].replace("-", "") != today:
         return False, "本日学習のモデルが未配布(参照先 trained_at=%s)" % (ptr_at,)

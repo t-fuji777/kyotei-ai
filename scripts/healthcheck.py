@@ -168,6 +168,14 @@ def evaluate(pred, th, now=None, gate=True):
             if n != th["races_per_venue_expect"]:
                 warn.append("W2 %s(%s) のレース数が%d" % (v.get("name"), v.get("code"), n))
 
+    # --- ライブ再予測に使ったモデルが朝の予測より古い(開催中ループがモデルを取得できていない) ---
+    # 学習済みモデルは Release の資産で配り、ループの実行機が取得する(scripts/model_store.py)。
+    # 取得できないと前回の版か git の予備(最大30日以上前)で黙って動くので、ここで見えるようにする。
+    lm = str(pred.get("live_model_trained_at") or "")[:10]
+    mt = str(pred.get("model_trained_at") or "")[:10]
+    if lm and mt and lm < mt:
+        warn.append("W5 ライブ再予測のモデル(%s 学習)が朝の予測のモデル(%s 学習)より古い" % (lm, mt))
+
     level = "critical" if crit else ("warning" if warn else "ok")
     return level, crit, warn, m
 

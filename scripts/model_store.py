@@ -50,17 +50,18 @@ TAG = "model-live"
 DEFAULT_REPO = "t-fuji777/kyotei-ai"
 MODEL_FILES = ("model_win.txt", "model_top2.txt", "model_top3.txt")
 FILES = ("meta.json", "model_top2.txt", "model_top3.txt", "model_win.txt")   # tar に入れる順(固定)
-ASSET_RE = re.compile(r"model-\d{8}-\d{4}-([0-9a-f]{12})\.tar\.gz")           # fullmatch で使う
+ASSET_RE = re.compile(r"model-[0-9]{8}-[0-9]{4}-([0-9a-f]{12})\.tar\.gz")           # fullmatch で使う
 SHA_RE = re.compile(r"[0-9a-f]{64}")
 VID_RE = re.compile(r"[0-9a-f]{12}")
-DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 KEEP_ASSETS = 7            # Release に残す世代数
 FREEZE_DAYS = 30           # 予備を更新する間隔(日)
 RETRY_SEC = 600            # 取得に失敗した資産を再試行するまでの間隔(秒)
 MIN_MODEL_BYTES = 100_000  # これより小さいモデルファイルは壊れているとみなす
+TAIL_SCAN_BYTES = 1 << 20  # 末尾のこの範囲に 'end of parameters' があること(後ろに pandas_categorical の行が続く)
 MAX_BYTES = 64 * 1024 * 1024
 HTTP_TIMEOUT = 10          # 1回の通信待ち(秒)
-DL_DEADLINE = 30           # ダウンロード全体の上限(秒)。開催中ループを止める時間の上限になる
+DL_DEADLINE = 30           # 本体の受信にかける上限(秒)。接続と応答待ちは別に各 HTTP_TIMEOUT 秒かかり得る
 GH_TIMEOUT = 60
 GH_UPLOAD_TIMEOUT = 180
 READBACK_TRIES = 6         # publish: 公開URLからの読み戻し回数
@@ -157,7 +158,7 @@ def _age_days(trained_at, now=None):
         d = datetime.strptime(str(trained_at)[:10], "%Y-%m-%d").date()
     except Exception:
         return None
-    return (now.date() - d).days
+    return (now.astimezone(JST).date() - d).days
 
 
 # ---------------------------------------------------------------- 検査と候補
@@ -166,7 +167,7 @@ def valid_dir(d):
     """モデル一式が揃っていて壊れていなければ meta(dict) を返す。駄目なら None。例外は出さない。
 
     meta.json に trained_at(YYYY-MM-DD で始まる文字列)があり、モデル3本がそれぞれ100KB以上、
-    先頭が 'tree'、末尾4KBに 'end of parameters' があること。Windows の作業ツリーでは改行が
+    先頭が 'tree'、末尾1MBに 'end of parameters' があること。Windows の作業ツリーでは改行が
     CRLF になるので 'tree' + 改行 では判定しない。末尾の検査は書きかけ(途中で切れたファイル)を弾く。
     """
     try:
@@ -185,7 +186,7 @@ def valid_dir(d):
             with open(p, "rb") as f:
                 if f.read(4) != b"tree":
                     return None
-                f.seek(max(0, size - 4096))
+                f.seek(max(0, size - TAIL_SCAN_BYTES))
                 if b"end of parameters" not in f.read():
                     return None
         return meta
@@ -341,6 +342,17 @@ def _extract_verified(tar_path, ptr, out_dir):
     return meta
 
 
+def _matches_pointer(d, ptr):
+    """d のモデル一式が参照先と同じ中身か(検査を通り、4ファイルの sha256 が一致)。例外は出さない。"""
+    try:
+        d = Path(d)
+        if not valid_dir(d):
+            return False
+        return all(_sha256(d / n) == h for n, h in ptr["files"].items())
+    except Exception:
+        return False
+
+
 def _cleanup_live(keep):
     """現行と1つ前以外の版と、古い一時ディレクトリを消す。失敗しても構わない。"""
     try:
@@ -366,9 +378,10 @@ def install(tar_path, ptr):
         _extract_verified(tar_path, ptr, tmpd)
         final = live / vid
         prev = live_current()
-        if final.exists():
-            shutil.rmtree(final)
-        os.replace(tmpd, final)
+        if not _matches_pointer(final, ptr):             # 同じ版が既にあれば消さずに使う(他のプロセスが読んでいるかもしれない)
+            if final.exists():
+                shutil.rmtree(final)
+            os.replace(tmpd, final)
         _atomic_write(live / "CURRENT", vid + "\n")              # ここが切替(置き換え1回)
     finally:
         shutil.rmtree(tmpd, ignore_errors=True)
@@ -389,7 +402,9 @@ def asset_url(asset):
 
 
 def _http_get(url, dest):
-    """url を dest へ保存する。1回の通信待ち HTTP_TIMEOUT 秒、全体 DL_DEADLINE 秒、MAX_BYTES で打ち切る。"""
+    """url を dest へ保存する。1回の通信待ち HTTP_TIMEOUT 秒、本体の受信 DL_DEADLINE 秒、MAX_BYTES で打ち切る。
+    接続・応答待ち(転送先を含む)は本体の上限に含まれない。失敗した資産は RETRY_SEC 秒は再試行しないので、
+    開催中ループが取得で止まるのは、最悪でも10分に1回・1分弱にとどまる。"""
     req = urllib.request.Request(url, headers={"User-Agent": "aritei-model-store"})
     t0 = time.monotonic()
     n = 0
@@ -618,18 +633,20 @@ def freeze(force=False, now=None):
             return False, "元のモデルが予備より新しくない。更新しない"
     frozen.mkdir(parents=True, exist_ok=True)
     order = MODEL_FILES + ("meta.json",)                  # meta.json を最後に置き換える
-    tmps = [frozen / (n + ".tmp%d" % os.getpid()) for n in order]
+    # 一時ファイルは無視対象の data/model_live の下に作る(同じファイルシステムなので置き換えは
+    # 原子的)。git 管理下の data/model に作ると、途中で止められた時に残骸がコミットされ得る。
+    # 置き換えの途中で止まると新旧のモデルが混ざるが、meta.json は古いままなので、次の freeze が
+    # やり直す(各モデルは単体では正常で、予測は止まらない)。
+    stage = _p("live") / (".freeze-%d" % os.getpid())
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir(parents=True)
     try:
-        for n, tmp in zip(order, tmps):
-            shutil.copyfile(Path(src) / n, tmp)
-        for n, tmp in zip(order, tmps):
-            os.replace(tmp, frozen / n)
+        for n in order:
+            shutil.copyfile(Path(src) / n, stage / n)
+        for n in order:
+            os.replace(stage / n, frozen / n)
     finally:
-        for tmp in tmps:
-            try:
-                tmp.unlink()
-            except OSError:
-                pass
+        shutil.rmtree(stage, ignore_errors=True)
     return True, "予備を更新した(trained_at=%s)" % sm["trained_at"]
 
 
@@ -676,9 +693,11 @@ def _verify(now, thresholds):
     crit_days = int(th.get("model_stale_crit_days", 2))
     frozen_warn = int(th.get("model_frozen_warn_days", 45))
     crit, warn = [], []
+    republish = False     # daily を起動して配布し直せば直る異常か(資産・参照先・予備そのものの異常)
     fm = valid_dir(_p("frozen"))
     if fm is None:
         crit.append("M3 予備モデル(data/model)が無いか壊れている")
+        republish = True
     effective = fm["trained_at"] if fm else None
     ptr, problem = read_pointer()
     asset_ok = None
@@ -686,6 +705,7 @@ def _verify(now, thresholds):
         warn.append("M0 参照先(live_pointer.json)が無い。git の予備モデルだけで動いている")
     elif ptr is None:
         crit.append("M1 参照先(live_pointer.json)が不正: %s" % problem)
+        republish = True
     else:
         bad = _check_asset(ptr)
         asset_ok = bad is None
@@ -693,6 +713,7 @@ def _verify(now, thresholds):
             effective = ptr["trained_at"]
         else:
             crit.append("M1 配布物 %s を取得・検証できない: %s" % (ptr["asset"], bad))
+            republish = True
     age = _age_days(effective, now) if effective else None
     if age is not None and age >= crit_days:
         crit.append("M2 使えるモデルが%d日前の学習のまま(trained_at=%s)" % (age, effective))
@@ -703,6 +724,9 @@ def _verify(now, thresholds):
         warn.append("M5 予備モデルが%d日前の学習のまま(定期更新が止まっている)" % fage)
     return {"level": "critical" if crit else ("warning" if warn else "ok"),
             "criticals": crit, "warnings": warn,
+            # M2(学習が止まっている)だけの時は false。毎朝の daily 自体が失敗し続けている状態で、
+            # 監視から起動を重ねても直らない(当日の予測が無ければ、公開JSON側の判定が起動する)。
+            "needs_republish": republish,
             "effective_trained_at": effective,
             "pointer_asset": (ptr or {}).get("asset"),
             "pointer_trained_at": (ptr or {}).get("trained_at"),
@@ -719,7 +743,7 @@ def verify(now=None, thresholds=None):
     except Exception as e:
         return {"level": "critical",
                 "criticals": ["M9 モデル配布の検査が例外で中断: %s" % _err(e)],
-                "warnings": [], "effective_trained_at": None}
+                "warnings": [], "needs_republish": False, "effective_trained_at": None}
 
 
 # ---------------------------------------------------------------- CLI
@@ -760,7 +784,8 @@ def main(argv=None):
                 text = json.dumps(res, ensure_ascii=False, indent=2)
             except Exception as e:
                 text = json.dumps({"level": "critical", "criticals": ["M9 結果を JSON にできない: %s" % _err(e)],
-                                   "warnings": [], "effective_trained_at": None}, ensure_ascii=False)
+                                   "warnings": [], "needs_republish": False,
+                                   "effective_trained_at": None}, ensure_ascii=False)
             try:
                 sys.stdout.buffer.write(text.encode("utf-8") + b"\n")     # 端末の文字コードに左右されない
                 sys.stdout.flush()

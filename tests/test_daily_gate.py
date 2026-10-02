@@ -47,8 +47,14 @@ def latest(date=TODAY, trained="2026-10-03 06:12 JST", venues=VENUES):
     return {"date": date, "generated_at": "2026-10-03 06:20 JST", "model_trained_at": trained, "venues": venues}
 
 
+SHA = "0123456789ab" + "0" * 52
+
+
 def ptr(trained_at):
-    return {"v": 1, "asset": "model-20261003-0612-0123456789ab.tar.gz", "trained_at": trained_at}
+    """model_store の検証を通る形の参照先。"""
+    return {"v": 1, "tag": "model-live", "asset": "model-20261003-0612-0123456789ab.tar.gz",
+            "sha256": SHA, "size": 4494632, "trained_at": trained_at, "period_end": "20261002",
+            "files": {n: "a" * 64 for n in ("meta.json", "model_top2.txt", "model_top3.txt", "model_win.txt")}}
 
 
 def test_pointer_missing_does_not_skip():
@@ -73,6 +79,21 @@ def test_broken_pointer_does_not_skip():
     for bad in ("{not json", "[]", '"text"', "{}", '{"trained_at": null}', '{"trained_at": 20261003}'):
         skip, reason = decide(latest=latest(), pointer=bad)
         assert skip is False and "未配布" in reason, (bad, reason)
+
+
+def test_today_but_invalid_pointer_does_not_skip():
+    """日付だけ本日でも、model_store が不正として使わない参照先なら省かない(ループは前回の版か予備で
+    動いているので、次の回が配布をやり直す)。"""
+    for breaker in (lambda d: d.pop("sha256"),
+                    lambda d: d.update(asset="model-20261003-0612-ffffffffffff.tar.gz"),   # sha256 と食い違う
+                    lambda d: d.update(files={}),
+                    lambda d: d.update(size="4494632")):
+        bad = ptr("2026-10-03 06:12 JST")
+        breaker(bad)
+        skip, reason = decide(latest=latest(), pointer=bad)
+        assert skip is False and "未配布" in reason, (bad, reason)
+    skip, reason = decide(latest=latest(), pointer={"trained_at": "2026-10-03 06:12 JST"})
+    assert skip is False and "未配布" in reason, reason
 
 
 def test_earlier_conditions_are_unchanged():

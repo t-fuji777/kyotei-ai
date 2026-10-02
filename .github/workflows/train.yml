@@ -34,5 +34,12 @@ jobs:
           git config user.email github-actions@github.com
           git add data/model docs/model_report.json
           git diff --cached --quiet || git commit -m "train model"
-          git pull --rebase --autostash
-          git push
+          # 開催中ループがほぼ毎分 push するので、pull と push の間に割り込まれたらやり直す
+          # (ここで落ちると、資産だけ上がって参照先と予備が届かず、学習からやり直しになる)。
+          for i in 1 2 3; do
+            if git pull --rebase --autostash && git push; then break; fi
+            git rebase --abort 2>/dev/null || true
+            if [ "$i" = 3 ]; then echo "3回試しても push できなかった"; exit 1; fi
+            echo "pull/push に失敗した(try $i)。やり直す"
+            sleep 3
+          done
