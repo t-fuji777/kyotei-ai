@@ -11,6 +11,11 @@ name: watchdog
 #     リポジトリへの書き込みは行わない(contents: read)。
 on:
   workflow_dispatch:
+    inputs:
+      test:
+        description: "動作テスト(空=通常の監視)。recover: 異常を模擬して復旧経路を通す / alert: 復旧しなかった想定で通知経路を通す(テスト用Issueを起票しジョブを失敗させる)"
+        required: false
+        default: ""
   schedule:
     # このリポジトリのschedule配信は約110〜250分遅延する(2026-09〜10実測。幅は日によって変わる)。
     # 名目時刻ではなく「着弾する実効時刻」で設計する。判定ゲート(7:30)より前に着弾した回は
@@ -33,6 +38,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
+      # 手動起動時のテストモード。schedule起動では常に空で、通常の監視として動く。
+      TEST_MODE: ${{ github.event.inputs.test }}
       NOTIFY_WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK }}
       NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
       PUSH_SUBS_URL: ${{ vars.PUSH_SUBS_URL }}
@@ -55,6 +62,11 @@ jobs:
           set -e
           cat health.json
           LEVEL=$(jq -r '.level' health.json)
+          if [ "$TEST_MODE" = "recover" ] || [ "$TEST_MODE" = "alert" ]; then
+            echo "テストモード($TEST_MODE): 実際の判定は $LEVEL。異常(critical)を模擬して後続の経路を通す"
+            echo "### テストモード: \`$TEST_MODE\` (実際の判定は \`$LEVEL\`、異常を模擬)" >> "$GITHUB_STEP_SUMMARY"
+            LEVEL=critical
+          fi
           echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           {
@@ -93,7 +105,8 @@ jobs:
       # 暴走防止: 既にdailyが走っている、または直近90分に2回以上完走している場合は撃たない。
       - name: 復旧のため daily を起動
         id: heal
-        if: steps.check.outputs.level == 'critical'
+        # alertテストでは起動しない(通知経路だけを確かめるため、不要なdaily実行を避ける)
+        if: steps.check.outputs.level == 'critical' && github.event.inputs.test != 'alert'
         run: |
           CUT=$(date -u -d '90 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
           RUNS=$(gh api "repos/$REPO/actions/workflows/daily.yml/runs?per_page=30" \
@@ -121,6 +134,10 @@ jobs:
         if: steps.check.outputs.level == 'critical'
         run: |
           echo "recovered=false" >> "$GITHUB_OUTPUT"
+          if [ "$TEST_MODE" = "alert" ]; then
+            echo "テストモード(alert): 復旧しなかった想定で通知経路へ進む"
+            exit 0
+          fi
           for i in $(seq 1 20); do
             sleep 60
             git fetch origin main -q || continue
@@ -151,6 +168,11 @@ jobs:
           TITLE="[アリテイ] 朝次処理の異常 $YMD"
           BODY=$(mktemp)
           {
+            if [ -n "$TEST_MODE" ]; then
+              TITLE="[テスト] $TITLE"
+              echo "**これは動作テストです。実際の異常ではなく、対処は不要です。**"
+              echo ""
+            fi
             echo "watchdog が異常を検知しました。"
             echo ""
             echo "## 公開JSONの判定"
@@ -180,7 +202,10 @@ jobs:
           gh label create pipeline-alert --color B60205 --description "朝次処理の異常" 2>/dev/null || true
           NUM=$(gh issue list --label pipeline-alert --state open --json number,title \
                   --jq "[.[] | select(.title | contains(\"$YMD\"))] | .[0].number // empty")
-          if [ -z "$NUM" ]; then
+          if [ -n "$TEST_MODE" ]; then
+            # テストは常に新規起票(当日の本物のIssueへコメントを混ぜない)
+            gh issue create --title "$TITLE" --label pipeline-alert --body-file "$BODY"
+          elif [ -z "$NUM" ]; then
             # Issueの新規作成はリポジトリ所有者にメールで届く。これが設定ゼロで通知が出る経路。
             gh issue create --title "$TITLE" --label pipeline-alert --body-file "$BODY"
           elif [ "${{ steps.check.outputs.level }}" = "critical" ]; then
