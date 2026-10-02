@@ -77,7 +77,12 @@ def save_year(df_new: pd.DataFrame, year: str):
     else:
         df = df_new
     df = df.sort_values(["date", "venue", "race_no", "lane"])
-    df.to_csv(path, index=False, compression="gzip")
+    # gzipヘッダの時刻を固定する。既定では書き出し時刻が入るため、同じ内容でも毎回
+    # 別のバイト列になり、同日の再実行のたびに版だけが増えていた(2026-10-02時点で
+    # entries_2026 が352版)。固定すれば内容が同じなら差分なしになる。改行も明示して
+    # 実行環境に依らず同じバイト列にする。
+    df.to_csv(path, index=False, compression={"method": "gzip", "mtime": 0},
+              lineterminator="\n")
     print(f"saved {path.name}: total {len(df)} rows")
 
 
