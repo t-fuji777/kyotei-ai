@@ -63,12 +63,12 @@ PUSH_TTL_MIN_SEC = 60     # 確定の下限。締切の直前でも、届く機�
 PUSH_TTL_RESULT_SEC = 3600  # 結果だけの通知。確定と違って急がないので、長めに保持させる
 # 送ってよい宛先のホスト名(push-worker/worker.js と同じ規則。変える時は両方を揃える)。
 PUSH_HOSTS = frozenset((
-    "fcm.googleapis.com",                  # Chrome / Edge / Android
+    "fcm.googleapis.com",                  # Chrome(Android / パソコン)
     "jmt17.google.com",                    # Chromium 系の一部
     "updates.push.services.mozilla.com",   # Firefox
     "web.push.apple.com",                  # iPhone / Safari
 ))
-PUSH_HOST_RE = re.compile(r"[a-z0-9-]+\.notify\.windows\.com")   # Windows(fullmatch で使う)
+PUSH_HOST_RE = re.compile(r"[a-z0-9-]+\.notify\.windows\.com")   # Windows の Edge(fullmatch で使う)
 PUSH_APPLE_HOST = "web.push.apple.com"
 
 
