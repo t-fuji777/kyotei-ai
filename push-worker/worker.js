@@ -24,8 +24,8 @@
 //   認証なしの登録要求だけで使い切られると、その日は送信側が一覧を取れず通知が全部止まる。
 //   1つの値なら、どの要求も読み取り1回(変更がある時だけ書き込み1回)で済み、list は使わない。
 //   弱点: ほぼ同時に来た登録は、後から書いた方が残り、先の登録が消えることがある(KV には
-//   「読んでから書く」を1つにまとめる仕組みが無い)。アプリは起動のたびに登録を確かめ直すので、
-//   消えた登録は次の起動で戻る。
+//   「読んでから書く」を1つにまとめる仕組みが無い)。アプリは起動した時と前面に戻った時
+//   (10分に1回まで)、それに設定タブを開いた時に登録を確かめ直すので、消えた登録はそこで戻る。
 //   復旧: 偽の登録で埋められた時は、Cloudflare の画面で KV の "table:v1" を消せば空に戻る
 //   (旧形式のキーが残っていれば、次の要求でそこから取り込み直す)。
 //
@@ -218,15 +218,9 @@ async function importLegacy(env, subs) {
     // ここで「取り込み済み」にしてしまうと旧形式の購読(持ち主の端末)が二度と読まれないので、
     // 未完了の印を付けたままにし、次の要求でもう一度試す。
   }
-  if (done) {
-    try {
-      // 取り込む物が無くても表を書く。表が無いままだと、要求のたびに list を使ってしまう。
-      await saveTable(env, subs, false);
-    } catch (e) {
-      // 書けなくても、この要求には取り込んだ内容で応える。表が無いままなので次の要求でやり直す。
-    }
-  }
-  return { subs, pending: !done };
+  // ここでは書かない。KV は同じキーへの書き込みを1秒に1回までしか受け付けないので、
+  // この要求の中での書き込みは呼び出し元で1回にまとめる(dirty = まだ保存していない取り込みがある)。
+  return { subs, pending: !done, dirty: done };
 }
 
 // 表を読む。戻り値は { subs: {id: {endpoint, keys}}, pending: 旧形式の取り込みが未完了か }。
@@ -246,7 +240,19 @@ async function loadTable(env) {
     if (entry) subs[id] = entry;
   }
   if (stored[LEGACY_PENDING] === true) return importLegacy(env, subs);
-  return { subs, pending: false };
+  return { subs, pending: false, dirty: false };
+}
+
+// 取り込んだだけで他に変更が無い時の保存(取り込む物が無くても表を書く。表が無いままだと、
+// 要求のたびに list を使ってしまう)。書けなくてもこの要求には取り込んだ内容で応える
+// (表が無いまま・印が付いたままなので、次の要求でやり直す)。
+async function saveImport(env, subs, dirty) {
+  if (!dirty) return;
+  try {
+    await saveTable(env, subs, false);
+  } catch (e) {
+    // 次の要求でやり直す
+  }
 }
 
 async function handleSub(request, env, headers) {
@@ -256,14 +262,16 @@ async function handleSub(request, env, headers) {
     return jsonResponse({ error: "invalid subscription" }, 400, headers);
   }
   const id = await sha256Hex(entry.endpoint);
-  const { subs, pending } = await loadTable(env);
+  const { subs, pending, dirty } = await loadTable(env);
   const cur = Object.hasOwn(subs, id) ? subs[id] : null;
   if (cur && cur.keys.p256dh === entry.keys.p256dh && cur.keys.auth === entry.keys.auth) {
-    // 同じ内容で登録済み。アプリは起動のたびに確かめに来るので、ここで書き込まないことで
+    // 同じ内容で登録済み。アプリは起動や前面復帰のたびに確かめに来るので、ここで書き込まないことで
     // 書き込みの枠(無料枠は1日1000回)を使わずに済ませる。
+    await saveImport(env, subs, dirty);
     return jsonResponse({ ok: true, id }, 200, headers);
   }
   if (!cur && Object.keys(subs).length >= MAX_SUBS) {
+    await saveImport(env, subs, dirty);
     return jsonResponse({ error: "too many subscriptions" }, 507, headers);
   }
   subs[id] = entry;
@@ -273,7 +281,7 @@ async function handleSub(request, env, headers) {
 
 // 表から id を消す。消す物が無ければ書き込まない(知らない宛先の解除で枠を使わせない)。
 async function removeIds(env, ids) {
-  const { subs, pending } = await loadTable(env);
+  const { subs, pending, dirty } = await loadTable(env);
   let removed = 0;
   for (const id of ids) {
     if (Object.hasOwn(subs, id)) {
@@ -282,6 +290,7 @@ async function removeIds(env, ids) {
     }
   }
   if (removed) await saveTable(env, subs, pending);
+  else await saveImport(env, subs, dirty);
   return removed;
 }
 
@@ -296,8 +305,13 @@ async function handleUnsub(request, env, headers) {
 }
 
 async function handleListSubs(env) {
-  const { subs } = await loadTable(env);
+  const { subs, pending, dirty } = await loadTable(env);
+  await saveImport(env, subs, dirty);
   const out = Object.entries(subs).map(([id, subscription]) => ({ id, subscription }));
+  // 旧形式の取り込みが済んでおらず、返せる購読が1件も無い時は「取れなかった」と答える。
+  // 空の一覧を 200 で返すと、送信側は「購読している端末が無い=送信済み」と記録し、その回の
+  // 通知が黙って届かなくなる。503 なら送信側は次の周回でやり直す。
+  if (pending && out.length === 0) return jsonResponse({ error: "temporarily unavailable" }, 503);
   return jsonResponse(out, 200);
 }
 

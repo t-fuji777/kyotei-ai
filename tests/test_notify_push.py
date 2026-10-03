@@ -25,6 +25,7 @@ YMD = "20261003"
 WORKER = "https://aritei-push.example.workers.dev"
 SENT = []          # webpush に渡された引数
 DELETED = []       # 掃除で消した購読id
+DELETE_THREADS = []  # 掃除を本体のスレッドから呼んだか
 SIGNED = []        # 署名したクレーム
 REAL_FETCH = N._fetch_push_subs
 REAL_FETCH_ONCE = N._fetch_push_subs_once
@@ -34,14 +35,20 @@ N.PUSH_FETCH_WAIT_SEC = 0
 
 
 class FakeResp:
-    def __init__(self, status):
+    def __init__(self, status, reason=None):
         self.status_code = status
+        self._reason = reason
+
+    def json(self):
+        if self._reason is None:
+            raise ValueError("no json")
+        return {"reason": self._reason}
 
 
 class FakeWebPushException(Exception):
-    def __init__(self, status):
+    def __init__(self, status, reason=None):
         super().__init__("push failed")
-        self.response = FakeResp(status) if status else None
+        self.response = FakeResp(status, reason) if status else None
 
 
 class FakeVapid:
@@ -67,11 +74,16 @@ def install_fakes(behaviour=None):
 
     sys.modules["pywebpush"] = types.SimpleNamespace(webpush=webpush, WebPushException=FakeWebPushException)
     N._load_vapid = lambda private: FakeVapid()
-    N._delete_push_sub = lambda url, headers, sub_id: DELETED.append(sub_id)
+    def fake_delete(url, headers, sub_id):
+        DELETED.append(sub_id)
+        DELETE_THREADS.append(threading.current_thread() is threading.main_thread())
+        return True
+
+    N._delete_push_sub = fake_delete
 
 
 def reset(subs, behaviour=None, url=WORKER, private="dummy-private"):
-    del SENT[:], DELETED[:], SIGNED[:]
+    del SENT[:], DELETED[:], SIGNED[:], DELETE_THREADS[:]
     install_fakes(behaviour)
     N._fetch_push_subs = lambda u, headers: subs
     if url is None:
@@ -206,10 +218,15 @@ def test_expired_subscription_is_removed_and_others_still_get_it():
 
 def test_apple_400_is_removed_but_400_elsewhere_is_kept():
     a, g = sub(1, "web.push.apple.com"), sub(2)
-    reset([a, g], behaviour={ep(1, "web.push.apple.com"): FakeWebPushException(400),
-                             ep(2): FakeWebPushException(400)})
+    reset([a, g], behaviour={ep(1, "web.push.apple.com"): FakeWebPushException(400, "BadDeviceToken"),
+                             ep(2): FakeWebPushException(400, "BadDeviceToken")})
     assert N.send_push("x") is False
     assert DELETED == [a["id"]], "Apple の 400(存在しない宛先)は掃除する。他の配信サービスの 400 は残す"
+    # Apple の 400 でも、理由が「宛先が無い」以外(こちらの要求の形の問題など)なら消さない。
+    # 消すと、正しい iPhone の購読まで失われる。
+    for reason in ("BadWebPushTopic", "TooManyProviderTokenUpdates", None):
+        reset([a], behaviour={ep(1, "web.push.apple.com"): FakeWebPushException(400, reason)})
+        assert N.send_push("x") is False and DELETED == [], reason
 
 
 def test_cleanup_deletes_one_id_per_request():
@@ -218,6 +235,9 @@ def test_cleanup_deletes_one_id_per_request():
     assert N.send_push("x") is False
     assert sorted(DELETED) == sorted(sub(i)["id"] for i in range(1, 4))
     assert all(isinstance(d, str) and len(d) == 64 for d in DELETED)
+    # 掃除は送信の後に本体のスレッドから1件ずつ出す(並べて出すと、1つの値を読んで書く Worker では
+    # 後から書いた方だけが残り、先の削除が取り消される)。
+    assert DELETE_THREADS == [True, True, True], DELETE_THREADS
 
 
 def test_temporary_failure_is_retried_once_per_device():

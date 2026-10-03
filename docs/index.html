@@ -300,7 +300,8 @@ const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l"));
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
 const t3hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,3).some(p=>p.c===r.result.order));
 
-function dayLabel(v){if(!v)return "";if(v.is_final)return " \u00b7 \u6700\u7d42\u65e5";if(v.day_n===1)return " \u00b7 \u521d\u65e5";if(v.day_n>1)return " \u00b7 "+v.day_n+"\u65e5\u76ee";return "";}
+function isFinalDay(v){if(!v)return false;const rs=v.races||[];if(!rs.length)return !!v.is_final;return rs.some(r=>String(r.type||"").replace(/準々?優勝/g,"").indexOf("優勝")>=0);}
+function dayLabel(v){if(!v)return "";if(isFinalDay(v))return " \u00b7 \u6700\u7d42\u65e5";if(v.day_n===1)return " \u00b7 \u521d\u65e5";if(v.day_n>1)return " \u00b7 "+v.day_n+"\u65e5\u76ee";return "";}
 function sortVenues(p){if(p&&Array.isArray(p.venues))p.venues.sort((a,b)=>(a.code||0)-(b.code||0));return p;}
 async function fetchJSON(url){
   const r=await fetch(url+"?t="+Date.now());
@@ -597,7 +598,7 @@ function renderToday(){
     return;
   }
   if(selVenue===null||!P.venues.some(v=>v.code===selVenue)) selVenue=P.venues[0].code;
-  const _NM='桐生 戸田 江戸川 平和島 多摩川 浜名湖 蒲郡 常滑 津 三国 びわこ 住之江 尼崎 鳴門 丸亀 児島 宮島 徳山 下関 若松 芦屋 福岡 唐津 大村'.split(' ');const _hv={};P.venues.forEach(x=>{_hv[x.code]=x;});const _ALLV=[];for(let _c=1;_c<=24;_c++){_ALLV.push(_hv[_c]||{code:_c,name:_NM[_c-1],_off:1});}const _P="　 ： — 最終日 初 日 日目".split(" ");const _pn=n=>n.length===1?_P[0]+n+_P[0]:n.length===2?n[0]+_P[0]+n[1]:n;const _zf=n=>String(n).replace(/[0-9]/g,x=>String.fromCharCode(x.charCodeAt(0)+65248));const _lb=v=>v._off?_P[0]+_P[2]:v.is_final?_P[3]:v.day_n===1?_P[4]+_P[0]+_P[5]:v.day_n>1?_zf(v.day_n)+_P[6]:_P[0]+_P[2];const _disp=v=>_pn(esc(v.name))+_P[1]+(v.code===11?" ":"")+_lb(v);const chips=_ALLV.map(v=>
+  const _NM='桐生 戸田 江戸川 平和島 多摩川 浜名湖 蒲郡 常滑 津 三国 びわこ 住之江 尼崎 鳴門 丸亀 児島 宮島 徳山 下関 若松 芦屋 福岡 唐津 大村'.split(' ');const _hv={};P.venues.forEach(x=>{_hv[x.code]=x;});const _ALLV=[];for(let _c=1;_c<=24;_c++){_ALLV.push(_hv[_c]||{code:_c,name:_NM[_c-1],_off:1});}const _P="　 ： — 最終日 初 日 日目".split(" ");const _pn=n=>n.length===1?_P[0]+n+_P[0]:n.length===2?n[0]+_P[0]+n[1]:n;const _zf=n=>String(n).replace(/[0-9]/g,x=>String.fromCharCode(x.charCodeAt(0)+65248));const _lb=v=>v._off?_P[0]+_P[2]:v.isFinalDay(v)?_P[3]:v.day_n===1?_P[4]+_P[0]+_P[5]:v.day_n>1?_zf(v.day_n)+_P[6]:_P[0]+_P[2];const _disp=v=>_pn(esc(v.name))+_P[1]+(v.code===11?" ":"")+_lb(v);const chips=_ALLV.map(v=>
     v._off?`<span class="venopt off">${_disp(v)}</span>`:`<button class="venopt ${v.code===selVenue?'on':''}" data-v="${v.code}">${_disp(v)}</button>`).join("");
   const venue=P.venues.find(v=>v.code===selVenue);
   const _have={};venue.races.forEach(rr=>{_have[rr.no]=rr;});
@@ -939,7 +940,7 @@ function _isStandalone(){return !!window.navigator.standalone||(window.matchMedi
 // 「通知は有効です」は、端末に購読があるだけでは出さない。送信側は Worker の一覧にある宛先にしか送らないので、
 // Worker に登録できたと確かめられた時だけ出す。
 const PUSH_LS="aritei_push";
-const PUSH_RESYNC_MS=12*3600*1000; // 起動時・前面復帰時の登録し直しは12時間に1回まで(設定タブを開いた時は毎回)
+const PUSH_RESYNC_MS=10*60*1000; // 起動時・前面復帰時の登録の確かめ直しは10分に1回まで(設定タブを開いた時は毎回)。受け口は登録済みなら書き込まないので、頻繁に確かめても負担は読み取り1回。長く空けると、受け口側で登録が消えた時に黙って届かない時間が長くなる
 const PUSH_NET_MS=8000;            // Worker への通信と serviceWorker.ready を待つ上限(「確認中…」のまま止まらないように)
 let _pushEpoch=0; // 「通知を止める」を押すたびに+1。行き違いで後から終わった登録が「受け取る」の控えを書き戻さないため
 let _pushDiag=""; // 登録を確認できなかった理由(設定タブに小さく出す。スクリーンショットでの原因調査用)
@@ -1087,6 +1088,7 @@ async function _pushUnsubscribe(){
       await sub.unsubscribe(); // 先に端末側を止める(これだけで通知は来なくなる。Worker に通信できなくても止められる)
       _pushForget(ep);
     }
+    _pushEpoch++;_pushLsSet(null); // 解除の途中で始まった同期が控えを書き戻していても、ここで消す(次の起動で勝手に購読し直さない)
     _pushBodyRender("off");
   }catch(e){
     if(off){off.disabled=false;off.textContent="通知を止める";}

@@ -284,7 +284,7 @@ for (const [label, impl, diag] of [["507", status(507), "応答507"], ["回線�
 {
   const env = makeEnv({ existing: { endpoint: "https://web.push.apple.com/xyz", key: KEY }, permission: "granted" });
   eq("C1 起動時の同期(初回)", [await env.api._pushSync(false), env.state.fetchCalls], ["on", ["POST /sub"]]);
-  eq("C2 直後の2回目は通信しない(12時間に1回まで)", [await env.api._pushSync(false), env.state.fetchCalls.length], ["on", 1]);
+  eq("C2 直後の2回目は通信しない(10分に1回まで)", [await env.api._pushSync(false), env.state.fetchCalls.length], ["on", 1]);
   eq("C3 購読は取り直さない", env.state.subscribeCalls, 0);
   eq("C4 設定タブを開いた時は毎回確かめる", [await env.api._pushSync(true), env.state.fetchCalls.length], ["on", 2]);
 }
@@ -449,7 +449,7 @@ for (const [label, impl, diag] of [["507", status(507), "応答507"], ["回線�
   env.fetchImpl = offline;
   eq("N1 断られた後に圏外になっても「有効」に戻らない", await env.api._pushSync(true), "unsynced");
   const n = env.posts("/sub");
-  eq("N1 断られた後の起動時は、12時間以内でも登録を試す", [await env.api._pushSync(false), env.posts("/sub")], ["unsynced", n + 1]);
+  eq("N1 断られた後の起動時は、10分以内でも登録を試す", [await env.api._pushSync(false), env.posts("/sub")], ["unsynced", n + 1]);
   env.fetchImpl = null;
   eq("N1 Worker が受け付けるようになれば、起動時の同期だけで有効に戻る", [await env.api._pushSync(false), env.ls().ep], ["on", "https://fcm.googleapis.com/fcm/send/x"]);
   check("N1 断られた時の文面は「受け付けられませんでした」", await (async () => { env.fetchImpl = status(400); await env.reopen(); return env.text().includes("受け付けられませんでした") && env.text().includes(DEAD); })(), env.text());
@@ -480,15 +480,15 @@ for (const [label, impl, diag] of [["507", status(507), "応答507"], ["回線�
   check("N3 Android: Chrome のタブで開いている場合の直し方", env.text().includes("Chromeで開いている場合: アドレス欄の左のマーク→権限→通知"), env.text());
   check("N3 Android には iPhone の手順を出さない", !env.text().includes("設定アプリ→通知→アリテイ"), env.text());
 }
-// N4) 登録し直しの間引き: 12時間たてば起動時にも確かめ直す。端末の時計が戻っていても確かめ直す。宛先が変われば登録し直す
+// N4) 登録し直しの間引き: 10分たてば起動時にも確かめ直す。端末の時計が戻っていても確かめ直す。宛先が変われば登録し直す
 {
   const env = makeEnv({ existing: { endpoint: "https://fcm.googleapis.com/fcm/send/x", key: KEY }, permission: "granted" });
   env.state.now = 1_800_000_000_000;
   await env.api._pushSync(false);
-  env.state.now += 11 * 3600 * 1000;
-  eq("N4 11時間後の起動時は通信しない", [await env.api._pushSync(false), env.posts("/sub")], ["on", 1]);
-  env.state.now += 2 * 3600 * 1000;
-  eq("N4 12時間を過ぎた起動時は確かめ直す", [await env.api._pushSync(false), env.posts("/sub")], ["on", 2]);
+  env.state.now += 9 * 60 * 1000;
+  eq("N4 9分後の起動時は通信しない", [await env.api._pushSync(false), env.posts("/sub")], ["on", 1]);
+  env.state.now += 2 * 60 * 1000;
+  eq("N4 10分を過ぎた起動時は確かめ直す", [await env.api._pushSync(false), env.posts("/sub")], ["on", 2]);
   env.state.now -= 5 * 24 * 3600 * 1000;
   eq("N4 時計が戻っている時も確かめ直す", [await env.api._pushSync(false), env.posts("/sub")], ["on", 3]);
   env.state.sub.endpoint = "https://fcm.googleapis.com/fcm/send/moved"; // ブラウザが宛先を付け替えた

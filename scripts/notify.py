@@ -385,7 +385,7 @@ def _fetch_push_subs(subs_url: str, headers: dict):
 def _delete_push_sub(subs_url: str, headers: dict, sub_id: str) -> bool:
     """届かなくなった購読を Worker 側の保管から消す(送信側の掃除)。成否を返す。
     id は1回の要求に1個だけ付ける(設置済みの Worker が古い版でも通るように)。
-    別スレッドから呼ばれるので print しない。"""
+    送信の後に本体のスレッドから1件ずつ呼ぶ(並べて出さない)。"""
     try:
         qs = urllib.parse.urlencode({"id": sub_id})
         req = urllib.request.Request(f"{subs_url}/sub?{qs}", method="DELETE", headers=headers)
@@ -478,9 +478,10 @@ def _send_one(webpush, WebPushException, vapid, sub: dict, payload: str, ttl: in
         status = getattr(resp, "status_code", None)
         reason = _resp_reason(resp)
         note = f"{status} {reason}".strip()
-        # 404 / 410 は「その購読はもう無い」。Apple は、存在しない宛先や鍵の合わない購読に 400 を返す
-        # (404 / 410 にならない)ので、放っておくと届かない登録が残り続けて枠を埋める。これも掃除する。
-        if status in (404, 410) or (status == 400 and is_apple):
+        # 404 / 410 は「その購読はもう無い」。Apple は、存在しない宛先に 400(理由 BadDeviceToken)を
+        # 返す(404 / 410 にならない)ので、放っておくと届かない登録が残り続けて枠を埋める。これも掃除する。
+        # 理由が違う 400(こちらの要求の形の問題など)では消さない。正しい iPhone の購読まで消えるため。
+        if status in (404, 410) or (status == 400 and is_apple and reason == "BadDeviceToken"):
             return "gone", note, False
         return "fail", f"status={note}", isinstance(status, int) and status >= 500
     except Exception as e:
@@ -584,11 +585,7 @@ def _push_run(rep: dict, text: str, tag: str, title: str, ttl) -> dict:
             # 1台でも届けば送信済みになるので、一時的な失敗で1台だけ取りこぼさないよう、1回だけ送り直す。
             time.sleep(PUSH_RETRY_WAIT_SEC)
             kind, note, _ = _send_one(webpush, WebPushException, vapid, sub, payload, ttl, is_apple)
-        deleted = _delete_push_sub(subs_url, headers, sub_id) if kind == "gone" else None
-        return kind, note, deleted
-
-    def drop(sub_id):
-        return "bad", "", _delete_push_sub(subs_url, headers, sub_id)
+        return kind, note, (sub_id if kind == "gone" else None)
 
     good, bad_ids, bad_labels = [], [], []
     for entry in subs:
@@ -610,9 +607,14 @@ def _push_run(rep: dict, text: str, tag: str, title: str, ttl) -> dict:
     # 並びを毎回変える。Worker が返す順は固定なので、全体の締切で切り上げた時に、いつも同じ端末が
     # 後回しになって届かない、ということを避ける。Worker が返した全件へ送る(件数で切り捨てない)。
     random.shuffle(good)
-    jobs = [lambda a=a: deliver(*a) for a in good] + [lambda i=i: drop(i) for i in bad_ids]
-    done = _run_jobs(jobs, deadline)
-    sends = [r for r in done if r[0] != "bad"]
+    sends = _run_jobs([lambda a=a: deliver(*a) for a in good], deadline)
+    # 掃除は、送信が全部終わった後に1件ずつ順番に出す。Worker は全購読を1つの値にまとめて
+    # 「読んで→書く」ので、同時に出すと後から書いた方だけが残り、先の削除が取り消される。
+    # 全体の締切までに終わらなかった分は、次の送信でまた掃除の対象になる。
+    undeleted = 0
+    for sub_id in bad_ids + [r[2] for r in sends if r[0] == "gone" and r[2]]:
+        if time.monotonic() >= deadline or not _delete_push_sub(subs_url, headers, sub_id):
+            undeleted += 1
     rep["ok"] = sum(1 for r in sends if r[0] == "ok")
     rep["gone"] = sum(1 for r in sends if r[0] == "gone")
     rep["fail"] = sum(1 for r in sends if r[0] == "fail")
@@ -623,9 +625,8 @@ def _push_run(rep: dict, text: str, tag: str, title: str, ttl) -> dict:
         detail.append("掃除: " + _counts(r[1] for r in sends if r[0] == "gone"))
     if rep["fail"]:
         detail.append("失敗: " + _counts(r[1] for r in sends if r[0] == "fail"))
-    undeleted = sum(1 for r in done if r[2] is False)
     if undeleted:
-        detail.append(f"Worker からの削除に失敗 {undeleted}件")
+        detail.append(f"Worker からの削除は次回へ {undeleted}件")
     print(f"notify: プッシュ通知 宛先{len(good)}件 → 届いた {rep['ok']} / 掃除 {rep['gone']} / "
           f"失敗 {rep['fail']} / 時間切れ {rep['left']}" + (f" ({' / '.join(detail)})" if detail else ""))
     return rep

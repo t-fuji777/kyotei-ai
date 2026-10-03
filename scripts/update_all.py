@@ -604,9 +604,16 @@ def main():
     if results_only:
         # 毎分パスが最も確実に締切T-15のチェックポイントを捉えられるため、
         # 結果確定(do_results)の前にdo_stampsを呼ぶ。
-        _tk_before = {(v["code"], r["no"]) for v in pred["venues"] for r in v["races"] if r.get("tk") == 1}
-        n_stp = do_stamps(pred, now)
+        # 前倒し通知の下準備(打刻の前に、既に確定している厳選を控える)。ここで失敗しても打刻は行う。
+        _tk_before = None
         if EARLY_NOTIFY:
+            try:
+                _tk_before = {(v.get("code"), r.get("no")) for v in pred["venues"] for r in v["races"]
+                              if r.get("tk") == 1}
+            except Exception:
+                _tk_before = None
+        n_stp = do_stamps(pred, now)
+        if EARLY_NOTIFY and _tk_before is not None:
             # この実行の打刻で厳選が新しく確定した(tk=1 になった)時だけ、結果・展示の取得(20〜170秒)を
             # 待たずに、書く→公開→通知(full の合間打刻と同じ順)。締切まで15分しかないので、通知を
             # 取得の後ろに回さない。公開を先にするのは、通知を開いた時に画面も確定になっているように
@@ -614,7 +621,7 @@ def main():
             # 残す(ここで送れなかった時のやり直しと、結果の通知のため。送信済みは二重に送らない)。
             # ここでの失敗は握る(結果・展示の取得を止めない)。
             try:
-                if n_stp and any(r.get("tk") == 1 and (v["code"], r["no"]) not in _tk_before
+                if n_stp and any(r.get("tk") == 1 and (v.get("code"), r.get("no")) not in _tk_before
                                  for v in pred["venues"] for r in v["races"]):
                     pred["results_updated_at"] = _ts(datetime.now(JST))
                     write(pred, ymd)

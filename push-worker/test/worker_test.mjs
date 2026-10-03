@@ -478,6 +478,7 @@ await section("6. 旧形式(購読1件=キー1個)からの取り込み", async 
   env = newEnv({ legacy: [legacyOwner()] });
   r = await postSub(env, REAL.apple);
   ok(r.status === 201, "(c) 別の端末の新規登録は 201");
+  ok(env.SUBS.used.put === 1, "(c) 取り込みと登録を合わせても、表への書き込みは1回(KV は同じキーへの書き込みが1秒に1回まで)");
   r = await getSubs(env);
   ok(r.json.length === 2 && r.json[0].subscription.endpoint === OWNER && r.json[1].subscription.endpoint === REAL.apple &&
     env.SUBS.used.list === 1, "(c) 持ち主の購読は上書きされず、2件とも一覧にある");
@@ -500,7 +501,7 @@ await section("6. 旧形式(購読1件=キー1個)からの取り込み", async 
   env = newEnv({ legacy: [legacyOwner()] });
   env.SUBS.fail.list = true;
   r = await getSubs(env);
-  ok(r.status === 200 && r.json.length === 0, "(f) list が失敗しても例外にせず、空の表として応える(503 にしない)");
+  ok(r.status === 503, "(f) 取り込みが済まず返せる購読が無い間、GET /subs は 503(空の一覧を 200 で返すと送信側が「購読ゼロ=送信済み」と記録してしまう)");
   ok(!env.SUBS.m.has(TABLE_KEY), "(f) この時点では表を作らない(取り込み済みにしない)");
   r = await postSub(env, REAL.apple);
   ok(r.status === 201, "(f) list が失敗している間も、新規登録は 201 で受け付ける");
@@ -521,7 +522,7 @@ await section("6. 旧形式(購読1件=キー1個)からの取り込み", async 
   env = newEnv({ legacy: [legacyOwner()] });
   env.SUBS.fail.getKey = (k) => k === sha(OWNER);
   r = await getSubs(env);
-  ok(r.status === 200 && r.json.length === 0 && !env.SUBS.m.has(TABLE_KEY), "(g) 旧キーの読み取りが失敗しても例外にせず、取り込み済みにもしない");
+  ok(r.status === 503 && !env.SUBS.m.has(TABLE_KEY), "(g) 旧キーの読み取りが失敗した時は 503 で応え、取り込み済みにもしない");
   env.SUBS.fail.getKey = null;
   ok(ownerOnly(await getSubs(env)), "(g) 次の要求で持ち主の購読が取り込まれる");
 
