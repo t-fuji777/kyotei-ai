@@ -449,7 +449,11 @@ def main():
         vraces = sorted(by_venue[vcode], key=lambda r: r["no"])
         dns = [r.get("day_n") for r in vraces if r.get("day_n") is not None]
         day_n = dns[0] if dns else None
-        is_final = any(yusho in str(r.get("type", "")) for r in vraces)
+        # 最終日 = 優勝戦のある日。「準優勝戦」「準々優勝戦」も「優勝」を含むので、先に取り除いて
+        # から判定する。以前は含むだけで最終日としており、準優勝戦の日(最終日の前日など)にも
+        # 「最終日」と表示していた(2026-06-13〜10-03 で最終日とした528会場日のうち約250が該当)。
+        is_final = any(yusho in str(r.get("type", "")).replace("準々優勝", "").replace("準優勝", "")
+                       for r in vraces)
         out["venues"].append({"code": vcode, "name": VENUES[vcode],
                               "day_n": day_n, "is_final": is_final,
                               "races": vraces})
