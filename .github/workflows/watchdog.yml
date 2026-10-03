@@ -279,11 +279,19 @@ jobs:
 
           # Webhook / Web Push が設定されていれば即時通知も送る(未設定なら黙って何もしない)。
           # Web Push には pywebpush が要る。入れられなくても通知を諦めるだけで、ここでは止めない。
-          pip install -q pywebpush || true
+          # 版は開催中ループ(auto-update.yml)と揃える。
+          # この通知は、厳選の通知を購読している全端末へ届く。いま購読しているのは持ち主だけ、という
+          # 前提で送っている(Webhook が未設定の間、スマホへすぐ届く経路はこれだけ)。他の利用者が
+          # 購読し始めたら、このジョブの env から VAPID_PRIVATE を外して、運用の知らせを配らないようにする。
+          pip install -q "pywebpush==2.5.0" || true
           TEXT="$(printf '朝次処理の異常を検知しました。\n判定: %s / 復旧: %s\nIssueを確認してください。' \
             "${{ steps.check.outputs.level }}" "${{ steps.recheck.outputs.recovered }}")"
           if [ -n "$MODEL_LEVEL" ]; then
             TEXT="$(printf '%s\nモデル配布の判定: %s' "$TEXT" "$MODEL_LEVEL")"
+          fi
+          # 動作テストの時は、通知の文面にも印を付ける(Issue の題名と同じ。本物の異常と取り違えない)。
+          if [ -n "$TEST_MODE" ]; then
+            TEXT="[テスト] $TEXT"
           fi
           python scripts/notify.py --text "$TEXT" || true
 

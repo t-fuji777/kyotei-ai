@@ -29,7 +29,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pandas numpy lightgbm lhafile requests pywebpush
+      - run: pip install pandas numpy lightgbm lhafile requests
+      # プッシュ通知(Web Push)だけが使うライブラリ。上の必須の依存とは分ける: これを入れられなくても
+      # ループは始める(打刻・結果・オッズの更新を、通知の都合で止めない)。入らなかった回は
+      # scripts/notify.py が自分で通知を飛ばす。版は固定する(送信側のテストはこの版で確かめている)。
+      - name: 通知用のライブラリ(入らなくても続行)
+        run: pip install "pywebpush==2.5.0" || echo "::warning::pywebpush を入れられなかった。この回はプッシュ通知を送らない(打刻・結果の更新は通常どおり行う)"
       - name: loop results + live re-predict
         env:
           GH_TOKEN: ${{ github.token }}

@@ -22,7 +22,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -q pywebpush
+      # 版は開催中ループ(auto-update.yml)と揃える。
+      - run: pip install -q "pywebpush==2.5.0"
       - name: プッシュ通知の設定を確認
         env:
           PUSH_SUBS_URL: ${{ vars.PUSH_SUBS_URL }}
