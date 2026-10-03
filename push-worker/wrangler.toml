@@ -2,6 +2,10 @@ name = "aritei-push"
 main = "worker.js"
 compatibility_date = "2026-01-01"
 workers_dev = true
+# 版ごとのプレビュー用URL(本番とは別のアドレスで、特定の版のコードを呼べる入口)を作らない。
+# 直す前の版のコードが、別のアドレスから呼べる状態で残らないようにするため。
+# アプリも送信側も本番のアドレスしか使わない。
+preview_urls = false
 
 # 購読(プッシュ通知の宛先)の保管場所。id は識別子で、秘密ではない
 # (wrangler kv namespace create aritei-push-subs で作成)。
