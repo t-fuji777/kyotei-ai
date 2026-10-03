@@ -312,32 +312,36 @@ def send_push(text: str) -> bool:
 
 def selftest(send_text: str = "") -> int:
     """Web Push の設定を確かめる(手動実行のワークフロー用)。秘密鍵そのものは表示しない。
-    1) pywebpush があるか 2) 秘密鍵から導いた公開鍵が、アプリ(docs/index.html)の VAPID_PUB と
-    一致するか 3) Worker から購読一覧を取れるか 4) send_text があれば実際に送る。0=正常 / 1=異常。"""
+    1) 秘密鍵から導いた公開鍵が、アプリ(docs/index.html)の VAPID_PUB と一致するか
+    2) Worker から購読一覧を取れるか 3) send_text があれば実際に送る。0=正常 / 1=異常。
+    Worker のURLが未設定でも 1) までは確かめる。"""
     import re
     subs_url, private = _push_cfg()
     print(f"selftest: worker={subs_url or '(未設定)'} / 秘密鍵={'あり' if private else 'なし'}")
-    if not (subs_url and private):
+    if not private:
         return 1
     try:
         import pywebpush  # noqa: F401
         vapid = _load_vapid(private)
         pub = _vapid_public_b64(vapid)
     except Exception as e:
-        print(f"selftest: 秘密鍵を読めない ({type(e).__name__}: {e})")
+        print(f"selftest: 秘密鍵を読めない ({type(e).__name__})")
         return 1
     html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
-    m = re.search(r'const VAPID_PUB="([A-Za-z0-9_\-]+)"', html)
+    m = re.search(r'const VAPID_PUB="([A-Za-z0-9_-]+)"', html)
     app_pub = m.group(1) if m else ""
     same = bool(app_pub) and app_pub == pub
     print(f"selftest: 公開鍵の一致={'はい' if same else 'いいえ'} (秘密鍵から導いた公開鍵 {pub[:12]}… / アプリ {app_pub[:12]}…)")
+    if not subs_url:
+        print("selftest: Worker のURLが未設定のため、購読一覧の確認は行わない")
+        return 0 if same else 1
     subs = _fetch_push_subs(subs_url, _sender_headers(subs_url, vapid))
     print(f"selftest: 購読一覧の取得={'失敗' if subs is None else '成功'} / 購読数={'-' if subs is None else len(subs)}")
     if not same or subs is None:
         return 1
     if send_text:
         sent = send_push(send_text)
-        print(f"selftest: テスト通知の送信={'成功' if sent else '失敗'}")
+        print(f"selftest: テスト通知の送信={'成功' if sent else '失敗(届け先に送れなかった)'}")
         return 0 if sent else 1
     return 0
 
