@@ -36,7 +36,6 @@ jobs:
           NOTIFY_WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK }}
           NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
           PUSH_SUBS_URL: ${{ vars.PUSH_SUBS_URL }}
-          PUSH_AUTH_KEY: ${{ secrets.PUSH_AUTH_KEY }}
           VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
         run: |
           git config user.name github-actions

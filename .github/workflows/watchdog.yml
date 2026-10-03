@@ -52,7 +52,6 @@ jobs:
       NOTIFY_WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK }}
       NOTIFY_CHAT_ID: ${{ secrets.NOTIFY_CHAT_ID }}
       PUSH_SUBS_URL: ${{ vars.PUSH_SUBS_URL }}
-      PUSH_AUTH_KEY: ${{ secrets.PUSH_AUTH_KEY }}
       VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
     steps:
       - uses: actions/checkout@v4
@@ -278,7 +277,9 @@ jobs:
             echo "既存Issue #$NUM にコメントを追記"
           fi
 
-          # Webhook / Web Push が設定されていれば即時通知も送る(未設定なら黙って何もしない)
+          # Webhook / Web Push が設定されていれば即時通知も送る(未設定なら黙って何もしない)。
+          # Web Push には pywebpush が要る。入れられなくても通知を諦めるだけで、ここでは止めない。
+          pip install -q pywebpush || true
           TEXT="$(printf '朝次処理の異常を検知しました。\n判定: %s / 復旧: %s\nIssueを確認してください。' \
             "${{ steps.check.outputs.level }}" "${{ steps.recheck.outputs.recovered }}")"
           if [ -n "$MODEL_LEVEL" ]; then

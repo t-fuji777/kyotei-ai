@@ -183,6 +183,17 @@ def _publish_midrun() -> None:
         print(f"::warning::midrun publish failed: {e}", flush=True)
 
 
+def _notify_midrun(pred, ymd) -> None:
+    """合間の打刻で厳選が確定したら、その場で通知する(公開の直後)。締切まで15分しかないので、
+    full の終わり(最大約11分後)まで待たせない。通知の設定が無ければ何もしない。失敗しても取得は
+    続ける。full の末尾でも同じ関数が呼ばれるが、送信済みの記録があるので二重には送らない。"""
+    try:
+        from notify import notify_events
+        notify_events(pred, ymd)
+    except Exception as e:
+        print(f"notify skip: {e}", flush=True)
+
+
 class _Ticker:
     """full の取得ループの合間に呼ぶ。時刻を取り直し、締切15分前を跨いだレースを
     その場で打刻する。full は開始時刻の now を最後まで使い回すため、従来はオッズ取得中
@@ -214,6 +225,7 @@ class _Ticker:
                 write(self.pred, self.ymd)
                 print(f"stamp-tick {now.strftime('%H:%M:%S')}: {n}", flush=True)
                 _publish_midrun()
+                _notify_midrun(self.pred, self.ymd)
             return n
         except Exception:
             self.dead = True

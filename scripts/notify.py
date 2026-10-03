@@ -4,9 +4,10 @@
 環境変数 NOTIFY_WEBHOOK が未設定/空ならWebhook送信は行わない。設定時のみ、
 送信先URLからTelegram(api.telegram.orgを含む)/ Discord互換 を自動判別してPOSTする。
 
-環境変数 PUSH_SUBS_URL / PUSH_AUTH_KEY / VAPID_PRIVATE が全て設定されている場合のみ、
-Cloudflare Worker(push-worker/)経由でホーム画面追加PWAへ本物のWeb Pushを送信する
-(pywebpush未インストール環境ではスキップしローカル互換を保つ)。
+環境変数 VAPID_PRIVATE(Web Push の秘密鍵)が設定されている場合のみ、購読を預かる
+Cloudflare Worker(push-worker/)から購読一覧を取り、ホーム画面に追加したアプリへ Web Push を送る
+(pywebpush が無い環境ではスキップする)。Worker への認証は、同じ秘密鍵で署名した短命のトークンで
+行う(合言葉は使わない)。Worker のURLは PUSH_SUBS_URL で上書きできる(既定は PUSH_SUBS_URL_DEFAULT)。
 
 Webhook/Web Pushはいずれも未設定なら notify_events() は即座に何もしない
 (既存パイプラインの挙動に一切影響しない)。どちらか一方でも成功すれば送信成功扱いとする。
@@ -27,6 +28,13 @@ ROOT = Path(__file__).parent.parent
 STATE_PATH = ROOT / "docs" / "predictions" / "notify_state.json"
 APP_TAG = "[アリテイ]"
 TIMEOUT_SEC = 5
+# 購読を預かる Worker(push-worker/)のURL。秘密ではない(docs/index.html の PUSH_WORKER と同じ値)。
+# 空の間は Web Push を送らない(Worker を Cloudflare に設置したら、そのURLをここと index.html に入れる)。
+PUSH_SUBS_URL_DEFAULT = ""
+PUSH_CONTACT = "mailto:t.fujino@meihogp.co.jp"
+PUSH_TIMEOUT_SEC = 10     # 1件の送信にかける上限。応答しない宛先で開催中の処理を止めない
+PUSH_TTL_SEC = 900        # 端末が圏外・省電力中でも、この時間は配信サービスが保持して届ける
+PUSH_MAX_SUBS = 100       # 1回に送る購読数の上限(送信にかかる時間の上限になる)
 
 
 def _atomic_write_text(path: Path, txt: str) -> None:
@@ -117,6 +125,10 @@ def _conf_events(pred: dict, ymd: str):
             time_part = f" {pt}" if pt else ""
             deadline = r.get("deadline", "")
             msg = f"{APP_TAG} {plan}プラン確定{time_part} / {vname}{no}R 締切{deadline}"
+            # 通知だけ見て買えるよう、上位3点を添える(打刻後は買い目が凍結されている)。
+            picks = [p.get("c") for p in (r.get("picks") or [])[:3] if p.get("c")]
+            if picks:
+                msg += "\n買い目 " + " / ".join(picks)
             out.append((eid, msg))
     return out
 
@@ -160,64 +172,111 @@ def _res_events(pred: dict, ymd: str):
     return out
 
 
+def _push_cfg():
+    """(Worker のURL, 秘密鍵)。どちらかが無ければ Web Push は送らない。"""
+    subs_url = (os.environ.get("PUSH_SUBS_URL") or "").strip() or PUSH_SUBS_URL_DEFAULT
+    if not subs_url.startswith("https://"):
+        subs_url = ""
+    return subs_url.rstrip("/"), (os.environ.get("VAPID_PRIVATE") or "").strip()
+
+
 def _push_ready() -> bool:
-    """Web Push送信に必要な環境変数が全て設定されているか判定する。"""
-    return bool(
-        (os.environ.get("PUSH_SUBS_URL") or "").strip()
-        and (os.environ.get("PUSH_AUTH_KEY") or "").strip()
-        and (os.environ.get("VAPID_PRIVATE") or "")
-    )
+    """Web Push送信に必要な設定(Worker のURLと秘密鍵)が揃っているか判定する。"""
+    subs_url, private = _push_cfg()
+    return bool(subs_url and private)
 
 
-def _fetch_push_subs(subs_url: str, auth_key: str) -> list:
-    """GET {subs_url}/subs?key=... で購読一覧(JSON配列)を取得する。
-    失敗時は例外を送出せず空リストを返す。"""
+def _load_vapid(private: str):
+    """秘密鍵の文字列から署名用のオブジェクトを作る。PEM でも base64url(DER / 生32バイト)でもよい。"""
+    from py_vapid import Vapid
+    if "-----BEGIN" in private:
+        return Vapid.from_pem(private.encode("utf-8"))
+    return Vapid.from_string(private)
+
+
+def _vapid_public_b64(vapid) -> str:
+    """公開鍵(非圧縮65バイト)の base64url。アプリ側の VAPID_PUB と同じ形。"""
+    import base64
+    from cryptography.hazmat.primitives import serialization
+    raw = vapid.public_key.public_bytes(serialization.Encoding.X962,
+                                        serialization.PublicFormat.UncompressedPoint)
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _sender_headers(subs_url: str, vapid) -> dict:
+    """Worker の送信側専用エンドポイント(/subs, DELETE /sub)に付ける認証ヘッダ。
+    宛先(aud)を Worker 自身にした5分有効のトークンを、Web Push の秘密鍵で署名する。"""
+    import time
+    parsed = urllib.parse.urlparse(subs_url)
+    claims = {"aud": f"{parsed.scheme}://{parsed.netloc}", "exp": int(time.time()) + 300,
+              "sub": PUSH_CONTACT}
+    # 既定の Python-urllib の User-Agent は Cloudflare に弾かれることがあるので明示する。
+    return {"Authorization": vapid.sign(claims)["Authorization"], "User-Agent": "aritei-notify"}
+
+
+def _fetch_push_subs(subs_url: str, headers: dict):
+    """GET {subs_url}/subs で購読一覧(JSON配列)を取得する。失敗時は例外を出さず None を返す
+    (空の一覧=購読者なし、とは区別する)。"""
     try:
-        qs = urllib.parse.urlencode({"key": auth_key})
-        req = urllib.request.Request(f"{subs_url.rstrip('/')}/subs?{qs}", method="GET")
+        req = urllib.request.Request(f"{subs_url}/subs", method="GET", headers=headers)
         with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        return data if isinstance(data, list) else []
+        return data if isinstance(data, list) else None
     except Exception as e:
         print(f"notify: push subs fetch failed ({e})")
-        return []
+        return None
 
 
-def _delete_push_sub(subs_url: str, auth_key: str, sub_id: str) -> None:
+def _delete_push_sub(subs_url: str, headers: dict, sub_id: str) -> None:
     """404/410を返した購読をWorker側KVから削除する(送信側の掃除)。"""
     try:
-        qs = urllib.parse.urlencode({"key": auth_key, "id": sub_id})
-        req = urllib.request.Request(f"{subs_url.rstrip('/')}/sub?{qs}", method="DELETE")
+        qs = urllib.parse.urlencode({"id": sub_id})
+        req = urllib.request.Request(f"{subs_url}/sub?{qs}", method="DELETE", headers=headers)
         with urllib.request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
             resp.read()
     except Exception as e:
         print(f"notify: push sub delete failed ({e})")
 
 
+def _push_body(text: str) -> str:
+    """通知の本文。題名が「アリテイ」なので、行頭の [アリテイ] は省く。"""
+    lines = [ln[len(APP_TAG):].strip() if ln.startswith(APP_TAG) else ln for ln in text.split("\n")]
+    body = "\n".join(ln for ln in lines if ln)
+    # Web Push本文は暗号化後4096バイト上限。日本語の長文で超えないよう本文を切り詰める。
+    if len(body) > 900:
+        body = body[:900] + "\n(続きはアプリで)"
+    return body
+
+
 def send_push(text: str) -> bool:
     """購読中の全端末へpywebpushでWeb Push通知を送信する。
-    PUSH_SUBS_URL/PUSH_AUTH_KEY/VAPID_PRIVATEのいずれかが未設定なら何もせずFalseを返す。
-    pywebpush未インストール環境ではImportErrorをcatchしてスキップする(ローカル互換)。
-    1件以上送信成功でTrueを返す(呼び出し元のsent登録判定用)。"""
-    subs_url = (os.environ.get("PUSH_SUBS_URL") or "").strip()
-    auth_key = (os.environ.get("PUSH_AUTH_KEY") or "").strip()
-    vapid_private = os.environ.get("VAPID_PRIVATE") or ""
-    if not (subs_url and auth_key and vapid_private):
+    設定(Worker のURL・秘密鍵)が無ければ何もせずFalseを返す。pywebpush が無い環境でも
+    スキップする。1件以上送信成功、または購読者ゼロでTrueを返す(呼び出し元のsent登録判定用)。
+    購読一覧を取れなかった時は False(次の周回で送り直す)。"""
+    subs_url, private = _push_cfg()
+    if not (subs_url and private):
         return False
     try:
         from pywebpush import webpush, WebPushException
+        vapid = _load_vapid(private)
+        headers = _sender_headers(subs_url, vapid)
     except ImportError:
         print("notify: pywebpush not installed, skip web push")
         return False
-    subs = _fetch_push_subs(subs_url, auth_key)
+    except Exception as e:
+        print(f"notify: web push setup failed ({type(e).__name__}: {e})")
+        return False
+    subs = _fetch_push_subs(subs_url, headers)
+    if subs is None:
+        return False
     if not subs:
         # 購読者ゼロ=届け先が無いだけなので配送済み扱い(後から購読した端末に
         # 当日分のバックログが一斉着弾するのを防ぐ。60秒毎の再送スパムも防止)。
         return True
-    # Web Push本文は暗号化後4096バイト上限。日本語の長文で超えないよう本文を切り詰める。
-    if len(text) > 900:
-        text = text[:900] + "\n(続きはアプリで)"
-    payload = json.dumps({"title": "アリテイ", "body": text}, ensure_ascii=False)
+    if len(subs) > PUSH_MAX_SUBS:
+        print(f"notify: {len(subs)} subscriptions, sending to the first {PUSH_MAX_SUBS} only")
+        subs = subs[:PUSH_MAX_SUBS]
+    payload = json.dumps({"title": "アリテイ", "body": _push_body(text)}, ensure_ascii=False)
     ok = False
     for entry in subs:
         sub = entry.get("subscription") if isinstance(entry, dict) else None
@@ -230,19 +289,57 @@ def send_push(text: str) -> bool:
             webpush(
                 subscription_info=sub,
                 data=payload,
-                vapid_private_key=vapid_private,
-                vapid_claims={"sub": "mailto:t.fujino@meihogp.co.jp"},
+                vapid_private_key=vapid,
+                vapid_claims={"sub": PUSH_CONTACT},
+                timeout=PUSH_TIMEOUT_SEC,
+                # 既定の TTL は0(端末が今つながっていなければ捨てる)。スマホは省電力で
+                # 切れていることが多いので保持させる。Urgency: high は省電力中でもすぐ届ける指定。
+                ttl=PUSH_TTL_SEC,
+                headers={"Urgency": "high"},
             )
             ok = True
         except WebPushException as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
             if status in (404, 410):
-                _delete_push_sub(subs_url, auth_key, sub_id)
+                _delete_push_sub(subs_url, headers, sub_id)
+                print(f"notify: expired subscription removed ({status})")
             else:
-                print(f"notify: web push failed ({e})")
+                print(f"notify: web push failed (status={status})")
         except Exception as e:
-            print(f"notify: web push failed ({e})")
+            print(f"notify: web push failed ({type(e).__name__})")
     return ok
+
+
+def selftest(send_text: str = "") -> int:
+    """Web Push の設定を確かめる(手動実行のワークフロー用)。秘密鍵そのものは表示しない。
+    1) pywebpush があるか 2) 秘密鍵から導いた公開鍵が、アプリ(docs/index.html)の VAPID_PUB と
+    一致するか 3) Worker から購読一覧を取れるか 4) send_text があれば実際に送る。0=正常 / 1=異常。"""
+    import re
+    subs_url, private = _push_cfg()
+    print(f"selftest: worker={subs_url or '(未設定)'} / 秘密鍵={'あり' if private else 'なし'}")
+    if not (subs_url and private):
+        return 1
+    try:
+        import pywebpush  # noqa: F401
+        vapid = _load_vapid(private)
+        pub = _vapid_public_b64(vapid)
+    except Exception as e:
+        print(f"selftest: 秘密鍵を読めない ({type(e).__name__}: {e})")
+        return 1
+    html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    m = re.search(r'const VAPID_PUB="([A-Za-z0-9_\-]+)"', html)
+    app_pub = m.group(1) if m else ""
+    same = bool(app_pub) and app_pub == pub
+    print(f"selftest: 公開鍵の一致={'はい' if same else 'いいえ'} (秘密鍵から導いた公開鍵 {pub[:12]}… / アプリ {app_pub[:12]}…)")
+    subs = _fetch_push_subs(subs_url, _sender_headers(subs_url, vapid))
+    print(f"selftest: 購読一覧の取得={'失敗' if subs is None else '成功'} / 購読数={'-' if subs is None else len(subs)}")
+    if not same or subs is None:
+        return 1
+    if send_text:
+        sent = send_push(send_text)
+        print(f"selftest: テスト通知の送信={'成功' if sent else '失敗'}")
+        return 0 if sent else 1
+    return 0
 
 
 def notify_events(pred: dict, ymd: str) -> None:
@@ -312,5 +409,8 @@ if __name__ == "__main__":
         sent = notify_text(_sys.argv[2])
         print("notify_text: sent" if sent else "notify_text: 送信先未設定のため送信せず")
         _sys.exit(0)
-    print("usage: python scripts/notify.py --text '本文'")
+    # Web Push の設定確認: python scripts/notify.py --selftest ["送るテスト文"]
+    if len(_sys.argv) >= 2 and _sys.argv[1] == "--selftest":
+        _sys.exit(selftest(_sys.argv[2] if len(_sys.argv) >= 3 else ""))
+    print("usage: python scripts/notify.py --text '本文' | --selftest ['テスト文']")
     _sys.exit(2)

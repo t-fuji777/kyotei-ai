@@ -1,11 +1,16 @@
 name = "aritei-push"
 main = "worker.js"
 compatibility_date = "2026-01-01"
+workers_dev = true
 
+# 購読(プッシュ通知の宛先)の保管場所。id は識別子で、秘密ではない
+# (wrangler kv namespace create aritei-push-subs で作成)。
 kv_namespaces = [
-  { binding = "SUBS", id = "PLACEHOLDER_KV_ID" }
-  # idはデプロイ時に `wrangler kv namespace create SUBS` で作成したIDに差し替える
+  { binding = "SUBS", id = "baa7450161984da8b931e8a449bfec4d" }
 ]
 
-# AUTH_KEYはリポジトリに書かない。デプロイ後に以下で設定する:
-#   wrangler secret put AUTH_KEY
+# Web Push の公開鍵(docs/index.html の VAPID_PUB と同じ値。秘密ではない)。
+# 送信側(GitHub Actions)は対になる秘密鍵で署名したトークンを送り、Worker はこの公開鍵で検証する。
+# この Worker に秘密の値(合言葉)は置かない。
+[vars]
+VAPID_PUB = "BBwe0VKS6ZoMa4CDjXDpKHvp5xPR9okvoPQCQGQfZdmX8JcIBAls-FuE3qOGFd7b2dPbxI9T0XWYHsJDqvby3hQ"

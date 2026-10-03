@@ -1,0 +1,31 @@
+name: notify-test
+# プッシュ通知の設定を確かめる(手動実行のみ)。
+#   - Web Push の秘密鍵(secrets.VAPID_PRIVATE)が、アプリに埋め込んだ公開鍵と対になっているか
+#   - 購読を預かる Worker(push-worker/)から、署名つきの要求で購読一覧を取れるか
+#   - message を入れると、購読中の全端末へその文面のテスト通知を送る
+# 秘密鍵そのものは表示しない。リポジトリへは何も書き込まない。
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "送るテスト通知の文面(空なら設定の確認だけで、通知は送らない)"
+        required: false
+        default: ""
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q pywebpush
+      - name: プッシュ通知の設定を確認
+        env:
+          PUSH_SUBS_URL: ${{ vars.PUSH_SUBS_URL }}
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
+          MESSAGE: ${{ github.event.inputs.message }}
+        run: python scripts/notify.py --selftest "$MESSAGE"
