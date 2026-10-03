@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""update_all.py の打刻タイミングの回帰テスト(ネットワーク不使用・時計は差し替え)。
+"""update_all.py の打刻タイミングと、通知の呼び出し方の回帰テスト(ネットワーク不使用・時計は差し替え)。
+通知(notify.notify_events)は偽物に差し替え、「いつ・何回呼ばれたか」と「失敗しても打刻・取得が
+続くか」を見る。通知の中身は tests/test_notify_push.py で確かめる。
 実行: python tests/test_update_all_stamps.py   (Windows では PYTHONUTF8=1 を付ける)"""
 import json
 import os
@@ -37,15 +39,19 @@ HIGH = {c: 9.9 for c in COMBOS}
 LOW = {c: 2.0 for c in COMBOS}
 
 
-def run(races, argv, fetched_odds=None, env_workflow=None, break_stamps=False, switches=None):
-    """races を1会場(コード1)に載せて main() を1回走らせる。取得1ページ=10秒として時計を進める。"""
+def run(races, argv, fetched_odds=None, env_workflow=None, break_stamps=False, switches=None,
+        notify=None, notify_cost=0, publish_raises=False):
+    """races を1会場(コード1)に載せて main() を1回走らせる。取得1ページ=10秒として時計を進める。
+    notify: notify_events の代わりに呼ぶ関数(pred, ymd)。戻り値がそのまま返る(真=未送信が残った)。
+    notify_cost: 通知1回にかかる秒数(時計を進める)。publish_raises: 合間の公開が例外を出す。
+    calls["log"] に、公開・通知・取得の起きた順を残す。"""
     tmp = Path(tempfile.mkdtemp())
     d = tmp / "docs" / "predictions"
     d.mkdir(parents=True)
     pred = {"date": YMD, "generated_at": "x", "venues": [{"code": 1, "name": "t", "races": races}]}
     (d / f"{YMD}.json").write_text(json.dumps(pred, ensure_ascii=False), encoding="utf-8")
     clock = {"t": START}
-    calls = {"odds": [], "publish": 0}
+    calls = {"odds": [], "publish": 0, "publish_kw": None, "notify": 0, "log": [], "tk_on_disk": []}
 
     class FakeDT(datetime):
         @classmethod
@@ -55,11 +61,27 @@ def run(races, argv, fetched_odds=None, env_workflow=None, break_stamps=False, s
     def adv(s):
         clock["t"] = clock["t"] + timedelta(seconds=s)
 
+    def tk_on_disk():
+        """いまディスク上の当日ファイルで tk=1 になっているレース番号。"""
+        cur = json.loads((d / f"{YMD}.json").read_text(encoding="utf-8"))
+        return sorted(r["no"] for r in cur["venues"][0]["races"] if r.get("tk") == 1)
+
     def f_odds(ymd, jcd, rno):
         adv(50)
         calls["odds"].append(rno)
+        calls["log"].append(f"odds:{rno}")
         o = (fetched_odds or {}).get(rno)
         return {"fuku": {1: "1.0-1.5"}, "t3": dict(o), "f3": {}, "t2": {}, "f2": {}, "k": {}} if o else None
+
+    def f_result(ymd, jcd, rno):
+        adv(10)
+        calls["log"].append(f"result:{rno}")
+        return None
+
+    def f_t3(ymd, jcd, rno):
+        adv(10)
+        calls["log"].append(f"t3:{rno}")
+        return None
 
     def f_none(*a):
         adv(10)
@@ -69,23 +91,37 @@ def run(races, argv, fetched_odds=None, env_workflow=None, break_stamps=False, s
         adv(10)
         return ""
 
+    def fake_notify(pred_, ymd_):
+        calls["notify"] += 1
+        calls["log"].append("notify")
+        adv(notify_cost)
+        return notify(pred_, ymd_) if notify else None
+
     saved = {k: getattr(U, k) for k in ("ROOT", "datetime", "fetch_odds", "fetch_result", "fetch_t3",
                                          "fetch_racename", "fetch_before_html", "time", "subprocess",
-                                         "do_stamps", "MIDRUN_STAMP", "MIDRUN_PUBLISH", "TAIL_STAMP")}
+                                         "do_stamps", "MIDRUN_STAMP", "MIDRUN_PUBLISH", "TAIL_STAMP",
+                                         "EARLY_NOTIFY")}
+    saved_notify = sys.modules["notify"].notify_events
     old_env = os.environ.get("GITHUB_WORKFLOW")
     old_argv = sys.argv
     try:
         U.ROOT = tmp
         U.datetime = FakeDT
         U.fetch_odds = f_odds
-        U.fetch_result = f_none
-        U.fetch_t3 = f_none
+        U.fetch_result = f_result
+        U.fetch_t3 = f_t3
         U.fetch_racename = f_none
         U.fetch_before_html = f_before
         U.time = types.SimpleNamespace(sleep=lambda s: adv(s))
+        sys.modules["notify"].notify_events = fake_notify
 
         def fake_run(cmd, **kw):
             calls["publish"] += 1
+            calls["publish_kw"] = kw
+            calls["log"].append("publish")
+            calls["tk_on_disk"].append(tk_on_disk())
+            if publish_raises:
+                raise RuntimeError("git push stuck")
             return types.SimpleNamespace(returncode=0)
         U.subprocess = types.SimpleNamespace(run=fake_run)
         if break_stamps:
@@ -103,6 +139,7 @@ def run(races, argv, fetched_odds=None, env_workflow=None, break_stamps=False, s
     finally:
         for k, v in saved.items():
             setattr(U, k, v)
+        sys.modules["notify"].notify_events = saved_notify
         sys.argv = old_argv
         if old_env is None:
             os.environ.pop("GITHUB_WORKFLOW", None)
@@ -184,6 +221,7 @@ ON = {"MIDRUN_PUBLISH": True}
 _, _, calls = run([race(5, "12:16", HIGH), race(6, "12:50"), race(7, "12:55")], [], env_workflow="auto-update",
                   switches=ON, **args)
 assert calls["publish"] == 1, calls
+assert calls["publish_kw"]["timeout"] == 30, "公開(push)を待つのは30秒まで。詰まっても通知をそれ以上遅らせない"
 _, _, calls = run([race(5, "12:16", HIGH), race(6, "12:50"), race(7, "12:55")], [], env_workflow="all-update",
                   switches=ON, **args)
 assert calls["publish"] == 0
@@ -194,4 +232,94 @@ _, _, calls = run([race(5, "12:16", HIGH), race(6, "12:50"), race(7, "12:55")], 
                   switches={"MIDRUN_PUBLISH": False}, **args)
 assert calls["publish"] == 0
 print("5 ok: publish only inside the auto-update loop")
+
+# 6) --results-only で厳選が確定(この実行の打刻で tk=1)したら、結果・展示の取得より前に
+#    「書く → 公開 → 通知」。1R は結果待ち(fetch_result が走る)。5R は締切12:14 で、開始時点(12:00)に打刻される。
+def waiting():
+    r = race(1, "11:40", HIGH)
+    r["tk"] = 0
+    r["att"] = 0
+    return r
+
+
+R, out, calls = run([waiting(), race(5, "12:14", HIGH, live=True)], ["--results-only"],
+                    env_workflow="auto-update", switches=ON)
+log = calls["log"]
+assert R[5].get("tk") == 1 and R[5].get("pt") == "12:00"
+assert log[:2] == ["publish", "notify"] and "result:1" in log[2:], log
+assert calls["tk_on_disk"] == [[5]], "公開の時点で、確定(tk=1)がファイルに書かれている"
+assert log.count("notify") == 2 and log[-1] == "notify", "末尾の通知(やり直しと結果の通知)は残す"
+print("6 ok: results-only publishes and notifies before fetching results:", log)
+
+# 6b) auto-update の外(公開しない場面)でも、通知は取得より前
+_, _, calls = run([waiting(), race(5, "12:14", HIGH, live=True)], ["--results-only"])
+assert calls["publish"] == 0 and calls["log"][0] == "notify" and "result:1" in calls["log"][1:], calls["log"]
+print("6b ok")
+
+# 6c) 打刻があっても厳選が成立していない(tk=0)なら、前倒しの公開・通知はしない(末尾の1回だけ)
+R, out, calls = run([waiting(), race(5, "12:14", LOW, live=True)], ["--results-only"],
+                    env_workflow="auto-update", switches=ON)
+assert R[5].get("tk") == 0
+assert calls["publish"] == 0 and calls["log"].count("notify") == 1 and calls["log"][-1] == "notify", calls["log"]
+print("6c ok: no early publish for tk=0 stamps")
+
+# 6d) 前の周回で確定済みの厳選(tk=1)があるだけでは、前倒しはしない(この実行で新しく確定した時だけ)
+old = race(4, "12:05", HIGH, live=True)
+old["tk"] = 1
+old["att"] = 1
+R, out, calls = run([waiting(), old, race(5, "12:14", LOW, live=True)], ["--results-only"],
+                    env_workflow="auto-update", switches=ON)
+assert R[4]["tk"] == 1 and R[5].get("tk") == 0
+assert calls["publish"] == 0 and calls["log"].count("notify") == 1, calls["log"]
+print("6d ok: only newly confirmed races trigger the early notify")
+
+# 6e) 止めた場合(EARLY_NOTIFY=False)は従来どおり: 通知は末尾の1回だけ
+_, _, calls = run([waiting(), race(5, "12:14", HIGH, live=True)], ["--results-only"],
+                  env_workflow="auto-update", switches={"MIDRUN_PUBLISH": True, "EARLY_NOTIFY": False})
+assert calls["publish"] == 0 and calls["log"].count("notify") == 1 and calls["log"][-1] == "notify", calls["log"]
+print("6e ok: kill switch")
+
+
+# 7) 通知や公開が失敗しても、打刻・結果の取得・ファイルへの書き込みは続く
+def boom(pred, ymd):
+    raise RuntimeError("notify exploded")
+
+
+R, out, calls = run([waiting(), race(5, "12:14", HIGH, live=True)], ["--results-only"],
+                    env_workflow="auto-update", switches=ON, notify=boom, publish_raises=True)
+assert R[5].get("tk") == 1 and "result:1" in calls["log"], calls["log"]
+assert calls["log"][:2] == ["publish", "notify"], "公開が失敗しても通知は試す"
+print("7 ok: results-only survives notify/publish failures")
+
+# 7b) full: 合間の通知が例外を出しても、以後の合間打刻は続く(11R は 12:02 に合間で打刻される)
+far = [race(n, "14:%02d" % n) for n in (20, 21, 22, 23)]        # 朝オッズの対象(取得のたびに合間が来る)
+R, out, calls = run([race(5, "12:16", HIGH), race(11, "12:17", HIGH), race(6, "12:50"), race(7, "12:55")] + far, [],
+                    fetched_odds={6: HIGH, 7: HIGH}, notify=boom)
+assert calls["odds"] == [6, 7] and R[6]["odds"]["t3"] and R[7]["odds"]["t3"]
+assert R[5].get("pt") == "12:01" and R[11].get("tk") == 1 and R[11].get("pt") == "12:02", (R[5].get("pt"), R[11].get("pt"))
+assert [x for x in calls["log"] if x.startswith("t3:")] == ["t3:20", "t3:21", "t3:22", "t3:23"]
+print("7b ok: a failing notify does not stop mid-run stamping")
+
+# 8) full: 合間の通知が送れずに残ったら、次の合間で最大3回まで試し直す(打刻が無い合間でも)
+#    通知1回に30秒(notify 側の上限)かかっても、オッズと朝オッズの取得は全部行われる。
+R, out, calls = run([race(5, "12:16", HIGH), race(6, "12:50"), race(7, "12:55")] + far, [],
+                    fetched_odds={6: HIGH, 7: HIGH}, notify=lambda p, y: True, notify_cost=30)
+log = calls["log"]
+assert calls["odds"] == [6, 7] and [x for x in log if x.startswith("t3:")] == ["t3:20", "t3:21", "t3:22", "t3:23"]
+assert R[5].get("tk") == 1
+# 打刻の合間で1回 + やり直し3回 + full の末尾で1回
+assert calls["notify"] == 1 + U.MIDRUN_NOTIFY_RETRY + 1 == 5, log
+assert log[log.index("notify"):][:5] == ["notify", "notify", "t3:20", "notify", "t3:21"], log
+print("8 ok: mid-run notify is retried at the next ticks, at most 3 times:", log)
+
+# 8b) 送れたら、やり直さない(打刻の合間で1回 + 末尾で1回)
+_, _, calls = run([race(5, "12:16", HIGH), race(6, "12:50"), race(7, "12:55")] + far, [],
+                  fetched_odds={6: HIGH, 7: HIGH}, notify=lambda p, y: False)
+assert calls["notify"] == 2, calls["log"]
+# やり直しの1回目で送れたら、そこで止める
+answers = [True, False, False, False, False]
+_, _, calls = run([race(5, "12:16", HIGH), race(6, "12:50"), race(7, "12:55")] + far, [],
+                  fetched_odds={6: HIGH, 7: HIGH}, notify=lambda p, y: answers.pop(0))
+assert calls["notify"] == 3, calls["log"]
+print("8b ok: no retry after a successful send")
 print("ALL OK")

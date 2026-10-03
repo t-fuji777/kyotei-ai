@@ -158,6 +158,14 @@ def do_stamps(pred, now, skip=None, only=None) -> int:
 MIDRUN_STAMP = True     # full の取得の合間に時刻を取り直して打刻する
 MIDRUN_PUBLISH = True   # 合間の打刻をその場で commit/push する(auto-update ループ内のみ)
 TAIL_STAMP = True       # --results-only の末尾で、買い目もオッズも動かないレースだけ追い打刻する
+EARLY_NOTIFY = True     # --results-only で厳選が確定したら、結果・展示の取得を待たずに公開して通知する
+# 合間の公開(git push)を待つ上限。公開→通知の順なので、push が詰まると通知もその分遅れる。
+# 平常時は約2秒で終わる。締切まで15分しかないので、詰まった時は30秒で見切って通知へ進む
+# (送れなかったコミットは、周回末尾の commit_push が従来どおり送る)。
+MIDRUN_PUBLISH_TIMEOUT_SEC = 30
+# 合間の通知が失敗した時(購読一覧を取れない等)に、次の合間で試し直す回数の上限。
+# これが無いと、次に試すのは次の打刻か full の末尾(最大約11分後)になる。
+MIDRUN_NOTIFY_RETRY = 3
 
 
 def _ts(now) -> str:
@@ -177,21 +185,25 @@ def _publish_midrun() -> None:
     sh = Path(__file__).parent / "publish_stamps.sh"
     try:
         sys.stdout.flush()
-        rc = subprocess.run(["bash", str(sh), "auto stamps"], cwd=str(ROOT), timeout=120).returncode
+        rc = subprocess.run(["bash", str(sh), "auto stamps"], cwd=str(ROOT),
+                            timeout=MIDRUN_PUBLISH_TIMEOUT_SEC).returncode
         print(f"midrun publish: rc={rc}", flush=True)
     except Exception as e:
         print(f"::warning::midrun publish failed: {e}", flush=True)
 
 
-def _notify_midrun(pred, ymd) -> None:
+def _notify_midrun(pred, ymd) -> bool:
     """合間の打刻で厳選が確定したら、その場で通知する(公開の直後)。締切まで15分しかないので、
     full の終わり(最大約11分後)まで待たせない。通知の設定が無ければ何もしない。失敗しても取得は
-    続ける。full の末尾でも同じ関数が呼ばれるが、送信済みの記録があるので二重には送らない。"""
+    続ける。full の末尾でも同じ関数が呼ばれるが、送信済みの記録があるので二重には送らない。
+    戻り値: 送れずに残った通知があるか(True なら _Ticker が次の合間でもう一度試す)。
+    通知にかかる時間は notify 側で上限を切ってある(1回の送信全体で約30秒)。"""
     try:
         from notify import notify_events
-        notify_events(pred, ymd)
+        return bool(notify_events(pred, ymd))
     except Exception as e:
         print(f"notify skip: {e}", flush=True)
+        return False
 
 
 class _Ticker:
@@ -209,6 +221,7 @@ class _Ticker:
         self.pred, self.ymd = pred, ymd
         self.stamps = 0
         self.dead = False
+        self.notify_retry = 0   # 失敗した通知を、あと何回の合間で試し直すか
 
     def __call__(self, pending=None) -> int:
         if self.dead:
@@ -225,7 +238,13 @@ class _Ticker:
                 write(self.pred, self.ymd)
                 print(f"stamp-tick {now.strftime('%H:%M:%S')}: {n}", flush=True)
                 _publish_midrun()
-                _notify_midrun(self.pred, self.ymd)
+                self.notify_retry = MIDRUN_NOTIFY_RETRY if _notify_midrun(self.pred, self.ymd) else 0
+            elif self.notify_retry > 0:
+                # 前の合間の通知が送れずに残っている(購読一覧を取れなかった等の一時的な失敗)。
+                # 打刻が無い合間でも試し直す。回数を限るのは、失敗が続く間ずっと取得を遅らせないため。
+                self.notify_retry -= 1
+                if not _notify_midrun(self.pred, self.ymd):
+                    self.notify_retry = 0
             return n
         except Exception:
             self.dead = True
@@ -585,7 +604,26 @@ def main():
     if results_only:
         # 毎分パスが最も確実に締切T-15のチェックポイントを捉えられるため、
         # 結果確定(do_results)の前にdo_stampsを呼ぶ。
+        _tk_before = {(v["code"], r["no"]) for v in pred["venues"] for r in v["races"] if r.get("tk") == 1}
         n_stp = do_stamps(pred, now)
+        if EARLY_NOTIFY:
+            # この実行の打刻で厳選が新しく確定した(tk=1 になった)時だけ、結果・展示の取得(20〜170秒)を
+            # 待たずに、書く→公開→通知(full の合間打刻と同じ順)。締切まで15分しかないので、通知を
+            # 取得の後ろに回さない。公開を先にするのは、通知を開いた時に画面も確定になっているように
+            # するため。打刻の大半は tk=0 なので、ここを通るのは1日1〜2回。末尾の notify_events は
+            # 残す(ここで送れなかった時のやり直しと、結果の通知のため。送信済みは二重に送らない)。
+            # ここでの失敗は握る(結果・展示の取得を止めない)。
+            try:
+                if n_stp and any(r.get("tk") == 1 and (v["code"], r["no"]) not in _tk_before
+                                 for v in pred["venues"] for r in v["races"]):
+                    pred["results_updated_at"] = _ts(datetime.now(JST))
+                    write(pred, ymd)
+                    print(f"stamp-early {datetime.now(JST).strftime('%H:%M:%S')}: sengen confirmed", flush=True)
+                    _publish_midrun()
+                    _notify_midrun(pred, ymd)
+            except Exception:
+                print("::warning::update_all: early publish/notify failed", flush=True)
+                traceback.print_exc()
         n_res = do_results(pred, now, ymd)
         n_stx = do_st_ex(pred, now, ymd)
         if TAIL_STAMP:
