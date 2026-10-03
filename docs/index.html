@@ -935,61 +935,163 @@ async function _appReload(){
 // プッシュ通知セクション(設定タブ)。PUSH_WORKERが空の間は呼ばれない(=「準備中」の静的表示のみ)。
 function _isIOSDevice(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);}
 function _isStandalone(){return !!window.navigator.standalone||(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches);}
+// 端末側の控え(localStorage): {on:1=「受け取る」にしている, ep:Worker へ登録できた宛先, t:登録できた時刻ms}。
+// 「通知は有効です」は、端末に購読があるだけでは出さない。送信側は Worker の一覧にある宛先にしか送らないので、
+// Worker に登録できたと確かめられた時だけ出す。
+const PUSH_LS="aritei_push";
+const PUSH_RESYNC_MS=12*3600*1000; // 起動時・前面復帰時の登録し直しは12時間に1回まで(設定タブを開いた時は毎回)
+const PUSH_NET_MS=8000;            // Worker への通信と serviceWorker.ready を待つ上限(「確認中…」のまま止まらないように)
+let _pushEpoch=0; // 「通知を止める」を押すたびに+1。行き違いで後から終わった登録が「受け取る」の控えを書き戻さないため
+let _pushDiag=""; // 登録を確認できなかった理由(設定タブに小さく出す。スクリーンショットでの原因調査用)
+function _pushLs(){try{const o=JSON.parse(localStorage.getItem(PUSH_LS)||"null");return o&&typeof o==="object"?o:{};}catch(_){return {};}}
+function _pushLsSet(o){try{if(o)localStorage.setItem(PUSH_LS,JSON.stringify(o));else localStorage.removeItem(PUSH_LS);}catch(_){/*プライベートモード等*/}}
+function _pushSupported(){return "serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;}
+function _swReady(){let tm;return Promise.race([navigator.serviceWorker.ready,new Promise((_,rej)=>{tm=setTimeout(()=>rej(new Error("sw timeout")),PUSH_NET_MS);})]).finally(()=>clearTimeout(tm));}
+// 端末の購読が、今の公開鍵(VAPID_PUB)で作られたものか。鍵を入れ替えた後に古い鍵の購読が残ると、
+// 配信サービスが送信を断り続ける。照合できない端末(鍵を返さない・想定外の形で返す)は、合っているものとして扱う
+// (違うと決めつけると、同期のたびに購読を作り直してしまうため)。
+function _pushKeyOk(sub){
+  try{
+    const k=sub.options&&sub.options.applicationServerKey,b=urlBase64ToUint8Array(VAPID_PUB);
+    if(!k||k.byteLength!==b.length)return true;
+    return new Uint8Array(k).every((v,i)=>v===b[i]);
+  }catch(_){return true;}
+}
+function _pushHost(sub){try{return new URL(sub.endpoint).hostname;}catch(_){return "?";}}
+// Worker へ購読を登録する。応答は 201(新規)/200(登録済み)が成功。それ以外は応答コードを e.status に載せて投げる。
+async function _pushRegister(sub){
+  const ep0=_pushEpoch;
+  const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),PUSH_NET_MS);
+  let res;
+  try{res=await fetch(PUSH_WORKER+"/sub",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub}),signal:ac.signal});}
+  finally{clearTimeout(tm);}
+  if(!res.ok){const e=new Error("register "+res.status);e.status=res.status;throw e;}
+  if(ep0===_pushEpoch)_pushLsSet({on:1,ep:sub.endpoint,t:Date.now()});
+}
+// Worker 側の登録を消すよう知らせる。結果は待たない(届かなくても、次の送信で配信サービスが「失効」を返し、送信側が掃除する)。
+function _pushForget(ep){try{fetch(PUSH_WORKER+"/unsub",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:ep}),keepalive:true}).catch(()=>{});}catch(_){}}
+// 端末の購読と Worker の登録を揃える。起動時・前面復帰時(force=false)と、設定タブを開いた時(force=true)に呼ぶ。
+// wantNow=true は「通知を受け取る」を押した直後。
+// 戻り値: "on"=登録を確認 / "off"=受け取る設定でない / "denied"=端末側で通知が拒否 / "unsynced"=登録を確認できない(届かない状態)
+async function _pushSync(force,wantNow){
+  if(!PUSH_WORKER||!_pushSupported())return "off";
+  if(Notification.permission==="denied")return "denied";
+  const reg=await _swReady();
+  let sub=await reg.pushManager.getSubscription();
+  const ls=_pushLs();
+  let want=!!ls.on||!!wantNow;
+  if(sub&&!_pushKeyOk(sub)){ // 公開鍵が変わった → 古い購読を捨てて取り直す
+    const old=sub.endpoint;
+    try{await sub.unsubscribe();}catch(_){}
+    _pushForget(old);sub=null;want=true;
+  }
+  if(!sub){
+    if(!(want&&Notification.permission==="granted"))return "off";
+    // 「受け取る」にしていたのに購読が消えている(OS・ブラウザ側の失効)。許可済みなので黙って取り直す。
+    try{sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUB)});}
+    catch(_){_pushDiag="購読を作れず";return "unsynced";}
+  }
+  const age=Date.now()-(ls.t||0);
+  if(!force&&ls.ep===sub.endpoint&&age>=0&&age<PUSH_RESYNC_MS)return "on";
+  try{await _pushRegister(sub);return "on";}
+  catch(e){
+    // 同じ宛先の登録を以前に確認できていて、今回は通信できなかっただけ(圏外・Worker の一時的な不調)なら有効のまま。
+    // Worker がはっきり断った時(400番台・507=満杯)と、一度も確認できていない時だけ「届かない状態」とする。
+    const known=!!ls.t&&ls.ep===sub.endpoint;
+    const refused=!!(e&&e.status)&&((e.status>=400&&e.status<500)||e.status===507);
+    if(known&&!refused)return "on";
+    // はっきり断られたら「確認済み」の控えを捨てる(次の起動時に間引かずに登録し直し、圏外でも有効と出さないため)。
+    // 通信中に「通知を止める」が押されていた時は、控えが既に消えているので書き戻さない。
+    if(refused&&_pushLs().ep===sub.endpoint)_pushLsSet({on:1});
+    _pushDiag=(e&&e.status?"応答"+e.status:"通信できず")+" / 宛先 "+_pushHost(sub);
+    return "unsynced";
+  }
+}
+const _PUSH_WHAT='<div style="font-size:11px;color:var(--dim);line-height:1.7;margin-bottom:8px">厳選プランが確定した時(締切の約15分前)と、その結果が出た時にお知らせします。厳選は1日に1〜2レースほどで、1レースにつき確定と結果の2回お知らせします。データ更新の異常もお知らせします。</div>';
 async function renderPushSection(){
   const el=document.getElementById("pushSec");
   if(!el)return;
+  const head='<div class="sec" style="margin-top:18px">プッシュ通知</div>';
   if(_isIOSDevice()&&!_isStandalone()){
-    el.innerHTML=`<div class="sec" style="margin-top:18px">プッシュ通知</div>
-      <div style="font-size:12px;color:var(--dim);line-height:1.7">ホーム画面に追加したアプリから設定できます(共有ボタン→ホーム画面に追加)</div>`;
+    el.innerHTML=head+'<div style="font-size:12px;color:var(--dim);line-height:1.7">iPhoneでは、ホーム画面に追加したアプリからだけ通知を設定できます。Safariの共有ボタン→「ホーム画面に追加」で追加し、追加したアイコンから開いて、この画面をもう一度ご覧ください(iOS 16.4以降)。</div>';
     return;
   }
-  if(!("serviceWorker" in navigator)||!("PushManager" in window)){
-    el.innerHTML=`<div class="sec" style="margin-top:18px">プッシュ通知</div>
-      <div style="font-size:12px;color:var(--dim);line-height:1.7">この端末はプッシュ通知に対応していません。</div>`;
+  if(!_pushSupported()){
+    el.innerHTML=head+'<div style="font-size:12px;color:var(--dim);line-height:1.7">このブラウザでは通知を受け取れません。iPhoneはiOS 16.4以降に更新し、AndroidはChromeで開いてください。</div>';
     return;
   }
-  el.innerHTML=`<div class="sec" style="margin-top:18px">プッシュ通知</div><div id="pushBody" style="font-size:12px;color:var(--dim)">確認中…</div>`;
-  try{
-    const reg=await navigator.serviceWorker.ready;
-    const sub=await reg.pushManager.getSubscription();
-    _pushBodyRender(sub);
-  }catch(e){
-    const b=document.getElementById("pushBody");if(b)b.textContent="通知状態の確認に失敗しました。";
-  }
+  el.innerHTML=head+'<div id="pushBody" style="font-size:12px;color:var(--dim)">確認中…</div>';
+  let st;try{st=await _pushSync(true);}catch(e){st="error";}
+  _pushBodyRender(st);
 }
-function _pushBodyRender(sub){
+function _pushBodyRender(st){
   const b=document.getElementById("pushBody");
   if(!b)return;
-  if(sub){
-    b.innerHTML=`<div style="color:var(--text);margin-bottom:8px">通知は有効です</div><button id="pushOff" class="chip">解除</button>`;
-    const off=document.getElementById("pushOff");if(off)off.onclick=()=>_pushUnsubscribe(sub);
+  const btn=(id,label)=>`<button id="${id}" class="chip" style="margin:0 6px 6px 0">${label}</button>`;
+  const msg='<div id="pushMsg" style="font-size:11px;line-height:1.7"></div>';
+  const txt=h=>`<div style="color:var(--text);line-height:1.7;margin-bottom:8px">${h}</div>`;
+  if(st==="on"){
+    b.innerHTML=_PUSH_WHAT+txt("通知は有効です")+btn("pushTest","テスト通知を表示")+btn("pushOff","通知を止める")+msg
+      +'<div style="font-size:11px;line-height:1.7">「テスト通知を表示」は、この端末の通知設定までを確かめるものです。実際の送信(サーバーからこの端末まで)の確認ではありません。</div>';
+  }else if(st==="unsynced"){
+    const refused=/^応答/.test(_pushDiag);
+    b.innerHTML='<div style="color:#E5484D;line-height:1.7;margin-bottom:8px">'+(refused
+        ?'通知の登録が受け付けられませんでした。このままでは通知が届きません。「もう一度確認する」を押しても直らない時は、下の「診断用」の表示が原因を調べる手がかりになります。'
+        :'通知の登録を確認できませんでした。このままでは通知が届きません。電波の良い場所で「もう一度確認する」を押してください。')+'</div>'
+      +btn("pushRetry","もう一度確認する")+btn("pushOff","通知を止める")+msg
+      +`<div style="font-size:10px;line-height:1.7">診断用: ${esc(_pushDiag||"-")}</div>`;
+  }else if(st==="error"){
+    b.innerHTML=txt("通知の状態を確認できませんでした。少し待ってから「もう一度確認する」を押してください。")+btn("pushRetry","もう一度確認する");
+  }else if(st==="denied"){
+    // 許可の場所は開き方で違う: ホーム画面のアプリは端末(OS)の設定、Chrome のタブは Chrome のサイト設定
+    const how=_isIOSDevice()
+      ?'iPhone(ホーム画面のアプリ): 設定アプリ→通知→アリテイ→「通知を許可」をオン'
+      :'Android(ホーム画面のアプリ): アリテイのアイコンを長押し→アプリ情報→通知→オン<br>Chromeで開いている場合: アドレス欄の左のマーク→権限→通知をオン';
+    b.innerHTML=txt('この端末の設定で、アリテイの通知がオフ(許可しない)になっています。次の手順でオンにしてから「もう一度確認する」を押してください。<br>'+how)+btn("pushRetry","もう一度確認する");
   }else{
-    b.innerHTML=`<button id="pushOn" class="chip">通知を受け取る</button>`;
-    const on=document.getElementById("pushOn");if(on)on.onclick=_pushSubscribe;
+    b.innerHTML=_PUSH_WHAT+(st==="dismissed"?txt("許可の確認が閉じられました。もう一度押して「許可」を選んでください。"):"")+btn("pushOn","通知を受け取る");
   }
+  const on=document.getElementById("pushOn");if(on)on.onclick=_pushSubscribe;
+  const off=document.getElementById("pushOff");if(off)off.onclick=_pushUnsubscribe;
+  const rt=document.getElementById("pushRetry");if(rt)rt.onclick=()=>{rt.disabled=true;rt.textContent="確認中…";return renderPushSection();};
+  const ts=document.getElementById("pushTest");if(ts)ts.onclick=async()=>{
+    const m=document.getElementById("pushMsg");
+    try{
+      const reg=await _swReady();
+      await reg.showNotification("アリテイ",{body:"テスト通知です。これが表示されれば、この端末の通知設定は正常です。",icon:"icon-192.png",tag:"aritei-test"});
+      if(m)m.textContent="テスト通知を表示しました。出てこない時は、端末の設定でアリテイの通知がオフになっていないかご確認ください。";
+    }catch(_){if(m)m.textContent="テスト通知を表示できませんでした。端末の設定でアリテイの通知がオフになっていないかご確認ください。";}
+  };
 }
 async function _pushSubscribe(){
-  const b=document.getElementById("pushBody");
+  const btn=document.getElementById("pushOn");
+  if(btn){btn.disabled=true;btn.textContent="登録中…";}
+  let st;
   try{
+    // 許可の要求は、押した操作の中で最初に行う(iPhone は利用者の操作の中でしか出せない)
     const perm=await Notification.requestPermission();
-    if(perm!=="granted"){if(b)b.innerHTML='<div style="color:var(--dim)">通知が許可されませんでした。</div>';return;}
-    const reg=await navigator.serviceWorker.ready;
-    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUB)});
-    const res=await fetch(PUSH_WORKER+"/sub",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub})});
-    if(!res.ok)throw new Error("subscribe register failed "+res.status);
-    _pushBodyRender(sub);
-  }catch(e){
-    if(b)b.innerHTML='<div style="color:var(--dim)">通知の登録に失敗しました。</div>';
-  }
+    if(perm==="granted"){const ls=_pushLs();ls.on=1;_pushLsSet(ls);st=await _pushSync(true,true);}
+    else st=perm==="denied"?"denied":"dismissed";
+  }catch(e){st="error";}
+  _pushBodyRender(st);
 }
-async function _pushUnsubscribe(sub){
-  const b=document.getElementById("pushBody");
+async function _pushUnsubscribe(){
+  const off=document.getElementById("pushOff");
+  if(off){off.disabled=true;off.textContent="停止中…";}
   try{
-    await fetch(PUSH_WORKER+"/unsub",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint:sub.endpoint})});
-    await sub.unsubscribe();
-    _pushBodyRender(null);
+    _pushEpoch++;_pushLsSet(null);
+    const reg=await _swReady();
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){
+      const ep=sub.endpoint;
+      await sub.unsubscribe(); // 先に端末側を止める(これだけで通知は来なくなる。Worker に通信できなくても止められる)
+      _pushForget(ep);
+    }
+    _pushBodyRender("off");
   }catch(e){
-    if(b)b.innerHTML='<div style="color:var(--dim)">解除に失敗しました。</div>';
+    if(off){off.disabled=false;off.textContent="通知を止める";}
+    const m=document.getElementById("pushMsg");
+    if(m){m.style.color="#E5484D";m.textContent="通知を止められませんでした。もう一度お試しください。";}
   }
 }
 
@@ -1041,8 +1143,42 @@ $("#tabToday").onclick=()=>show("today");
 $("#tabAcc").onclick=()=>show("acc");
 $("#tabModel").onclick=()=>show("model");
 if("scrollRestoration" in history)history.scrollRestoration="manual";
-// 起動タブ: 設定「起動時に開くタブ」の保存値を反映(未設定/取得不可は当日予測)
-{let _st="today";try{if(localStorage.getItem("aritei_start_tab")==="sen")_st="sen";}catch(_){/*プライベートモード等*/}show(_st);}
+// 通知タップで開いた時: 厳選一覧を表示し、最新データを取り直す。合図は2通り(docs/sw.js の notificationclick):
+// 閉じていた時は "./?from=push" で開かれ、開いていた時は {type:"push-click"} のメッセージが届く。
+// 通知はサイトへの反映(GitHub Pages)より先に届くことがあるので、反映を待って 5・30・60・90・120秒後にも取り直す。
+// ここは refreshBusy の宣言(let)より前で動くので、refreshLatest は直接呼ばず必ず setTimeout 経由にする。
+let _pushClickTm=[];
+function _pushClickRefresh(){
+  _pushClickTm.forEach(clearTimeout);
+  _pushClickTm=[5,30,60,90,120].map(s=>setTimeout(()=>{if(document.visibilityState==="visible")refreshLatest();},s*1000));
+}
+function _onPushClick(){show("sen");_pushClickRefresh();}
+// "?from=push" で開かれたか。開いた直後にアプリの更新(新しい sw.js への切り替え)で自動の再読み込みが入っても
+// 厳選一覧のままにするため、印を60秒だけ sessionStorage に控える(URL の印は下の _fromPushClean で消す)。
+function _fromPush(){
+  try{
+    if(new URLSearchParams(location.search).get("from")==="push"){
+      try{sessionStorage.setItem("aritei_from_push",String(Date.now()));}catch(_){/*プライベートモード等*/}
+      return true;
+    }
+    const age=Date.now()-(+sessionStorage.getItem("aritei_from_push")||0);
+    return age>=0&&age<60000;
+  }catch(_){return false;}
+}
+// URL の ?from=push を消す(手動の再読み込みや共有で、厳選一覧での起動が残らないように)
+function _fromPushClean(){
+  try{
+    const q=new URLSearchParams(location.search);
+    if(q.get("from")!=="push")return;
+    q.delete("from");const s=q.toString();
+    history.replaceState(history.state,"",location.pathname+(s?"?"+s:"")+location.hash);
+  }catch(_){}
+}
+// 起動タブ: 設定「起動時に開くタブ」の保存値を反映(未設定/取得不可は当日予測)。通知タップで開かれた時は厳選一覧。
+{let _st="today";try{if(localStorage.getItem("aritei_start_tab")==="sen")_st="sen";}catch(_){/*プライベートモード等*/}
+  const _fp=_fromPush();if(_fp)_st="sen";
+  show(_st);
+  if(_fp){_pushClickRefresh();_fromPushClean();}}
 // 較正表(calib.json)は起動時に1回取得。失敗時はCALIB=nullのまま内蔵フォールバック表を使う。
 // 取得完了が現在表示中のタブの描画より後になった場合は、そのタブだけ再描画して反映する。
 fetchJSON("calib.json").then(c=>{
@@ -1061,7 +1197,15 @@ if("serviceWorker" in navigator){
   navigator.serviceWorker.addEventListener("controllerchange",()=>{
     if(!_hadCtrl||_swReloading) return; _swReloading=true; location.reload();
   });
+  // 通知タップで、開いていたこの画面が前面に出された時(sw.js からの合図)
+  navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.type==="push-click")_onPushClick();});
 }
+// プッシュ通知: 端末の購読と Worker の登録を揃える(設定タブを開かなくても、登録の欠落・購読の失効・公開鍵の変更を直す)。
+// 起動を遅らせないよう少し後に、結果を待たずに行う。失敗しても画面には何も出さない(状態は設定タブで表示する)。
+// ホーム画面のアプリは終了せず前面と背面を行き来するだけのことが多いので、前面に戻った時にも行う(通信は12時間に1回まで)。
+function _pushSyncBg(){if(PUSH_WORKER)_pushSync(false).catch(()=>{});}
+setTimeout(_pushSyncBg,2000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")_pushSyncBg();});
 
 let refreshBusy=false;
 async function refreshLatest(){
