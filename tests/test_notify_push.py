@@ -125,6 +125,27 @@ def test_cap_on_number_of_subscriptions():
     assert N.send_push("x") is True and len(SENT) == N.PUSH_MAX_SUBS
 
 
+def test_total_time_budget_stops_a_slow_run():
+    """応答の遅い宛先が並んでも、全体の上限で打ち切る(開催中の処理を止めない)。"""
+    reset([sub(i) for i in range(10)])
+    clock = {"t": 0.0}
+    real_webpush = sys.modules["pywebpush"].webpush
+
+    def slow(**kw):
+        clock["t"] += 9.0                                  # 1件9秒かかる宛先
+        return real_webpush(**kw)
+
+    sys.modules["pywebpush"].webpush = slow
+    import time as _time
+    real_monotonic = _time.monotonic
+    _time.monotonic = lambda: clock["t"]
+    try:
+        assert N.send_push("x") is True
+    finally:
+        _time.monotonic = real_monotonic
+    assert 1 <= len(SENT) < 10 and len(SENT) == int(N.PUSH_TOTAL_SEC // 9) + 1, len(SENT)
+
+
 def test_sender_token_is_short_lived_and_bound_to_the_worker():
     import time
     reset([])

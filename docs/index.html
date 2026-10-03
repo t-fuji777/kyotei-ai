@@ -248,9 +248,9 @@ let showGen=0,autoRefreshing=false;
 let accOpenM={},accResizeBound=false; // 的中実績: 過去月の折りたたみ開閉状態 / resizeリスナー二重登録防止
 const PREDS={};
 const _WD=["日","月","火","水","木","金","土"];
-// Web Push通知: PUSH_WORKERが空文字の間はデプロイ未完了とみなし、機能全体を非表示にする(休眠状態)。
-// デプロイ後にオーケストレータがWorker URLを設定して有効化する。
-const PUSH_WORKER="";
+// Web Push通知: 購読を預かる Cloudflare Worker(push-worker/)のURL。scripts/notify.py の
+// PUSH_SUBS_URL_DEFAULT と同じ値。空文字にすると機能全体を非表示にする(「準備中」の表示に戻る)。
+const PUSH_WORKER="https://aritei-push.t-fujino.workers.dev";
 const VAPID_PUB="BBwe0VKS6ZoMa4CDjXDpKHvp5xPR9okvoPQCQGQfZdmX8JcIBAls-FuE3qOGFd7b2dPbxI9T0XWYHsJDqvby3hQ";
 function urlBase64ToUint8Array(base64String){
   const padding="=".repeat((4-base64String.length%4)%4);

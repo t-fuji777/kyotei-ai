@@ -29,12 +29,13 @@ STATE_PATH = ROOT / "docs" / "predictions" / "notify_state.json"
 APP_TAG = "[アリテイ]"
 TIMEOUT_SEC = 5
 # 購読を預かる Worker(push-worker/)のURL。秘密ではない(docs/index.html の PUSH_WORKER と同じ値)。
-# 空の間は Web Push を送らない(Worker を Cloudflare に設置したら、そのURLをここと index.html に入れる)。
-PUSH_SUBS_URL_DEFAULT = ""
+# 空にすると Web Push を送らない(止めたい時はここを空にして main へ入れる)。
+PUSH_SUBS_URL_DEFAULT = "https://aritei-push.t-fujino.workers.dev"
 PUSH_CONTACT = "mailto:t.fujino@meihogp.co.jp"
 PUSH_TIMEOUT_SEC = 10     # 1件の送信にかける上限。応答しない宛先で開催中の処理を止めない
 PUSH_TTL_SEC = 900        # 端末が圏外・省電力中でも、この時間は配信サービスが保持して届ける
-PUSH_MAX_SUBS = 100       # 1回に送る購読数の上限(送信にかかる時間の上限になる)
+PUSH_MAX_SUBS = 100       # 1回に送る購読数の上限
+PUSH_TOTAL_SEC = 30       # 1回の送信全体にかける上限。応答の遅い宛先が並んでも開催中の処理を止めない
 
 
 def _atomic_write_text(path: Path, txt: str) -> None:
@@ -278,7 +279,12 @@ def send_push(text: str) -> bool:
         subs = subs[:PUSH_MAX_SUBS]
     payload = json.dumps({"title": "アリテイ", "body": _push_body(text)}, ensure_ascii=False)
     ok = False
-    for entry in subs:
+    import time
+    t0 = time.monotonic()
+    for i, entry in enumerate(subs):
+        if time.monotonic() - t0 > PUSH_TOTAL_SEC:
+            print(f"notify: web push time budget exceeded, {len(subs) - i} subscription(s) not sent")
+            break
         sub = entry.get("subscription") if isinstance(entry, dict) else None
         if not sub:
             continue
