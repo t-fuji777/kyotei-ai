@@ -13,6 +13,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 from build_dataset import build_day, save_year
+from common import sengen_counts, sengen_picks  # noqa: F401 (実績の数え方。recompute_sengen.py と共用)
 from common import (is_sengen, sengen_top3p, SENGEN_MIN_ODDS,
                      is_matsu, matsu_top4p, MATSU_MIN_ODDS, MATSU_MAX_ODDS)
 
@@ -164,7 +165,7 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
             # actはK帳票由来の実際の着順で、的中判定(act in picks)は優先順位に関わらず従来通り。
             rres = r.get("result") or {}
             if "tk" in r:
-                is_tk = bool(r["tk"])
+                is_tk = sengen_counts(r)
             elif "tk" in rres:
                 is_tk = bool(rres["tk"])
             else:
@@ -174,7 +175,7 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
                 day["sen_pred_sum"] += top3p
                 # 竹プランROI: 1レース300円投資、的中時はpay3t(100円あたり払戻)を回収
                 day["sen_stake"] += 300
-                if act in picks[:3]:
+                if act in (sengen_picks(r) if "tk" in r else picks[:3]):
                     day["sen_hit"] += 1
                     day["sen_ret"] += pays.get(key, 0)
                     if pays.get(key, 0) < 300:

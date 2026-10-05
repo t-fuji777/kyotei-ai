@@ -18,7 +18,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import (is_sengen, sengen_top3p, SENGEN_MIN_ODDS,
+from common import (sengen_counts, sengen_picks,
+                    is_sengen, sengen_top3p, SENGEN_MIN_ODDS,
                      matsu_top4p, is_matsu, MATSU_MIN_ODDS, MATSU_MAX_ODDS)
 
 ROOT = Path(__file__).parent.parent
@@ -83,7 +84,7 @@ def recompute_day(pred: dict):
             #   3. 従来通りの動的計算(スタンプの無い過去データ、52日互換)
             # 上位ほど遡及改変防止の確度が高いため優先する。
             if "tk" in r:
-                is_tk = bool(r["tk"])
+                is_tk = sengen_counts(r)   # 締切後に判定したレース(ph=1)は数えない
             elif "tk" in res:
                 is_tk = bool(res["tk"])
             else:
@@ -93,7 +94,8 @@ def recompute_day(pred: dict):
                 sen_pred_sum += top3p
                 # 竹プランROI: 1レース300円投資、的中時はpay3t(100円あたり払戻)を回収
                 sen_stake += 300
-                if res["order"] in picks[:3]:
+                # 的中は確定した時点の買い目で数える(update_results.evaluate と同じ)
+                if res["order"] in (sengen_picks(r) if "tk" in r else picks[:3]):
                     sen_hit += 1
                     sen_ret += res.get("pay3t") or 0
                     if (res.get("pay3t") or 0) < 300:

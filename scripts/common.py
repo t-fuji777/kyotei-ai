@@ -154,6 +154,26 @@ def is_matsu(top4p, venue, rno):
         return False
 
 
+def sengen_counts(r: dict) -> bool:
+    """確定済み(tk が焼き込まれた)レースを、厳選の実績に数えるか。
+    締切後に判定したレース(ph=1)は数えない: 判定の時点ではもう買えなかったので、実績にすると
+    「後から選んだ」のと区別がつかない(2026-08-04 桐生6R はレース後に打刻、08-28 尼崎6R は
+    締切の約2時間後に打刻されていた。2026-10-05 に数え方を直した)。"""
+    return bool(r.get("tk")) and not r.get("ph")
+
+
+def sengen_picks(r: dict) -> list:
+    """厳選の的中を数える買い目(上位3点)。確定した時点の買い目で数える。
+    os(判定時のオッズ)は確定時の買い目の上位4点をその順で持っているので、あればそのキー順を使う。
+    確定の後に買い目が差し替わったレースを、差し替え後の目で的中にしないため(2026-08-13 大村8R は
+    確定の5分後に買い目が替わり、替わった後の目で的中と数えていた。確定後の差し替えは 9/2 頃から
+    起きない作りになっている)。os が無い古い記録は、保存されている買い目の上位3点。"""
+    osd = r.get("os")
+    if isinstance(osd, dict) and len(osd) >= 3:
+        return list(osd.keys())[:3]
+    return [p["c"] for p in (r.get("picks") or [])][:3]
+
+
 def stamp_plans(race, vcode, res=None, now_hhmm=None, late=False):
     """竹/松の該当可否を確定し、レースオブジェクト直下のrace["tk"]/race["mt"]
     (1 or 0)へ焼き込む。目的: 確定後にpicks/oddsがパイプラインの競合(rebase -X theirs等)
@@ -246,7 +266,10 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None, late=False):
         race["ph"] = 1
     # 厳選として確定したレースには、締切時の払戻の目安を焼き込む(表示専用)。
     # 事後判定のレースには付けない(既に結果が出ている)。
-    elif tk == 1:
+    elif tk == 1 and not (race.get("odds") or {}).get("jt"):
+        # 目安の幅(DRIFT_POINTS)は、締切の約50分前の板から締切までの変動で作ったもの。
+        # 判定の直前に取り直した板(odds.jt あり。2026-10-06〜)には当てはまらない(変動はもっと小さい)
+        # ので、付けない。取り直した板での実績が溜まったら、幅を作り直して再開する。
         pr = {c: drift_range(t3[c]) for c in picks[:3] if t3.get(c)}
         if pr:
             race["pr"] = pr
