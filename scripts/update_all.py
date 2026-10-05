@@ -102,7 +102,7 @@ STAMP_LEAD_MIN = 15  # 締切何分前からチェックポイント確定を打
 STAMP_LATE_MAX = 15
 
 
-def do_stamps(pred, now, skip=None, only=None) -> int:
+def do_stamps(pred, now, skip=None, only=None, refresh=None) -> int:
     """締切15分前チェックポイント: まだ厳選(竹)が確定していない(r["tk"]無し)かつ
     結果未確定のレースのうち、締切前後STAMP_LEAD_MIN/STAMP_LATE_MAX分以内の
     ものへ、その時点のpicks/oddsで厳選スタンプ(r["tk"]/r["pt"]。mtは終売につき常に0)を
@@ -143,6 +143,15 @@ def do_stamps(pred, now, skip=None, only=None) -> int:
             # only: 条件を満たすレースだけ打刻する(--results-only 末尾の追い打刻用)。
             if only is not None and not only(r):
                 continue
+            # refresh: 厳選の候補(確率条件を満たすレース)は、判定の直前に3連単のオッズを取り直す。
+            # 取り直すのは締切前の判定だけ(締切後の板は確定オッズで、判定の時点ではもう買えない)。
+            # 取り直しの失敗で打刻を止めない(保存済みのオッズで判定する)。
+            if refresh is not None and mins >= 0:
+                try:
+                    if is_sengen(sengen_top3p(r.get("picks") or []), v["code"], r["no"]):
+                        refresh(v, r)
+                except Exception as e:
+                    print(f"  judge-odds {v.get('code')}-{r.get('no')}R: refresh failed ({type(e).__name__})", flush=True)
             stamp_plans(r, v["code"], None, now_hhmm, late=(mins < 0))
             n += 1
     if n:
@@ -150,6 +159,50 @@ def do_stamps(pred, now, skip=None, only=None) -> int:
     if healed:
         print(f"stamps: att healed on {healed} race(s)")
     return n + healed
+
+
+# ---- 厳選の判定に使うオッズの取り直し(2026-10-06 の開催分から) ----
+# 厳選の条件は「締切15分前のオッズで上位3点が全て3.1倍以上」。ところが判定に使っていたのは、
+# レースが締切60分以内に入った時に1回取得したオッズで、打刻の時点では20〜51分(中央値36分)古かった
+# (2026-08-04〜10-01 の厳選候補88件を git 履歴で確認。全件が締切35〜60分前の板)。
+# 説明どおりにするため、候補(確率条件を満たすレース)は判定の直前に3連単のオッズ1ページを取り直す。
+# 候補は1日数件なので、boatrace.jp への要求は1日数回増えるだけ。
+# 日付で切り替えるのは、開催の途中で判定の基準が変わらないようにするため。
+ODDS_REFRESH_FROM = "20261006"
+ODDS_REFRESH_SKIP_SEC = 180   # この実行でこれ以内に取得したばかりのレースは取り直さない
+
+
+def _make_refresher(ymd, fresh=None):
+    """do_stamps に渡す取り直しの関数を作る。対象日より前なら None(従来どおり保存済みのオッズで判定)。
+    fresh は {(会場, レース): 取得した時刻(time.monotonic)}。full の中で本オッズを取ったばかりの
+    レースを二重に取りに行かないために使う。"""
+    if str(ymd) < ODDS_REFRESH_FROM:
+        return None
+    fresh = {} if fresh is None else fresh
+
+    def refresh(v, r):
+        key = (v["code"], r["no"])
+        got = fresh.get(key)
+        if got is not None and time.monotonic() - got < ODDS_REFRESH_SKIP_SEC:
+            return
+        t3 = fetch_t3(ymd, v["code"], r["no"])
+        if not t3:
+            # 取れなかった時は保存済みのオッズで判定する(jt が付かないので、後から見分けられる)。
+            print(f"  judge-odds {v['code']}-{r['no']}R: not available, judging with stored odds", flush=True)
+            return
+        fresh[key] = time.monotonic()
+        combos = [p["c"] for p in (r.get("picks") or [])]
+        ex = r.get("odds") or {}
+        # 取り直した板だけで置き換える。古い板の値を残すと、今は売られていない買い目(欠場など)を
+        # 古いオッズで通してしまう。取り直した板に無い買い目は「オッズ未取得」として成立させない。
+        ex["t3"] = {c: t3[c] for c in combos if t3.get(c) is not None}
+        if isinstance(ex.get("axis"), dict) and combos:
+            ex["axis"]["t3"] = t3.get(combos[0])
+        ex["jt"] = datetime.now(JST).strftime("%H:%M:%S")   # 判定用に取り直した時刻(監査用)
+        r["odds"] = ex
+        print(f"  judge-odds {v['code']}-{r['no']}R: refreshed t3={len(ex['t3'])}", flush=True)
+
+    return refresh
 
 
 # ---- full の取得ループの合間に行う打刻(2026-10-02) ----
@@ -221,6 +274,8 @@ class _Ticker:
         self.pred, self.ymd = pred, ymd
         self.stamps = 0
         self.dead = False
+        self.fresh = {}         # この実行で本オッズを取得したレースと時刻(判定の直前の取り直しを省くため)
+        self.refresh = _make_refresher(ymd, self.fresh)
         self.notify_retry = 0   # 失敗した通知を、あと何回の合間で試し直すか
 
     def __call__(self, pending=None) -> int:
@@ -230,7 +285,7 @@ class _Ticker:
             now = datetime.now(JST)
             if now.strftime("%Y%m%d") != self.ymd:
                 return 0
-            n = do_stamps(self.pred, now, skip=pending)
+            n = do_stamps(self.pred, now, skip=pending, refresh=self.refresh)
             if n:
                 self.stamps += n
                 # 以降の取得で落ちても打刻と取得済みオッズが残るよう、先に書く。
@@ -382,6 +437,8 @@ def do_odds(pred, now, ymd, tick=None) -> int:
             if not odds or not (odds.get("t3") or odds.get("fuku")):
                 print(f"  odds {v['code']}-{r['no']}R: none yet")
                 continue
+            if odds.get("t3") and getattr(tick, "fresh", None) is not None:
+                tick.fresh[(v["code"], r["no"])] = time.monotonic()
             merged = _axis_from_odds(r, odds)
             ex = r.get("odds", {})
             ex.update(merged)
@@ -612,7 +669,8 @@ def main():
                               if r.get("tk") == 1}
             except Exception:
                 _tk_before = None
-        n_stp = do_stamps(pred, now)
+        _refresh = _make_refresher(ymd)
+        n_stp = do_stamps(pred, now, refresh=_refresh)
         if EARLY_NOTIFY and _tk_before is not None:
             # この実行の打刻で厳選が新しく確定した(tk=1 になった)時だけ、結果・展示の取得(20〜170秒)を
             # 待たずに、書く→公開→通知(full の合間打刻と同じ順)。締切まで15分しかないので、通知を
@@ -640,7 +698,7 @@ def main():
             try:
                 now2 = datetime.now(JST)
                 if now2.strftime("%Y%m%d") == ymd:
-                    n_tail = do_stamps(pred, now2, only=_settled)
+                    n_tail = do_stamps(pred, now2, only=_settled, refresh=_refresh)
                     if n_tail:
                         print(f"stamp-tail {now2.strftime('%H:%M:%S')}: {n_tail}", flush=True)
                     n_stp += n_tail
@@ -670,7 +728,7 @@ def main():
         n_stp = tick.stamps
     else:
         n_odds = do_odds(pred, now, ymd)
-        n_stp = do_stamps(pred, now)
+        n_stp = do_stamps(pred, now, refresh=_make_refresher(ymd))
         n_res = do_results(pred, now, ymd)
         n_morn = do_morning_odds(pred, now, ymd)
         n_name = do_racenames(pred, ymd)

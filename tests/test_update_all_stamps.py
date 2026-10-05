@@ -40,7 +40,7 @@ LOW = {c: 2.0 for c in COMBOS}
 
 
 def run(races, argv, fetched_odds=None, env_workflow=None, break_stamps=False, switches=None,
-        notify=None, notify_cost=0, publish_raises=False):
+        notify=None, notify_cost=0, publish_raises=False, fetched_t3=None):
     """races を1会場(コード1)に載せて main() を1回走らせる。取得1ページ=10秒として時計を進める。
     notify: notify_events の代わりに呼ぶ関数(pred, ymd)。戻り値がそのまま返る(真=未送信が残った)。
     notify_cost: 通知1回にかかる秒数(時計を進める)。publish_raises: 合間の公開が例外を出す。
@@ -81,7 +81,10 @@ def run(races, argv, fetched_odds=None, env_workflow=None, break_stamps=False, s
     def f_t3(ymd, jcd, rno):
         adv(10)
         calls["log"].append(f"t3:{rno}")
-        return None
+        o = (fetched_t3 or {}).get(rno)
+        if isinstance(o, Exception):
+            raise o
+        return dict(o) if o else None
 
     def f_none(*a):
         adv(10)
@@ -100,7 +103,7 @@ def run(races, argv, fetched_odds=None, env_workflow=None, break_stamps=False, s
     saved = {k: getattr(U, k) for k in ("ROOT", "datetime", "fetch_odds", "fetch_result", "fetch_t3",
                                          "fetch_racename", "fetch_before_html", "time", "subprocess",
                                          "do_stamps", "MIDRUN_STAMP", "MIDRUN_PUBLISH", "TAIL_STAMP",
-                                         "EARLY_NOTIFY")}
+                                         "EARLY_NOTIFY", "ODDS_REFRESH_FROM")}
     saved_notify = sys.modules["notify"].notify_events
     old_env = os.environ.get("GITHUB_WORKFLOW")
     old_argv = sys.argv
@@ -112,7 +115,8 @@ def run(races, argv, fetched_odds=None, env_workflow=None, break_stamps=False, s
         U.fetch_t3 = f_t3
         U.fetch_racename = f_none
         U.fetch_before_html = f_before
-        U.time = types.SimpleNamespace(sleep=lambda s: adv(s))
+        U.time = types.SimpleNamespace(sleep=lambda s: adv(s),
+                                       monotonic=lambda: (clock["t"] - START).total_seconds())
         sys.modules["notify"].notify_events = fake_notify
 
         def fake_run(cmd, **kw):
@@ -322,4 +326,61 @@ _, _, calls = run([race(5, "12:16", HIGH), race(6, "12:50"), race(7, "12:55")] +
                   fetched_odds={6: HIGH, 7: HIGH}, notify=lambda p, y: answers.pop(0))
 assert calls["notify"] == 3, calls["log"]
 print("8b ok: no retry after a successful send")
+
+# 9) 厳選の判定の直前に、候補のオッズを取り直す(対象日以降だけ)
+ON = {"ODDS_REFRESH_FROM": YMD}       # このテストの日付から有効にする
+OFF = {"ODDS_REFRESH_FROM": "29991231"}
+START = datetime(2026, 10, 1, 12, 0, 0, tzinfo=JST)
+t3s = lambda log: [x for x in log if x.startswith("t3:")]
+
+# 9a) 軽い周回: 保存済みは高いオッズ(古い板)、取り直した板は 2.0 倍 → 取り直した板で判定して見送り
+R, out, calls = run([race(5, "12:14", HIGH)], ["--results-only"], fetched_t3={5: LOW}, switches=ON)
+assert t3s(calls["log"]) == ["t3:5"], calls["log"]
+assert R[5].get("tk") == 0 and "3.1倍未満 2.0倍" in (R[5].get("rs") or ""), (R[5].get("tk"), R[5].get("rs"))
+assert R[5]["os"]["1-2-3"] == 2.0 and R[5]["odds"]["t3"]["1-2-3"] == 2.0 and R[5]["odds"].get("jt")
+print("9a ok: the candidate is judged with odds refreshed right before the stamp")
+
+# 9b) 取り直した板で条件を満たせば厳選。目安(pr)は付けない(幅が古い板の変動で作られているため)
+R, out, calls = run([race(5, "12:14", LOW)], ["--results-only"], fetched_t3={5: HIGH}, switches=ON)
+assert R[5].get("tk") == 1 and R[5]["os"]["1-2-3"] == 9.9 and "pr" not in R[5], R[5]
+print("9b ok: selected with refreshed odds; no payout estimate")
+
+# 9c) 対象日より前は取り直さない(従来どおり保存済みのオッズで判定し、目安も付く)
+R, out, calls = run([race(5, "12:14", HIGH)], ["--results-only"], fetched_t3={5: LOW}, switches=OFF)
+assert t3s(calls["log"]) == [] and R[5].get("tk") == 1 and R[5].get("pr") and "jt" not in R[5]["odds"]
+print("9c ok: no refresh before the switch date")
+
+# 9d) 取り直しに失敗(取れない・例外)しても打刻は行い、保存済みのオッズで判定する
+for bad in (None, RuntimeError("timeout")):
+    R, out, calls = run([race(5, "12:14", HIGH)], ["--results-only"], fetched_t3={5: bad}, switches=ON)
+    assert R[5].get("tk") == 1 and "jt" not in R[5]["odds"] and R[5].get("pr"), (bad, R[5])
+print("9d ok: a failed refresh falls back to the stored odds")
+
+# 9e) 候補でないレース(確率条件を満たさない・4R以前)は取り直さない(要求を増やさない)
+R, out, calls = run([race(5, "12:14", HIGH, top3p=0.30), race(4, "12:14", HIGH)], ["--results-only"],
+                    fetched_t3={5: LOW, 4: LOW}, switches=ON)
+assert t3s(calls["log"]) == [] and R[5].get("tk") == 0 and R[4].get("tk") == 0
+print("9e ok: non-candidates are not refetched")
+
+# 9f) 取り直した板に無い買い目(欠場など)は、古い板の値で通さない → オッズ未取得で見送り
+part = dict(HIGH); del part["1-3-2"]
+R, out, calls = run([race(5, "12:14", HIGH)], ["--results-only"], fetched_t3={5: part}, switches=ON)
+assert R[5].get("tk") == 0 and R[5].get("rs") == "オッズ未取得", (R[5].get("tk"), R[5].get("rs"))
+print("9f ok: a pick missing from the refreshed board is not passed with stale odds")
+
+# 9g) 締切を過ぎてからの打刻では取り直さない(締切後の板は確定オッズ)
+START = datetime(2026, 10, 1, 12, 20, 0, tzinfo=JST)
+R, out, calls = run([race(5, "12:14", HIGH)], ["--results-only"], fetched_t3={5: LOW}, switches=ON)
+assert t3s(calls["log"]) == [] and R[5].get("ph") == 1, (calls["log"], R[5])
+START = datetime(2026, 10, 1, 12, 0, 0, tzinfo=JST)
+print("9g ok: no refresh for a post-deadline stamp")
+
+# 9h) full: この実行で本オッズを取ったばかりのレースは二重に取り直さない。取っていない候補は取り直す
+#     5R: オッズ未取得で取得対象(取得した板は 2.0 倍)。8R: 保存済みは高い・取得対象外・締切12:16(T-15=12:01)
+R, out, calls = run([race(5, "12:14"), race(8, "12:16", HIGH), race(6, "12:50")], [],
+                    fetched_odds={5: LOW, 6: HIGH}, fetched_t3={8: LOW}, switches=ON)
+assert calls["odds"] == [5, 6] and t3s(calls["log"]) == ["t3:8"], calls["log"]
+assert R[5].get("tk") == 0 and "jt" not in R[5]["odds"], "取ったばかりの本オッズで判定する(取り直さない)"
+assert R[8].get("tk") == 0 and R[8]["odds"].get("jt") and R[8]["os"]["1-2-3"] == 2.0
+print("9h ok: full pass refreshes only candidates it did not just fetch")
 print("ALL OK")
