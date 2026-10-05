@@ -12,6 +12,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import common as C
+import recompute_sengen as RS
 import update_results as UR
 
 YMD = "20261001"
@@ -37,18 +38,30 @@ def day_rows(results):
     return pd.DataFrame(rows)
 
 
-def evaluate(races, results):
+def evaluate(races, results, ymd=YMD):
     tmp = Path(tempfile.mkdtemp())
     d = tmp / "docs" / "predictions"
     d.mkdir(parents=True)
-    pred = {"date": YMD, "venues": [{"code": 1, "name": "t", "races": races}]}
-    (d / f"{YMD}.json").write_text(json.dumps(pred, ensure_ascii=False), encoding="utf-8")
+    pred = {"date": ymd, "venues": [{"code": 1, "name": "t", "races": races}]}
+    (d / f"{ymd}.json").write_text(json.dumps(pred, ensure_ascii=False), encoding="utf-8")
     saved = UR.ROOT
     UR.ROOT = tmp
     try:
-        return UR.evaluate(YMD, day_rows(results))
+        return UR.evaluate(ymd, day_rows(results))
     finally:
         UR.ROOT = saved
+
+
+def with_results(races, results):
+    """recompute_sengen は当日ファイルの result を読むので、結果を載せた写しを作る。"""
+    out = []
+    for r in races:
+        r = dict(r)
+        if r["no"] in results:
+            order, pay = results[r["no"]]
+            r["result"] = {"order": order, "pay3t": pay}
+        out.append(r)
+    return {"date": YMD, "venues": [{"code": 1, "name": "t", "races": out}]}
 
 
 P = ["1-2-3", "1-3-2", "2-1-3", "1-2-4", "1-4-2", "2-1-4", "3-1-2", "3-2-1", "1-3-4", "1-4-3"]
@@ -83,21 +96,35 @@ def test_evaluate_applies_both_rules():
     results = {5: ("1-2-3", 1230), 6: ("1-2-3", 900), 7: ("1-2-3", 2000), 8: ("6-5-4", 30000),
                9: ("1-2-3", 500), 10: ("1-3-2", 250)}
     day = evaluate(races, results)
-    assert day["races"] == 6
-    assert day["sen_n"] == 4, day["sen_n"]                  # 5R・7R・8R・10R(6R と 9R は数えない)
-    assert day["sen_hit"] == 2, day["sen_hit"]              # 5R と 10R(7R は差し替え後の目でしか当たっていない)
-    assert day["sen_stake"] == 1200 and day["sen_ret"] == 1230 + 250, (day["sen_stake"], day["sen_ret"])
+    # 逆向き: 確定時の買い目 [3-1-2, 3-2-1, 1-3-4] では的中、今の保存の上位3点では不的中
+    races.append(race(11, P, tk=1, os={"3-1-2": 5.0, "3-2-1": 6.0, "1-3-4": 7.0, "1-4-3": 8.0}))
+    results[11] = ("3-2-1", 4000)
+    day = evaluate(races, results)
+    assert day["races"] == 7
+    assert day["sen_n"] == 5, day["sen_n"]                  # 5R・7R・8R・10R・11R(6R と 9R は数えない)
+    assert day["sen_hit"] == 3, day["sen_hit"]              # 5R・10R・11R(7R は差し替え後の目でしか当たっていない)
+    assert day["sen_stake"] == 1500 and day["sen_ret"] == 1230 + 250 + 4000, (day["sen_stake"], day["sen_ret"])
     assert day["sen_hitloss"] == 1
     # 全R(上位5点)の集計は今までどおり、保存されている買い目で数える
     assert day["top5_hit"] == 5 and day["return5"] == 1230 + 900 + 2000 + 500 + 250
+    # 手動の再集計(recompute_sengen.py)も同じ規則で、同じ数字になる
+    agg = RS.recompute_day(with_results(races, results), YMD)
+    for k in ("sen_n", "sen_hit", "sen_stake", "sen_ret", "sen_hitloss"):
+        assert agg[k] == day[k], (k, agg[k], day[k])
 
 
-def test_unstamped_old_days_are_unchanged():
-    """tk が焼き込まれていない古い日(〜8/3)は、今までどおりの動的な判定で数える。"""
+def test_unstamped_races_count_only_before_the_stamping_era():
+    """打刻の無いレースを後から条件に当てはめて数えるのは、打刻の方式を始める前の日(〜8/3)だけ。
+    8/4 以降は、打刻が無い=誰にも確定を知らせていないレースなので、厳選の実績に数えない
+    (周回が丸1日止まった時に、翌朝の集計で勝手に厳選が増えないように)。"""
     r = race(5, P, odds={"t3": {c: 5.0 for c in P}})
-    r["picks"] = [{"c": c, "p": 0.15 if i < 3 else 0.02} for i, c in enumerate(P)]
-    day = evaluate([r], {5: ("1-2-3", 1230)})
-    assert day["sen_n"] == 1 and day["sen_hit"] == 1 and day["sen_ret"] == 1230
+    old = evaluate([r], {5: ("1-2-3", 1230)}, ymd="20260803")
+    assert old["sen_n"] == 1 and old["sen_hit"] == 1 and old["sen_ret"] == 1230
+    for ymd in ("20260804", "20261001"):
+        new = evaluate([r], {5: ("1-2-3", 1230)}, ymd=ymd)
+        assert new["sen_n"] == 0 and new["sen_hit"] == 0 and new["races"] == 1, (ymd, new["sen_n"])
+    pred = with_results([r], {5: ("1-2-3", 1230)})
+    assert RS.recompute_day(pred, "20260803")["sen_n"] == 1 and RS.recompute_day(pred, "20261001")["sen_n"] == 0
 
 
 if __name__ == "__main__":

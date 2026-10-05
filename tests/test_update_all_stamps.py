@@ -380,7 +380,36 @@ print("9g ok: no refresh for a post-deadline stamp")
 R, out, calls = run([race(5, "12:14"), race(8, "12:16", HIGH), race(6, "12:50")], [],
                     fetched_odds={5: LOW, 6: HIGH}, fetched_t3={8: LOW}, switches=ON)
 assert calls["odds"] == [5, 6] and t3s(calls["log"]) == ["t3:8"], calls["log"]
-assert R[5].get("tk") == 0 and "jt" not in R[5]["odds"], "取ったばかりの本オッズで判定する(取り直さない)"
+assert R[5].get("tk") == 0 and R[5]["os"]["1-2-3"] == 2.0, "取ったばかりの本オッズで判定する(取り直さない)"
+assert R[5]["odds"].get("jt"), "取り直しを省いた時も、判定の直前の板であることは残す(jt)"
 assert R[8].get("tk") == 0 and R[8]["odds"].get("jt") and R[8]["os"]["1-2-3"] == 2.0
 print("9h ok: full pass refreshes only candidates it did not just fetch")
+
+# 9i) 取ったばかりの本オッズで厳選になった時も、目安(pr)は付けない(判定の直前の板なので幅が当てはまらない)
+R, out, calls = run([race(5, "12:14"), race(6, "12:50")], [], fetched_odds={5: HIGH, 6: HIGH}, switches=ON)
+assert t3s(calls["log"]) == [] and R[5].get("tk") == 1 and R[5]["odds"].get("jt") and "pr" not in R[5], R[5]
+print("9i ok: a candidate judged with just-fetched full odds carries jt and no payout estimate")
+
+# 9j) 末尾の追い打刻(結果・展示の取得の間に締切15分前を跨いだ、買い目もオッズも動かないレース)でも取り直す
+START = datetime(2026, 10, 1, 11, 59, 55, tzinfo=JST)
+done2 = race(1, "11:40", HIGH)
+done2["tk"] = 0
+done2["att"] = 0
+R, out, calls = run([done2, race(5, "12:15", HIGH, live=True)], ["--results-only"], fetched_t3={5: LOW}, switches=ON)
+assert t3s(calls["log"]) == ["t3:5"] and R[5].get("tk") == 0 and R[5]["odds"].get("jt"), (calls["log"], R[5])
+START = datetime(2026, 10, 1, 12, 0, 0, tzinfo=JST)
+print("9j ok: the tail stamp also refreshes")
+
+# 9k) 切り替えの日付(本物の定数): 10/5 までは取り直さず、10/6 から取り直す
+assert U.ODDS_REFRESH_FROM == "20261006"
+assert U._make_refresher("20261005") is None and callable(U._make_refresher("20261006"))
+print("9k ok: the switch date is 2026-10-06")
+
+# 9l) 合間打刻を止めた経路(開始時刻で残り時間を見る)でも、締切を過ぎた板は取り直さない
+#     5R: 締切12:03。他の4レースのオッズ取得(各50秒)の後で打刻に来る頃には締切を過ぎている。
+R, out, calls = run([race(5, "12:03", HIGH)] + [race(n, "12:50") for n in (6, 7, 8, 9)], [],
+                    fetched_odds={6: HIGH, 7: HIGH, 8: HIGH, 9: HIGH}, fetched_t3={5: LOW},
+                    switches=dict(ON, MIDRUN_STAMP=False))
+assert t3s(calls["log"]) == [] and "jt" not in R[5]["odds"], (calls["log"], R[5].get("odds"))
+print("9l ok: no refresh once the deadline has passed, even on the kill-switch path")
 print("ALL OK")

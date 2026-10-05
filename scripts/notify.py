@@ -205,7 +205,12 @@ def _res_events(pred: dict, ymd: str):
             pay = res.get("pay3t")
             plans = []
             if tk:
-                plans.append(("厳選", order in picks[:3]))
+                # 的中は確定した時点の買い目で数える(scripts/common.py の sengen_picks と同じ規則。
+                # os は確定時の買い目の上位4点をその順で持つ)。確定の後に買い目が差し替わっても、
+                # 通知で知らせた買い目と違う目で「的中」にしない。
+                osd = r.get("os")
+                top3 = list(osd.keys())[:3] if isinstance(osd, dict) and len(osd) >= 3 else picks[:3]
+                plans.append(("厳選", order in top3))
             if mt:
                 plans.append(("松", order in picks[:4]))
             multi = len(plans) > 1

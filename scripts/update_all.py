@@ -174,23 +174,34 @@ ODDS_REFRESH_SKIP_SEC = 180   # この実行でこれ以内に取得したばか
 
 def _make_refresher(ymd, fresh=None):
     """do_stamps に渡す取り直しの関数を作る。対象日より前なら None(従来どおり保存済みのオッズで判定)。
-    fresh は {(会場, レース): 取得した時刻(time.monotonic)}。full の中で本オッズを取ったばかりの
-    レースを二重に取りに行かないために使う。"""
+    fresh は {(会場, レース): (取得した時刻 time.monotonic, 同じ時刻の "HH:MM:SS")}。full の中で
+    本オッズを取ったばかりのレースを二重に取りに行かないために使う。
+    odds.jt は「判定に使った板を取得した時刻」。付いていれば判定の直前の板で判定した、付いていなければ
+    取り直せず保存済みの板(締切の数十分前のもの)で判定した、と後から見分けられる。odds.t3 そのものは
+    締切10分前や締切後にも取り直されて上書きされるので、jt が指すのは os(判定時の板)のほうである。"""
     if str(ymd) < ODDS_REFRESH_FROM:
         return None
     fresh = {} if fresh is None else fresh
 
     def refresh(v, r):
         key = (v["code"], r["no"])
+        # 締切を過ぎていたら取り直さない(締切後の板は確定オッズ。呼び出し側も締切前だけ呼ぶが、
+        # 合間打刻を止めた経路は開始時刻で残り時間を見ているので、ここで今の時刻でも確かめる)。
+        left = _mins_to_deadline(datetime.now(JST), r.get("deadline"))
+        if left is None or left < 0:
+            return
         got = fresh.get(key)
-        if got is not None and time.monotonic() - got < ODDS_REFRESH_SKIP_SEC:
+        if got is not None and time.monotonic() - got[0] < ODDS_REFRESH_SKIP_SEC:
+            # この実行で本オッズを取ったばかり。取り直さないが、判定の直前の板であることは残す。
+            if isinstance(r.get("odds"), dict):
+                r["odds"]["jt"] = got[1]
             return
         t3 = fetch_t3(ymd, v["code"], r["no"])
         if not t3:
             # 取れなかった時は保存済みのオッズで判定する(jt が付かないので、後から見分けられる)。
             print(f"  judge-odds {v['code']}-{r['no']}R: not available, judging with stored odds", flush=True)
             return
-        fresh[key] = time.monotonic()
+        fresh[key] = (time.monotonic(), datetime.now(JST).strftime("%H:%M:%S"))
         combos = [p["c"] for p in (r.get("picks") or [])]
         ex = r.get("odds") or {}
         # 取り直した板だけで置き換える。古い板の値を残すと、今は売られていない買い目(欠場など)を
@@ -198,7 +209,7 @@ def _make_refresher(ymd, fresh=None):
         ex["t3"] = {c: t3[c] for c in combos if t3.get(c) is not None}
         if isinstance(ex.get("axis"), dict) and combos:
             ex["axis"]["t3"] = t3.get(combos[0])
-        ex["jt"] = datetime.now(JST).strftime("%H:%M:%S")   # 判定用に取り直した時刻(監査用)
+        ex["jt"] = fresh[key][1]   # 判定に使う板を取得した時刻
         r["odds"] = ex
         print(f"  judge-odds {v['code']}-{r['no']}R: refreshed t3={len(ex['t3'])}", flush=True)
 
@@ -438,7 +449,7 @@ def do_odds(pred, now, ymd, tick=None) -> int:
                 print(f"  odds {v['code']}-{r['no']}R: none yet")
                 continue
             if odds.get("t3") and getattr(tick, "fresh", None) is not None:
-                tick.fresh[(v["code"], r["no"])] = time.monotonic()
+                tick.fresh[(v["code"], r["no"])] = (time.monotonic(), datetime.now(JST).strftime("%H:%M:%S"))
             merged = _axis_from_odds(r, odds)
             ex = r.get("odds", {})
             ex.update(merged)

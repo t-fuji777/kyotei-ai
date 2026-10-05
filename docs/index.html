@@ -299,6 +299,9 @@ const actCls=v=>v==="注目"?"actR":"actM";
 const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l"));
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
 const t3hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,3).some(p=>p.c===r.result.order));
+// 厳選の的中は、確定した時点の買い目で数える(集計側 scripts/common.py の sengen_picks と同じ規則)。
+// os は確定時の買い目の上位4点をその順で持つ。確定の後に買い目が替わっても、替わった後の目で的中にしない。
+const senHit=r=>{if(!r.result)return false;const o=r.os&&typeof r.os==="object"?Object.keys(r.os):[];return o.length>=3?o.slice(0,3).indexOf(r.result.order)>=0:t3hit(r);};
 
 function isFinalDay(v){if(!v)return false;const rs=v.races||[];if(!rs.length)return !!v.is_final;return rs.some(r=>String(r.type||"").replace(/準々?優勝/g,"").indexOf("優勝")>=0);}
 function dayLabel(v){if(!v)return "";if(isFinalDay(v))return " \u00b7 \u6700\u7d42\u65e5";if(v.day_n===1)return " \u00b7 \u521d\u65e5";if(v.day_n>1)return " \u00b7 "+v.day_n+"\u65e5\u76ee";return "";}
@@ -368,8 +371,11 @@ function renderSengen(){
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   skipList.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   {const _tm=$("#todayMeta");if(_tm){
-    const hit=list.filter(x=>t3hit(x.r)).length;
-    _tm.innerHTML=`<span class="tml">本　日：</span><span class="tmv">${list.length}件</span><span class="tmn"></span><span class="tml">的　中：</span><span class="tmv">${hit}件</span><span class="tmn"></span>`;
+    // 締切後に判定したレース(ph)は実績に数えないので、見出しの件数・的中からも外す(的中実績の速報と揃える)。
+    const cnt=list.filter(x=>!x.r.ph);
+    const hit=cnt.filter(x=>senHit(x.r)).length;
+    const late=list.length-cnt.length;
+    _tm.innerHTML=`<span class="tml">本　日：</span><span class="tmv">${cnt.length}件</span><span class="tmn">${late?"(ほか締切後の判定"+late+"件)":""}</span><span class="tml">的　中：</span><span class="tmv">${hit}件</span><span class="tmn"></span>`;
   }}
   // 見送りカード: racebody無しの1行カード。買い目が無く展開する中身が無いため、
   // カード全体をタップで当日予測の該当レースへ移動する(jumpcard)。
@@ -393,7 +399,7 @@ function renderSengen(){
     return;
   }
   const _cf=({v,r})=>{
-    const hit=t3hit(r);
+    const hit=senHit(r);
     const fav=r.fuku||{};
     const fb=r.boats.find(b=>b.lane===fav.lane)||{};
     const top=r.picks[0]||{c:"-",p:0};
@@ -423,7 +429,7 @@ function renderSengen(){
     // 締切15分前の確定に間に合わず締切後に判定したレース(r.ph、または打刻時刻が締切より後)。
     const _mm=x=>{const q=String(x||"").split(":");return q.length===2?(+q[0])*60+(+q[1]):null;};
     const _ph=!!r.ph||(r.pt&&r.deadline&&_mm(r.pt)-_mm(r.deadline)>0);
-    const phHtml=_ph?`<div class="prnote">締切15分前の確定に間に合わず、締切後に同じ条件で判定した記録です。</div>`:"";
+    const phHtml=_ph?`<div class="prnote">締切15分前の確定に間に合わず、締切後に同じ条件で判定した記録です。実績には数えません。</div>`:"";
     return `<div class="race open${isCand?' cand':''}">
       <div class="racehead">
         <span class="rno num jump" data-vc="${v.code}" data-rn="${r.no}"><span class="rnum">${r.no}R</span><span class="rven">${esc(v.name)}</span></span>
@@ -624,7 +630,7 @@ function todayStats(){
     n++;if(x.hit_win)w++;const p5=top5p(r);tp+=p5;
     if(r.picks&&r.picks[0]&&r.picks[0].c===x.order)t1++;
     if(t5hit(r)){t6++;rt+=(x.pay3t||0)}st+=500;
-    if(sengenOk(r,v.code)&&!r.ph){sn++;sp+=top3p(r);if(t3hit(r))sh++;sst+=300;if(t3hit(r))sret+=(x.pay3t||0);} // 締切後に判定したレース(ph)は実績に数えない(集計側 update_results.py と同じ)
+    if(sengenOk(r,v.code)&&!r.ph){sn++;sp+=top3p(r);if(senHit(r))sh++;sst+=300;if(senHit(r))sret+=(x.pay3t||0);} // 締切後に判定したレース(ph)は実績に数えない(集計側 update_results.py と同じ)
     // バッジ別(注目/様子見)の全R速報。T-15打刻(r.att)のあるレースのみ(集計側と同一基準)
     if(r.att!=null){if(r.att){an++;ast+=500;if(t5hit(r)){ah++;aret+=(x.pay3t||0);}}else{yn++;yst+=500;if(t5hit(r)){yh++;yret+=(x.pay3t||0);}}}}
   if(!n) return null;
@@ -859,7 +865,7 @@ function renderModel(rep){
     ["候補","厳選プランの確率条件を満たし、締切15分前の最終判定(オッズ条件)を待っているレース。数値はまだ確定していない。「確定予定」に判定が行われる時刻を表示する。"],
     ["確定","締切15分前の時点でプラン対象に確定したレース。確定した内容と時刻はデータに記録され、以後の後出し変更はできない。"],
     ["見送り","候補として表示したが、締切15分前の最終判定で条件を満たさず選ばなかったレース。理由は「3.1倍未満 ○倍」(オッズが下限割れ)、「確率低下 ○%→○%」(展示を反映した再予測でTOP3合計確率が36%を割った)、「オッズ未取得」(判定時にオッズを取得できておらず、3.1倍以上を確かめられなかった)のいずれか。候補に出した以上、選ばなかったレースも理由とともに残す。"],
-    ["厳選プラン","厳選3点買い(100円×3点)。締切15分前のオッズで3点すべて3.1倍以上のレースだけを選ぶ。5R以降のみ。的中実績は、締切15分前に確定する今の方式になった2026年8月4日以降を集計している。締切を過ぎてから判定したレースは実績に数えず、的中は確定した時点の買い目で数える。2026年10月6日からは、判定の直前に取り直したオッズを使っている(それ以前は締切の約50分前に取得したオッズで判定していた)。"+_lossNote(true)],
+    ["厳選プラン","厳選3点買い(100円×3点)。締切15分前のオッズで3点すべて3.1倍以上のレースだけを選ぶ。5R以降のみ。的中実績は、締切15分前に確定する今の方式になった2026年8月4日以降を集計している。締切を過ぎてから判定したレースは実績に数えず、的中は確定した時点の買い目で数える。2026年10月6日からは、判定の直前に取り直したオッズを使っている(それ以前は締切の約50分前に取得したオッズで判定していた)。取り直せなかった時は、取得済みのオッズで判定する。"+_lossNote(true)],
     ["払戻の目安","厳選が確定してから結果が出るまで表示する幅。判定時(締切15分前)のオッズに、過去の厳選相当レースで実際に起きた締切までの変動を掛けたもの。過去の半分はこの幅に収まり、4回に1回はこれより下がった。保証ではない。2026年10月6日から、判定の直前に取り直したオッズで判定する方式に変えたため、新しい方式の実績が溜まるまで表示を休止している。"],
     ["矢印つきの倍率(4.5→2.9倍)","左が判定した時点(締切15分前)のオッズ、右が実際の払戻。判定は左の値で行っている。締切間際に人気が集まるとオッズは下がるため、この2つは一致しないことがある。"],
     ["判定/結果/払戻金","レース確定後の答え合わせ。予測TOP5内に的中したか・1〜3着の並び・3連単100円あたりの払戻額。"],

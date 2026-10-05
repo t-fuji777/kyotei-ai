@@ -18,7 +18,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import (sengen_counts, sengen_picks,
+from common import (sengen_counts, sengen_picks, SENGEN_STAMP_FROM,
                     is_sengen, sengen_top3p, SENGEN_MIN_ODDS,
                      matsu_top4p, is_matsu, MATSU_MIN_ODDS, MATSU_MAX_ODDS)
 
@@ -33,7 +33,7 @@ def _atomic_write_text(path: Path, text: str):
     os.replace(tmp, path)
 
 
-def recompute_day(pred: dict):
+def recompute_day(pred: dict, ymd: str = ""):
     """1日分の予測JSON -> {sen_n, sen_hit, sen_pred_sum, prm_n, prm_hit, prm_pred_sum,
     sen_stake, sen_ret, prm_stake, prm_ret}(新ルールで再集計)。確定済み(result.order
     あり)のレースのみ集計対象。sen_stake/sen_ret/prm_stake/prm_retは竹300円・松400円
@@ -88,7 +88,9 @@ def recompute_day(pred: dict):
             elif "tk" in res:
                 is_tk = bool(res["tk"])
             else:
-                is_tk = is_sengen(top3p, v.get("code"), rno) and picks_ok
+                # 打刻の無いレースを後から数えるのは、打刻の方式を始める前の日だけ(update_results.evaluate と同じ)
+                _d = str(ymd or pred.get("date") or "")
+                is_tk = (_d < SENGEN_STAMP_FROM) and is_sengen(top3p, v.get("code"), rno) and picks_ok
             if is_tk:
                 sen_n += 1
                 sen_pred_sum += top3p
@@ -163,7 +165,7 @@ def main():
         except Exception as e:
             print(f"{ymd}: 予測JSON読み込み失敗 ({e}); skip")
             continue
-        agg = recompute_day(pred)
+        agg = recompute_day(pred, ymd)
         day["sen_n"] = agg["sen_n"]
         day["sen_hit"] = agg["sen_hit"]
         day["sen_pred_sum"] = agg["sen_pred_sum"]
@@ -187,7 +189,11 @@ def main():
          "fuku_hit": 0, "sen_n": 0, "sen_hit": 0, "sen_pred_sum": 0.0, "top5_pred_sum": 0.0,
          "prm_n": 0, "prm_hit": 0, "prm_pred_sum": 0.0,
          "sen_stake": 0, "sen_ret": 0, "prm_stake": 0, "prm_ret": 0,
-         "sen_hitloss": 0, "prm_hitloss": 0}
+         "sen_hitloss": 0, "prm_hitloss": 0,
+         # 注目/様子見の合計(update_results.main と同じ項目。抜けていると、このスクリプトを
+         # 実行した時に total から消えて、画面の累計に注目・様子見の行が出なくなる)
+         "att_n": 0, "att_hit": 0, "att_stake": 0, "att_ret": 0,
+         "yos_n": 0, "yos_hit": 0, "yos_stake": 0, "yos_ret": 0}
     for d in acc.get("days", []):
         for k in t:
             t[k] += d.get(k, 0)
