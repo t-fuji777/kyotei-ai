@@ -412,4 +412,18 @@ R, out, calls = run([race(5, "12:03", HIGH)] + [race(n, "12:50") for n in (6, 7,
                     switches=dict(ON, MIDRUN_STAMP=False))
 assert t3s(calls["log"]) == [] and "jt" not in R[5]["odds"], (calls["log"], R[5].get("odds"))
 print("9l ok: no refresh once the deadline has passed, even on the kill-switch path")
+
+# 10) 世代の印(g): 同じ日に世代1と世代2の買い目が混ざっても、各レースは自分の世代のしきい値で判定される。
+#     top3p 0.40 は世代1(0.36)では候補、世代2(仮 0.46)では候補でない。印が無いレースは世代1(上の 1〜9 と同じ)。
+#     候補の証跡(qc)・判定直前の取り直し(t3)・打刻(tk)の3つとも。詳しくは tests/test_gen_rules.py。
+START = datetime(2026, 10, 1, 12, 0, 0, tzinfo=JST)
+g2 = race(6, "12:14", HIGH, top3p=0.40); g2["g"] = 2
+g2hi = race(7, "12:14", HIGH, top3p=0.47); g2hi["g"] = 2
+R, out, calls = run([race(5, "12:14", HIGH, top3p=0.40), g2, g2hi], ["--results-only"],
+                    fetched_t3={5: HIGH, 6: HIGH, 7: HIGH}, switches=ON)
+assert R[5].get("tk") == 1 and R[5].get("qc") == 1 and "g" not in R[5], R[5]
+assert R[6].get("tk") == 0 and "qc" not in R[6] and "rs" not in R[6] and R[6].get("g") == 2, R[6]
+assert R[7].get("tk") == 1 and R[7].get("qc") == 1 and R[7].get("g") == 2, R[7]
+assert t3s(calls["log"]) == ["t3:5", "t3:7"], "世代2の 0.40 は候補でないので、判定直前の取り直しもしない"
+print("10 ok: each race is judged with its own generation's thresholds")
 print("ALL OK")

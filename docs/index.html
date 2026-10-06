@@ -184,6 +184,8 @@ th{color:var(--dim);font-weight:600;font-size:11px}
 th:first-child,td:first-child{text-align:left}.acctbl{width:100%;table-layout:fixed;border-collapse:collapse}.acctbl th,.acctbl td{text-align:center;vertical-align:middle;padding:2px 3px;line-height:1.35;overflow-wrap:break-word;border-bottom:0}.acctbl tr.stkrow:first-child th{padding:6px 3px 4px}.acctbl tr.blast>th,.acctbl tr.blast>td{box-shadow:inset 0 -1px 0 var(--line)}.acctbl td.dcell{vertical-align:middle;text-align:center;box-shadow:inset 0 -1px 0 var(--line)}.prnote{font-size:10.5px;color:var(--dim);line-height:1.55;padding:7px 0 0}.acctbl td.plab{color:var(--dim);font-weight:700;white-space:nowrap}
 .acctbl .stkrow th,.acctbl .stkrow td{position:sticky;z-index:5;background-color:var(--bg);border-bottom:0}.acctbl tr.tblk>th,.acctbl tr.tblk>td{background-color:var(--surface)}.acctbl tr.pmid>td{background-image:repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px),repeating-linear-gradient(90deg,var(--line) 0 3px,transparent 3px 7px);background-position:left top,left bottom;background-size:100% 1px,100% 1px;background-repeat:no-repeat}.acctbl tr.stkend>th,.acctbl tr.stkend>td{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl td.dcell.dend{box-shadow:inset 0 -2px 0 rgba(47,168,255,.55)}.acctbl tr.mrow{cursor:pointer}
 #senCount .anote{grid-column:1/-1;text-align:right;font-size:8px;line-height:1.45;font-weight:400;color:var(--dim);white-space:nowrap}
+/* 的中実績: モデルを更新した日の印(日付セルの下に添える小さな1行) */
+.acctbl .gmark{display:block;font-size:8px;line-height:1.3;font-weight:600;color:var(--confA);white-space:nowrap}
 .pad{padding:0 16px}
 .accwrap{padding:0 4px}
 .accwrap .acctbl td>br+span{white-space:nowrap}
@@ -237,7 +239,19 @@ body:has(#tabSen.on) header{border-bottom:1px solid var(--line)}body:has(#tabTod
 const $=s=>document.querySelector(s);
 // 厳選: 3連単TOP3の3点(300円)買い。TOP3合計確率が高く・除外会場でなく・上位3点のオッズが一定以上の
 // 水面が安定したレースのみを厳選する。閾値/除外会場は過去実績のtrain/test検証で決定(scripts/common.py とミラー)。
-const SENGEN_TOP3P_MIN=0.36, SENGEN_MIN_ODDS=3.1, SENGEN_EXCLUDE=[3,4,14];
+// しきい値はモデルの世代ごとに持つ(scripts/common.py の SENGEN_CFG_BY_GEN の写し)。世代が違えば確率の
+// 目盛りが違うので、同じ 0.36 でも選ばれる本数が変わる。レースの g(買い目を作ったモデルの世代。印の無い
+// レース=世代2より前のファイルは世代1)で引く。世代2の top3p_min は仮の値(切り替え時に確定)。
+const SENGEN_CFG_BY_GEN={
+  1:{top3p_min:0.36,min_odds:3.1,min_rno:5,exclude_venues:[3,4,14],cand_top4p_min:0.36},
+  2:{top3p_min:0.46,min_odds:3.1,min_rno:5,exclude_venues:[3,4,14],cand_top4p_min:0.46}
+};
+// 世代の読み取り(common.race_gen と同じ規則): 無い・読めない・1未満は世代1
+const _genOf=v=>{const g=Math.floor(+v);return (v!=null&&isFinite(g)&&g>=1)?g:1;};
+const raceGen=r=>_genOf(r&&r.g);
+// 世代またはレースからしきい値を引く(common.sengen_cfg_for と同じ)。表に無い世代は世代1の値に落とす
+// (現行の動きを変えない側)。
+const sengenCfgFor=x=>SENGEN_CFG_BY_GEN[(x&&typeof x==="object")?raceGen(x):_genOf(x)]||SENGEN_CFG_BY_GEN[1];
 // 松(プレミア・TOP4の4点買い)は2026-09-01で終売。判定ロジックは撤去済みで、表示からも
 // 全撤去済み(マスターの指示)。過去実績はaccuracy.jsonのprm_*とgit履歴にそのまま残る。
 const VIEW={today:null,acc:null,model:null,calib:null};
@@ -284,10 +298,21 @@ const CAL_T5L=[[7.5,4.6],[17.5,17.8],[22.5,21.3],[27.5,30.3],[32.5,37.9],[37.5,4
 const CAL_T3L=[[5,3.3],[12.5,12.3],[17.5,17.4],[22.5,26.1],[27.5,33.9],[33,41.9],[68,44.9]];
 const CAL_T4L=[[6,2.9],[15,13.9],[21,22.6],[27,30.7],[33,38.3],[39,48.6],[71,49]];
 const _CAL_FALLBACK={t5e:CAL_T5E,t5l:CAL_T5L,t3e:CAL_T3E,t3l:CAL_T3L,t4e:CAL_T4E,t4l:CAL_T4L};
-// CALIB(calib.json)に該当キーがあればそれを使い、無ければ内蔵フォールバック表を使う
-const _tb=k=>(CALIB&&CALIB[k]&&CALIB[k].length)?CALIB[k]:_CAL_FALLBACK[k];
+// 較正表をモデルの世代で引く(scripts/common.py の _calib_tbl と同じ順): calib.json の gens[世代][key](世代ごとの表)
+// → トップレベルの key(現在の世代の表。gens の無い古い形の calib.json はこれだけ) → 内蔵フォールバック表。
+// 世代が違えば同じ生の確率でも実際の的中率が違うので、表示の%もレースの世代の表で出す。
+// 画面は表示だけなので、世代の表が無い時はトップレベルに落ちてよい(打刻側はログに出す)。
+const _tbOk=t=>Array.isArray(t)&&t.length>0;
+function _tb(k,g){
+  if(CALIB){
+    const gens=CALIB.gens,per=(gens&&typeof gens==="object")?gens[String(_genOf(g))]:null;
+    if(per&&typeof per==="object"&&_tbOk(per[k]))return per[k];
+    if(_tbOk(CALIB[k]))return CALIB[k];
+  }
+  return _CAL_FALLBACK[k];
+}
 function calPct(p,tbl){const x=p*100;if(x<=tbl[0][0])return Math.round(tbl[0][1]*x/tbl[0][0]);for(let i=1;i<tbl.length;i++){if(x<=tbl[i][0]){const a=tbl[i-1],b=tbl[i];return Math.round(a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]));}}return Math.round(tbl[tbl.length-1][1]);}
-const calT5=r=>calPct(top5p(r),_tb(r.no<=4?"t5e":"t5l"));
+const calT5=r=>calPct(top5p(r),_tb(r.no<=4?"t5e":"t5l",raceGen(r)));
 // 全レース(当日予測)のバッジは「行動の推奨」を2段階で表示する。
 // 注目=較正40%以上(買うか検討する価値。結果の約束は含まない語) / 様子見=それ以外。
 // 旧「勝負」(厳選条件そのもの)は有料プランの選定を無料タブに漏らすため廃止。
@@ -296,7 +321,20 @@ const calT5=r=>calPct(top5p(r),_tb(r.no<=4?"t5e":"t5l"));
 const actLbl=r=>r.att!=null?(r.att?"注目":"様子見"):(calT5(r)>=40?"注目":"様子見");
 // 全レースバッジ専用配色(厳選の%バッジの金/青/灰と混同しないよう別系統): 注目=紫/様子見=沈色
 const actCls=v=>v==="注目"?"actR":"actM";
-const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l"));
+const calT3=r=>calPct(top3p(r),_tb(r.no<=4?"t3e":"t3l",raceGen(r)));
+// モデルを更新した日(世代が前の日と変わった日)の一覧 [{gen,date}](日付昇順)。
+// accuracy.json の日の行の gen(無ければ1)と、当日ファイルの model_gen(無ければ1。実績の行がまだ無い当日の分)
+// から求める。世代2の日が1日も無ければ空(=今の表示に何も足さない)。
+// 的中実績の累計は通しで続けるので、どこからが新しいモデルかを画面に示すために使う。
+function modelGenStarts(acc,P){
+  const rows=(Array.isArray(acc&&acc.days)?acc.days:[]).filter(d=>d&&d.date).map(d=>({date:String(d.date),gen:_genOf(d.gen)}));
+  if(P&&P.date){const dd=String(P.date);if(!rows.some(x=>x.date===dd))rows.push({date:dd,gen:_genOf(P.model_gen)});}
+  rows.sort((a,b)=>a.date.localeCompare(b.date));
+  const out=[];let prev=1;
+  rows.forEach(x=>{if(x.gen!==prev){out.push({gen:x.gen,date:x.date});prev=x.gen;}});
+  return out;
+}
+const _fmtMD=s=>(+String(s).slice(4,6))+"/"+(+String(s).slice(6,8));
 const t5hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,5).some(p=>p.c===r.result.order));
 const t3hit=r=>!!(r.result&&r.picks&&r.picks.slice(0,3).some(p=>p.c===r.result.order));
 // 厳選の的中は、確定した時点の買い目で数える(集計側 scripts/common.py の sengen_picks と同じ規則)。
@@ -322,12 +360,14 @@ function setHeader(p){
 
 function axisTable(r){ return ""; }
 // 厳選判定: 序盤1-4Rはモデルの高確率帯が信用できない(較正で実証)ため、5R以降のみ対象とする。
+// 打刻前(候補)の判定に使うしきい値は、そのレースの買い目を作ったモデルの世代(r.g)の値。
 function sengenOk(r,vcode){
   // チェックポイント確定スタンプ最優先(締切15分前に確定しレース直下へ焼き込み、以後不変)
   if(r.tk!=null)return !!r.tk;
   // 確定時スタンプ(旧・本日分互換。パイプライン競合による遡及改変から所属を守る)
   if(r.result&&!r.result.status&&r.result.tk!=null)return !!r.result.tk;
-  if(r.no<5)return false;if(top3p(r)<SENGEN_TOP3P_MIN||SENGEN_EXCLUDE.indexOf(vcode)>=0)return false;return r.picks.slice(0,3).every(function(p){var o=pickOdds(r,p.c);return o==null||o>=SENGEN_MIN_ODDS;});}
+  const cfg=sengenCfgFor(r);
+  if(r.no<cfg.min_rno)return false;if(top3p(r)<cfg.top3p_min||cfg.exclude_venues.indexOf(vcode)>=0)return false;return r.picks.slice(0,3).every(function(p){var o=pickOdds(r,p.c);return o==null||o>=cfg.min_odds;});}
 function fitRtype(){document.querySelectorAll(".rtype").forEach(el=>{el.style.fontSize="";let fs=12,g=0;while(el.scrollWidth>el.clientWidth+0.5&&fs>8&&g<24){fs-=0.5;el.style.fontSize=fs+"px";g++;}});}
 // 買い目の実効オッズ(表示・厳選の価値判定の共通基準): 確定済みレース(中止除く)の
 // 的中買い目は、暫定オッズ(prov)が最終に更新されず残る場合があるため、実配当(pay3t/100)を
@@ -366,7 +406,9 @@ function renderSengen(){
     // 松系の理由(帯超え/下限割れ/オッズ未達)は売っていないプランの見送りなので出さない。
     // 「確率低下」=候補として出した後にライブ再予測で確率条件を割ったもの。これを
     // 出さないと候補が痕跡なく消える(2026-09-12に是正)。
-    if(r.rs&&(r.rs.indexOf("3.1倍未満")===0||r.rs.indexOf("確率低下")===0||r.rs.indexOf("オッズ未取得")===0)&&r.tk!==1)skipList.push({v,r});
+    // オッズ下限の理由は「◯倍未満 ◯倍」の形(common.stamp_plans が書く)。下限の数字は世代で変わり得るので
+    // 数字を決め打ちせず形で拾う(今の「3.1倍未満 …」はそのまま一致する)。
+    if(r.rs&&(/^\d+(\.\d+)?倍未満/.test(r.rs)||r.rs.indexOf("確率低下")===0||r.rs.indexOf("オッズ未取得")===0)&&r.tk!==1)skipList.push({v,r});
   }));
   list.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
   skipList.sort((a,b)=>(a.r.deadline||"99:99").localeCompare(b.r.deadline||"99:99"));
@@ -663,6 +705,10 @@ function renderAcc(acc){
   }
   if(!tt||!tt.races){m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;}
   // 日別ラベル「3日(月)」形式(先頭ゼロ無しの日+曜)。曜日算出は旧dlabのロジックを流用。
+  // モデルを更新した日(世代が変わった日)には「モデル更新」の印を日付の下に添える。累計は通しで続けるので、
+  // 累計の見出しにも最新の更新日を添える(どこからが新しいモデルの成績かが分かるように)。世代2の日が無ければ何も出ない。
+  const gstarts=modelGenStarts(acc,pred);
+  const gmark=ymd=>gstarts.some(x=>x.date===String(ymd))?'<span class="gmark">モデル更新</span>':"";
   const dlab2=ymd=>{const s=String(ymd);const w=_WD[new Date(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8)).getDay()];return (+s.slice(6,8))+"日("+w+")";};
   // 月別集計+折りたたみ: 当月(latestDate||pred.date、未取得時は最新の日別行の月)はデフォルト展開。
   // それ以外の月は初期状態で折りたたみ。行クリックで accOpenM[key] をトグルして再描画する。
@@ -718,21 +764,22 @@ function renderAcc(acc){
     }).join("");
   };
   const headRow='<tr class="stkrow blast"><th>日付</th><th>プラン</th><th>的中/件数</th><th>的中率</th><th>回収率</th></tr>';
-  const totalRows=days.length?blockRows('<span style="font-weight:700">累計</span>',tt,{cls:"stkrow tblk"}):"";
+  const gtot=gstarts.length?'<span class="gmark">モデル更新 '+_fmtMD(gstarts[gstarts.length-1].date)+'</span>':"";
+  const totalRows=days.length?blockRows('<span style="font-weight:700">累計</span>'+gtot,tt,{cls:"stkrow tblk"}):"";
   const curOpen=!!accOpenM[curMKey];
   const curGroup=groups.find(g=>g.key===curMKey);
   // 当月集計は確定日に本日速報(未確定)を随時合算して表示する(翌朝確定値に置き換わる)
   const curList=(curGroup?curGroup.list:[]).concat((tj&&pred&&mkey(String(pred.date))===curMKey)?[tj]:[]);
   const curMonthRows=blockRows(mLabel(curMKey,curOpen),curList.length?sumMonth(curList):null,{cls:"stkrow mrow",dataM:curMKey,lastCls:"stkend",dcellCls:"dend"});
   // 本日速報の詳細行は当月の折りたたみに連動して表示/非表示(集計値は当月ブロックに合算済み)
-  const todayRows=(tj&&curOpen)?blockRows(dlab2(pred.date)+'<br><span style="font-size:8px;color:var(--dim)">速報</span>',tj,{}):"";
-  const curDayRows=(curOpen&&curGroup)?curGroup.list.map(d=>blockRows(dlab2(d.date),d,{})).join(""):"";
+  const todayRows=(tj&&curOpen)?blockRows(dlab2(pred.date)+'<br><span style="font-size:8px;color:var(--dim)">速報</span>'+gmark(pred.date),tj,{}):"";
+  const curDayRows=(curOpen&&curGroup)?curGroup.list.map(d=>blockRows(dlab2(d.date)+gmark(d.date),d,{})).join(""):"";
   const pastRows=groups.filter(g=>g.key!==curMKey).map(g=>{
     const open=!!accOpenM[g.key];
     // 月の途中からデータが始まる月(6月=13日〜等)はラベルに開始日を注記する
     const md=Math.min.apply(null,g.list.map(d=>+String(d.date).slice(6,8)));
     const mrows=blockRows(mLabel(g.key,open)+(md>1?'<span style="display:block;font-size:8px;color:var(--dim)">'+md+'日〜</span>':""),sumMonth(g.list),{cls:"mrow",dataM:g.key});
-    const dayRows=open?g.list.map(d=>blockRows(dlab2(d.date),d,{})).join(""):"";
+    const dayRows=open?g.list.map(d=>blockRows(dlab2(d.date)+gmark(d.date),d,{})).join(""):"";
     return mrows+dayRows;
   }).join("");
   // 凡例(※全R=…等)はマスターの指示で撤去(2026-09-02)。3行に伸びてヘッダの他要素と
@@ -793,17 +840,32 @@ function renderModel(rep){
   // 設定タブ: 通知/アプリ情報を上部に、表示的中率の検証を中段に、
   // モデル詳細(学習と精度)は折りたたみで下部に置く。
   const m=$("#main");
-  const tm=rep?(rep.test_metrics||{}):{}, bm=rep?(rep.baseline_metrics||{}):{};
-  const fi=Object.entries((rep&&rep.feature_importance)||{}).slice(0,10)
-    .map(([k,v])=>`<div class="kv"><span>${k}</span><span class="num">${Math.round(v)}</span></div>`).join("");
+  // model_report.json は学習のたびに書き換わる。項目が欠ける・形が違う(period が配列でない、
+  // test_metrics が無い、feature_importance が配列や153個)時も例外にしない: ここで落ちると
+  // 設定タブ全体(通知の設定を含む)が「データの取得に失敗しました」になる。
+  const _obj=x=>(x&&typeof x==="object"&&!Array.isArray(x))?x:{};
+  const tm=rep?_obj(rep.test_metrics):{}, bm=rep?_obj(rep.baseline_metrics):{}, sg=_obj(tm.sengen);
+  // 特徴量重要度は名前→値の辞書(降順)で来る前提だが、並びに頼らず値で降順にして上位10個を出す
+  const fi=Object.entries(rep?_obj(rep.feature_importance):{}).map(([k,v])=>[k,Number(v)||0]).sort((a,b)=>b[1]-a[1]).slice(0,10)
+    .map(([k,v])=>`<div class="kv"><span>${esc(k)}</span><span class="num">${Math.round(v)}</span></div>`).join("");
+  const period=rep?(Array.isArray(rep.period)?rep.period.join(" - "):(rep.period!=null?String(rep.period):"-")):"-";
+  const rowsTrain=rep?(Number(rep.rows_train)||0):0;
+  // モデルの作り(世代2だけ出す)。世代1(今の本番。rep.gen が無い報告も世代1)は今までどおり何も出さない。
+  // 世代2: 現行45特徴量 + 選手・モーターの履歴108特徴量の153個を、条件づけ分解ロジットの LightGBM 1本に
+  // 入れ、3連単120通りの確率を直接出す(世代1は 1着/2着以内/3着以内 の二値モデル3本を3段の式で組み合わせていた)。
+  // 見出しは短く・折り返さない(右の説明が長いので、放っておくと見出しが1文字ずつ縦に並ぶ)。
+  const genRow=(rep&&_genOf(rep.gen)===2)
+    ?`<div class="kv"><span style="white-space:nowrap;margin-right:10px">モデル</span><span class="num">世代2: 特徴量153個(現行45 + 選手・モーターの履歴108)。1着→2着→3着の条件つき確率を1本のLightGBMで学び、3連単120通りの確率を直接出す</span></div>`
+    :"";
   // 表示的中率の検証: docs/calib.json(=VIEW.calib/CALIB)がある場合のみ、表示帯別に
   // 直近30日/全期間の実測的中率を突き合わせて確認できる小表を出す。
   let calibSec="";
   const cal=VIEW.calib;
   if(cal){
-    const vf=cal.verify||{};
-    const recent=vf.recent30||[];
-    const full=vf.full||[];
+    // calib.json の形は世代ごとの表(gens)などが増えていく。verify が欠ける・配列でない時も例外にしない
+    const vf=_obj(cal.verify);
+    const recent=Array.isArray(vf.recent30)?vf.recent30:[];
+    const full=Array.isArray(vf.full)?vf.full:[];
     const bandSet=[];const seen={};
     full.concat(recent).forEach(x=>{if(x&&x.band!=null&&!seen[x.band]){seen[x.band]=true;bandSet.push(x.band);}});
     const findB=(arr,b)=>arr.find(x=>x&&x.band===b);
@@ -817,7 +879,7 @@ function renderModel(rep){
     calibSec=`<div class="sec" style="margin-top:18px">表示的中率の検証</div>
       <div style="font-size:11px;color:var(--dim);margin:-2px 0 8px">表示している的中率が実測と一致しているかの自動検証(毎朝更新)</div>
       <div class="kv"><span>更新日</span><span class="num">${cal.updated_at||"-"}</span></div>
-      <div class="kv"><span>対象レース数</span><span class="num">${nTotal.toLocaleString()}R</span></div>
+      <div class="kv"><span>対象レース数</span><span class="num">${(Number(nTotal)||0).toLocaleString()}R</span></div>
       <table><tr><th>表示帯</th><th>直近30日 実測</th><th>全期間 実測</th></tr>${rows||'<tr><td colspan="3">データなし</td></tr>'}</table>`;
   }
   // 打刻バッジの較正監視: 2026-09-02以降(T-15打刻レジーム)の注目/様子見の実測を、
@@ -835,19 +897,23 @@ function renderModel(rep){
         : (wil(ah,an,-1)>=0.40 ? '<span style="color:#1FB97A">整合(実測40%以上を統計的に確認)</span>'
                                : '<span style="color:var(--dim)">判定保留(40%と統計的に区別できない)</span>');
     }
+    // モデルを更新した日(世代が変わった日)。較正が合っているかは更新日以降だけで見ないと分からないので、
+    // 監視の数字がどの日からのモデルを混ぜているかを示す。世代2の日が無ければ出ない。
+    const gst=modelGenStarts(VIEW.acc,pred);
+    const gRow=gst.length?`<div class="kv"><span>モデル更新日</span><span class="num">${gst.map(x=>esc(x.date.slice(0,4)+"-"+x.date.slice(4,6)+"-"+x.date.slice(6,8))+"(世代"+x.gen+")").join(" / ")}</span></div>`:"";
     calibSec+=`<div class="sec" style="margin-top:18px">バッジ実測の監視(締切15分前確定分)</div>
       <div style="font-size:11px;color:var(--dim);margin:-2px 0 8px">2026-09-02以降に打刻で確定したバッジの実測。「注目=較正40%以上」が実測で保たれているかを自動判定(遡及集計分は含めない)</div>
       <div class="kv"><span>注目</span><span class="num">${an?`${ah}/${an} (${(ah/an*100).toFixed(1)}%)`:"-"}</span></div>
       <div class="kv"><span>様子見</span><span class="num">${yn?`${yh}/${yn} (${(yh/yn*100).toFixed(1)}%)`:"-"}</span></div>
-      <div class="kv"><span>判定</span><span class="num">${judge}</span></div>`;
+      <div class="kv"><span>判定</span><span class="num">${judge}</span></div>${gRow}`;
   }
   const pushSec=PUSH_WORKER?'<div id="pushSec"></div>':`<div class="sec" style="margin-top:14px">通知</div>
     <div class="kv"><span>プッシュ通知</span><span class="num" style="color:var(--dim)">準備中</span></div>
     <div style="font-size:11px;color:var(--dim);margin-top:6px">厳選プランの確定と結果を端末に通知する機能を準備しています。公開時はここでオン/オフできます。</div>`;
   const modelBody=rep?`
-    <div class="kv"><span>学習日時</span><span class="num">${rep.trained_at||"-"}</span></div>
-    <div class="kv"><span>学習期間</span><span class="num">${(rep.period||[]).join(" - ")}</span></div>
-    <div class="kv"><span>学習行数</span><span class="num">${(rep.rows_train||0).toLocaleString()}</span></div>
+    <div class="kv"><span>学習日時</span><span class="num">${esc(rep.trained_at||"-")}</span></div>
+    <div class="kv"><span>学習期間</span><span class="num">${esc(period)}</span></div>
+    <div class="kv"><span>学習行数</span><span class="num">${rowsTrain.toLocaleString()}</span></div>${genRow}
     <div class="kv"><span>プラン条件</span><span class="num">厳選プラン: 5R以降・TOP3合計確率36%以上・全3点オッズ3.1倍以上・安定水面のみ<br>7,339レースのバックテストで決定<br>オッズは締切15分前時点の値で判定(締切までに変動します)</span></div>
     <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
     <div style="font-size:11px;color:var(--dim);margin:-2px 0 8px">学習時に測ったモデル単体の精度。すべてTOP5基準で、厳選プランの成績とは別物です。プランの実績は的中実績タブをご覧ください。</div>
@@ -855,7 +921,7 @@ function renderModel(rep){
     <div class="kv"><span>3連単 予測</span><span class="num">${pct(tm.top1_hit_rate||0)} (基準 ${pct(bm.top1_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 TOP5内</span><span class="num">${pct(tm.top5_hit_rate||0)} (基準 ${pct(bm.top5_hit_rate||0)})</span></div>
     <div class="kv"><span>3連単 TOP10内</span><span class="num">${pct(tm.top10_hit_rate||0)} (基準 ${pct(bm.top10_hit_rate||0)})</span></div>
-    <div class="kv"><span>高確率帯 TOP5内${tm.sengen&&tm.sengen.top5_min!=null?"(合計"+Math.round(tm.sengen.top5_min*100)+"%以上)":""}</span><span class="num">${tm.sengen&&tm.sengen.top5_hit_rate!=null?pct(tm.sengen.top5_hit_rate)+" ("+tm.sengen.races_per_day+"R/日)":"-"}</span></div>
+    <div class="kv"><span>高確率帯 TOP5内${sg.top5_min!=null?"(合計"+Math.round(sg.top5_min*100)+"%以上)":""}</span><span class="num">${sg.top5_hit_rate!=null?pct(sg.top5_hit_rate)+(sg.races_per_day!=null?" ("+sg.races_per_day+"R/日)":""):"-"}</span></div>
     <div class="kv"><span>回収率(TOP5均等買い)</span><span class="num">${pct(tm.top5_roi||0)}</span></div>
     <div class="sec" style="margin-top:18px">特徴量重要度 TOP10</div>${fi}`
     :'<div class="note">モデル情報がありません。<br>学習完了後に表示されます。</div>';

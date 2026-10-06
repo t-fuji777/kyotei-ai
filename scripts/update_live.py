@@ -18,7 +18,7 @@ from features import load_fan
 from fetch_beforeinfo import fetch_beforeinfo
 from fetch_odds import fetch_odds
 from fetch_result import fetch_result
-from predict_today import load_hist, load_models, races_to_rows, predict_races, write
+from predict_today import load_models, races_to_rows, predict_live_rows, write
 
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
@@ -139,15 +139,16 @@ def update_exhibits(pred, now, ymd) -> int:
     if btxt is None:
         print("B file unavailable")
         return 0
-    races = [r for r in parse_b(btxt, ymd) if (r["venue"], r["race_no"]) in live]
+    card = parse_b(btxt, ymd)
+    races = [r for r in card if (r["venue"], r["race_no"]) in live]
     if not races:
         return 0
 
     tgt = pd.DataFrame(races_to_rows(races, live=live))
     meta, models, sengen = load_models()
-    hist = load_hist()
-    fan = load_fan(ROOT / "data" / "fan")
-    by_venue, _ = predict_races(tgt, hist, fan, models, sengen)
+    # 世代で分かれる(世代1は履歴を読んで今までどおり、世代2は当日分の保存から9列だけ更新)。
+    # 保存を作る時にその日の全レース(card)が要るので番組表は全部渡す
+    by_venue, _ = predict_live_rows(ymd, card, tgt, meta, models, sengen)
 
     n_upd = 0
     for v in pred["venues"]:

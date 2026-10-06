@@ -39,7 +39,11 @@ concurrency:
 jobs:
   watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 30 → 75分(2026-10-06、世代2の準備)。内訳の最大: 公開JSONの判定 約1分 + モデル配布の確認
+    # (verify の時間切れ 300秒 × 2回 + 待ち 120秒 = 12分)+ 復旧待ち 45分(下の「復旧を確認」)
+    # + Issue 起票と通知 約2分 = 約60分。これに約15分の余裕。以前は 30分で、復旧待ち 20分 +
+    # verify 12分 で既にぎりぎりだった。
+    timeout-minutes: 75
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
@@ -184,6 +188,11 @@ jobs:
 
       # 公開URLはGitHub Pagesのデプロイ待ちで数分遅れるため、復旧確認は origin/main の
       # 実ファイルで行う(コミットされた時点で判定できる)。
+      # 復旧待ちは 20分 → 45分(2026-10-06、世代2の準備)。daily の学習の手順は世代2で約10〜25分、
+      # 時間切れを 45分に置いた(daily.yml)。7:30の判定の時点で daily が学習中だった日(上の heal は
+      # 実行中なら起動せず完了を待つ)や、ここから起動した daily が学習をやり直す日に、学習 + 配布 +
+      # 当日の予測の公開(合計で最大約50分)を待ち切れる長さにする。20分のままだと、学習が長い朝は
+      # 復旧が済む前に「復旧せず」で Issue と失敗の通知が出る。
       - name: 復旧を確認
         id: recheck
         if: steps.check.outputs.level == 'critical'
@@ -193,7 +202,7 @@ jobs:
             echo "テストモード(alert): 復旧しなかった想定で通知経路へ進む"
             exit 0
           fi
-          for i in $(seq 1 20); do
+          for i in $(seq 1 45); do
             sleep 60
             git fetch origin main -q || continue
             git show origin/main:docs/predictions/latest.json > /tmp/latest.json 2>/dev/null || continue
@@ -208,7 +217,7 @@ jobs:
               exit 0
             fi
           done
-          echo "20分待っても復旧せず"
+          echo "45分待っても復旧せず"
 
       - name: 異常をIssueに起票
         id: issue
@@ -251,7 +260,7 @@ jobs:
             fi
             echo "## 復旧の試行"
             echo "daily の起動: ${{ steps.heal.outputs.dispatched }}"
-            echo "20分以内の復旧: ${{ steps.recheck.outputs.recovered }}"
+            echo "45分以内の復旧: ${{ steps.recheck.outputs.recovered }}"
             echo ""
             echo "## 対処"
             echo "1. まず Actions タブ > watchdog > Run workflow を押す(多くの場合これで直る)。"

@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from common import (sengen_counts, sengen_picks, SENGEN_STAMP_FROM,
-                    is_sengen, sengen_top3p, SENGEN_MIN_ODDS,
+                    is_sengen, sengen_top3p, SENGEN_MIN_ODDS, sengen_cfg_for,
                      matsu_top4p, is_matsu, MATSU_MIN_ODDS, MATSU_MAX_ODDS)
 
 ROOT = Path(__file__).parent.parent
@@ -75,7 +75,10 @@ def recompute_day(pred: dict, ymd: str = ""):
                     return _pay / 100.0
                 return t3.get(c)
 
-            picks_ok = all((_eff(c) is None or _eff(c) >= SENGEN_MIN_ODDS) for c in picks[:3])
+            # しきい値(top3p_min / min_odds)はレースの世代(r["g"]。無ければ1 = 0.36 / 3.1)で引く
+            _cfg = sengen_cfg_for(r)
+            _min_odds = _cfg.get("min_odds", SENGEN_MIN_ODDS)
+            picks_ok = all((_eff(c) is None or _eff(c) >= _min_odds) for c in picks[:3])
             rno = r.get("no")
             # 竹/松の該当可否: 優先順位は
             #   1. r["tk"]/r["mt"](レース直下、締切15分前チェックポイントで確定/
@@ -90,7 +93,7 @@ def recompute_day(pred: dict, ymd: str = ""):
             else:
                 # 打刻の無いレースを後から数えるのは、打刻の方式を始める前の日だけ(update_results.evaluate と同じ)
                 _d = str(ymd or pred.get("date") or "")
-                is_tk = (_d < SENGEN_STAMP_FROM) and is_sengen(top3p, v.get("code"), rno) and picks_ok
+                is_tk = (_d < SENGEN_STAMP_FROM) and is_sengen(top3p, v.get("code"), rno, _cfg) and picks_ok
             if is_tk:
                 sen_n += 1
                 sen_pred_sum += top3p
@@ -136,7 +139,19 @@ def recompute_day(pred: dict, ymd: str = ""):
             "prm_n": prm_n, "prm_hit": prm_hit, "prm_pred_sum": prm_pred_sum,
             "sen_stake": sen_stake, "sen_ret": sen_ret,
             "prm_stake": prm_stake, "prm_ret": prm_ret,
-            "sen_hitloss": sen_hitloss, "prm_hitloss": prm_hitloss}
+            "sen_hitloss": sen_hitloss, "prm_hitloss": prm_hitloss,
+            # その日の朝の予測を作ったモデルの世代(当日ファイルの model_gen。無ければ1)。
+            # update_results.evaluate が日の行に書くのと同じ値。total には足さない。
+            "gen": _model_gen(pred)}
+
+
+def _model_gen(pred: dict) -> int:
+    """当日ファイルの model_gen(無い・読めない過去の日は1)。update_results._model_gen と同じ。"""
+    try:
+        g = (pred or {}).get("model_gen")
+        return int(g) if g is not None else 1
+    except Exception:
+        return 1
 
 
 def main():
@@ -178,6 +193,7 @@ def main():
         day["prm_ret"] = agg["prm_ret"]
         day["sen_hitloss"] = agg["sen_hitloss"]
         day["prm_hitloss"] = agg["prm_hitloss"]
+        day["gen"] = agg["gen"]   # 世代の印。total(下の t)には足さない
         n_updated += 1
         rate = (agg["sen_hit"] / agg["sen_n"] * 100) if agg["sen_n"] else 0.0
         prm_rate = (agg["prm_hit"] / agg["prm_n"] * 100) if agg["prm_n"] else 0.0

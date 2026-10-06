@@ -1,6 +1,21 @@
 name: train
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "計測用の実行。true にすると学習と自己検査だけを行い、配布・予備の更新・commit を省く。所要時間とメモリの最大をログと要約に出す(世代2の切り替え前に Actions 上で1回通す用)"
+        required: false
+        type: boolean
+        default: false
+      model_gen:
+        description: "学習する世代を上書きする(1 または 2。空=scripts/train.py の定数 MODEL_GEN のまま)。環境変数 MODEL_GEN として渡す。dry_run で世代2を測る時に使う。要約に実際に学習した世代が出るので、そこで確かめる"
+        required: false
+        default: ""
+      allow_format_change:
+        description: "予備(data/model)の形を学習したモデルの形に置き換えることを許す(model_store.py freeze --allow-format-change)。普段は false のまま。世代2で運用を続けると決めた時に1回だけ true にする"
+        required: false
+        type: boolean
+        default: false
 concurrency:
   group: data
   cancel-in-progress: false
@@ -12,27 +27,102 @@ jobs:
     timeout-minutes: 300
     env:
       GH_TOKEN: ${{ github.token }}
+      # workflow_dispatch の boolean 入力は github.event.inputs では文字列 "true" / "false" になる。
+      DRY_RUN: ${{ github.event.inputs.dry_run }}
+      IN_MODEL_GEN: ${{ github.event.inputs.model_gen }}
+      ALLOW_FORMAT_CHANGE: ${{ github.event.inputs.allow_format_change }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pandas numpy lightgbm
+      # lightgbm は4系に固定する(世代2の学習は独自の目的関数を渡す書き方で4系が前提。daily.yml と同じ指定)。
+      - run: pip install pandas numpy "lightgbm>=4.6,<5"
+      # dry_run の時は GNU time(/usr/bin/time -v)で所要時間と作業メモリの最大(Maximum resident set size)
+      # を測る。実行機に無ければ入れ、それも駄目なら測らずに学習だけ行う(計測の都合で学習を止めない)。
+      # 学習が失敗した時(自己検査の不一致を含む)は、計測の出力を残してからこの手順を失敗にする。
       - name: train model
-        run: python scripts/train.py
+        id: train
+        run: |
+          if [ -n "$IN_MODEL_GEN" ]; then
+            if [ "$IN_MODEL_GEN" != "1" ] && [ "$IN_MODEL_GEN" != "2" ]; then
+              echo "model_gen は 1 か 2 か空(入力: '$IN_MODEL_GEN')"; exit 1
+            fi
+            export MODEL_GEN="$IN_MODEL_GEN"
+            echo "学習する世代を上書き: MODEL_GEN=$MODEL_GEN"
+          fi
+          if [ "$DRY_RUN" != "true" ]; then
+            python scripts/train.py
+          else
+            echo "計測用の実行(dry_run): 学習と自己検査だけを行い、配布・予備の更新・commit は省く"
+            MACHINE="CPU $(nproc) コア / メモリ $(free -g | awk '/^Mem:/ {print $2}') GB"
+            echo "実行機: $MACHINE"
+            python -c "import sys, numpy, pandas, lightgbm; print('python', sys.version.split()[0], '/ numpy', numpy.__version__, '/ pandas', pandas.__version__, '/ lightgbm', lightgbm.__version__)"
+            if [ ! -x /usr/bin/time ]; then
+              echo "/usr/bin/time が無いので入れる"
+              (sudo apt-get update -qq && sudo apt-get install -y -q time) || echo "::warning::GNU time を入れられなかった。メモリの最大は測らない"
+            fi
+            START=$(date +%s)
+            set +e
+            if [ -x /usr/bin/time ]; then
+              /usr/bin/time -v -o time.txt python scripts/train.py
+              RC=$?
+            else
+              python scripts/train.py
+              RC=$?
+              : > time.txt
+            fi
+            set -e
+            ELAPSED=$(( $(date +%s) - START ))
+            echo "---- 計測(GNU time -v) ----"
+            cat time.txt
+            MAXKB=$(grep -m1 'Maximum resident set size' time.txt | sed 's/.*: //' || true)
+            if [ -n "$MAXKB" ]; then MAXMEM="$(( MAXKB / 1024 )) MB"; else MAXMEM="不明(GNU time 無し)"; fi
+            if [ -f data/model_build/meta.json ]; then
+              META="あり($(python -c "import json; m=json.load(open('data/model_build/meta.json', encoding='utf-8')); print('gen', m.get('gen', 1), '/ format', m.get('format', 1), '/ trained_at', m.get('trained_at'))"))"
+            else
+              META="無し(学習が最後まで通っていない)"
+            fi
+            echo "所要時間: $(( ELAPSED / 60 ))分$(( ELAPSED % 60 ))秒 / 作業メモリの最大: $MAXMEM / 終了コード: $RC / meta.json: $META"
+            {
+              echo "### 計測用の実行(dry_run)"
+              echo ''
+              echo "- 実行機: $MACHINE"
+              echo "- 学習の終了コード: $RC (0 = 成功。自己検査の不一致も非0)"
+              echo "- 所要時間(学習の手順): $(( ELAPSED / 60 ))分$(( ELAPSED % 60 ))秒"
+              echo "- 作業メモリの最大: $MAXMEM"
+              echo "- meta.json: $META"
+              echo ''
+              echo '配布・予備の更新・commit は省いた(dry_run)。'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit $RC
+          fi
       # 学習の出力は data/model_build(gitignore)。Release へ配布して参照先
       # (data/model/live_pointer.json)を書き、git の予備(data/model)も更新する。
       # どちらかが失敗したらジョブを失敗させる(何もコミットしない)。
+      # freeze --force は「30日の間隔を無視して予備を更新する」の意味。予備と学習したモデルの形が
+      # 違う時(世代1の予備に対して世代2を学習した時)は、--allow-format-change を付けない限り
+      # 何もしない(model_store.py)。予備は古いコードへの巻き戻しの保険なので、形の置き換えは
+      # 入力 allow_format_change で明示した時だけ行う。
       - name: モデルを配布 (Release資産) と予備の更新
+        if: github.event.inputs.dry_run != 'true'
         timeout-minutes: 10
         run: |
           python scripts/model_store.py publish
-          python scripts/model_store.py freeze --force
+          FREEZE_ARGS=""
+          if [ "$ALLOW_FORMAT_CHANGE" = "true" ]; then
+            echo "予備の形の置き換えを許可する(--allow-format-change)"
+            FREEZE_ARGS="--allow-format-change"
+          fi
+          python scripts/model_store.py freeze --force $FREEZE_ARGS
+      # 較正の種(data/calib_seed_gen2.json)は世代2の学習が成功した時だけできるので、有る時だけ add する。
       - name: commit
+        if: github.event.inputs.dry_run != 'true'
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add data/model docs/model_report.json
+          if [ -f data/calib_seed_gen2.json ]; then git add data/calib_seed_gen2.json; fi
           git diff --cached --quiet || git commit -m "train model"
           # 開催中ループがほぼ毎分 push するので、pull と push の間に割り込まれたらやり直す
           # (ここで落ちると、資産だけ上がって参照先と予備が届かず、学習からやり直しになる)。

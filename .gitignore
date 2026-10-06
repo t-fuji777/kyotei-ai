@@ -4,4 +4,9 @@ __pycache__/
 data/model_build/
 data/model_live/
 data/model/*.tmp*
+# 世代2の当日分の特徴量の保存(predict_today が朝に作り、直前の再予測が読む)。git には入れない
+data/feat_cache/
+# テストと検証の一時フォルダ(tests/test_*.py が作業ツリーの根に作る .tmp_<名前>_<pid>/ など)。
+# 後始末に失敗して残っても、git add -A で枝に入らないようにする
+.tmp_*/
 .wrangler/

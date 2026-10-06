@@ -40,7 +40,11 @@ permissions:
 jobs:
   daily:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 60 → 90分(2026-10-06、世代2の準備)。学習の手順は現行で約4.5分だが、世代2(153特徴量・
+    # 1本)は Actions で約10〜25分、悪い場合約30分の見込み(port/performance.md 2.5、
+    # model_path.md 5.2)。学習の手順に付けた時間切れ45分を使い切っても、配布・commit・当日の
+    # 予測(push の競合で最大6回やり直し)・ループの起動まで進めるだけの余裕を持たせる。
+    timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -60,8 +64,17 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+      # 開催中ループの起動を学習の前にも1回行う(動いていれば何もしない)。末尾の起動だけだと、
+      # daily が最初の起動元になる日は学習の分(世代2で最大45分)だけループの開始が遅れ、その間は
+      # 7:20の自己復旧も働かない。ensure_loop.sh は失敗しても 0 で戻るが、念のため続行にする。
+      - name: 開催中ループ(auto-update)を学習の前に起動しておく
+        if: steps.gate.outputs.skip != 'true'
+        run: bash scripts/ensure_loop.sh
+        continue-on-error: true
+      # lightgbm は4系に固定する。世代2の学習は独自の目的関数を params に渡す書き方で、4系が前提
+      # (5系で動きが変わっても朝の学習が黙って壊れないように)。開催中ループ・train.yml と同じ指定。
       - if: steps.gate.outputs.skip != 'true'
-        run: pip install lhafile pandas numpy lightgbm pillow requests
+        run: pip install lhafile pandas numpy "lightgbm>=4.6,<5" pillow requests
       - name: ensure icons
         if: steps.gate.outputs.skip != 'true'
         run: python scripts/make_icons.py
@@ -74,13 +87,18 @@ jobs:
         if: steps.gate.outputs.skip != 'true'
         run: python scripts/update_results.py
         continue-on-error: true
-      - name: build calibration
-        if: steps.gate.outputs.skip != 'true'
-        continue-on-error: true
-        run: python scripts/build_calib.py
+      # 較正表の作成(build calibration)は、以前はここ(学習の前)にあった。2026-10-06 に学習・配布の
+      # 後へ移した(下の「build calibration」)。世代2の較正表は、学習が出す種(data/calib_seed_gen2.json)
+      # が無いと作れないため。
+      #
+      # 学習の手順の時間切れ 45分: 世代2の学習は Actions で約10〜25分、悪い場合約30分の見込み
+      # (port/performance.md 2.5、model_path.md 5.2)。時間切れはこの手順の失敗として扱われ
+      # (continue-on-error のまま)、配布を飛ばして前回のモデルで当日の予測を公開し、ループの起動まで
+      # 進む。以前は時間切れが無く、学習が固まるとジョブごと打ち切られて予測の公開まで巻き添えだった。
       - name: retrain model (daily)
         id: train
         if: steps.gate.outputs.skip != 'true'
+        timeout-minutes: 45
         run: python scripts/train.py
         continue-on-error: true
       # 学習したモデル(data/model_build。git には入れない)を Release の資産として配布する。
@@ -96,16 +114,30 @@ jobs:
         run: |
           python scripts/model_store.py publish
           python scripts/model_store.py freeze
-      # 予測より前の成果物(前日結果・実績・較正・モデルの参照先)を先に確定させる。ここまでの手順は
-      # 当日の予測ファイルに触れないので、開催中ループの書き込みとは衝突しない。
+      # 較正表(docs/calib.json)は学習・配布の後、commit の前に作る(2026-10-06 に学習の前から移した)。
+      # 世代2の表は「学習に使っていない試験期間の種」(train.py が data/calib_seed_gen2.json に書く)に
+      # 本番の日を足して作るので、その日の学習が終わってからでないと最初の朝の種が無い。学習が失敗した
+      # 日は種が前回 commit のまま残り、使うモデル(前回の資産)と同じ世代の表になる。
+      # 学習・配布の成否に関わらず走らせる(世代1の表は予測ファイルだけから作れる。今と同じ)。
+      # 当日の予測ファイルには触れないので、開催中ループの書き込みとは衝突しない。predict today の
+      # 手順は docs/predictions しか add しないため、較正表はこの位置(commit の前)で作る必要がある。
+      - name: build calibration
+        if: steps.gate.outputs.skip != 'true'
+        continue-on-error: true
+        run: python scripts/build_calib.py
+      # 予測より前の成果物(前日結果・実績・較正・モデルの参照先・較正の種)を先に確定させる。ここまでの
+      # 手順は当日の予測ファイルに触れないので、開催中ループの書き込みとは衝突しない。
       # pull と push の間に開催中ループのコミットが入ると push が拒否されるので、3回まで
       # やり直す(ここで落ちると、資産だけ上がって参照先が main に届かない状態になる)。
-      - name: commit (前日結果・実績・モデル)
+      # docs/calib.json は `git add docs` に含まれる。較正の種(data/calib_seed_gen2.json)は世代2の
+      # 学習が成功した時だけできるので、有る時だけ add する(無いパスを add すると git が失敗する)。
+      - name: commit (前日結果・実績・モデル・較正)
         if: steps.gate.outputs.skip != 'true'
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add data/races data/fan data/model docs
+          if [ -f data/calib_seed_gen2.json ]; then git add data/calib_seed_gen2.json; fi
           git diff --cached --quiet || git commit -m "daily data $(TZ=Asia/Tokyo date +%Y%m%d)"
           for i in 1 2 3; do
             if git pull --rebase --autostash -X theirs && git push; then break; fi
@@ -145,12 +177,14 @@ jobs:
           echo "6回試しても公開できなかった"; exit 1
       # 開催中ループをscheduleの遅延に任せず、ここから起動する(動いていれば何もしない)。
       # 省いた回でも実行するので、1日7回の着弾がそのままループの死活確認になる。
+      # 学習の前にも1回呼んでいる(上の手順)が、こちらは省いた回・途中で落ちた回の保険として残す。
       - name: 開催中ループ(auto-update)が動いていなければ起動
         if: always()
         run: bash scripts/ensure_loop.sh
       # 学習や配布が失敗しても、予測の公開とループの起動までは済ませてから、ここでジョブを
       # 赤くする(GitHub標準の失敗メールが届く)。配布されていない間は daily_gate.py が
-      # 省かないので、次に着弾した回が学習からやり直す。
+      # 省かないので、次に着弾した回が学習からやり直す。学習の手順の時間切れ(45分)も
+      # outcome=failure になるので、ここで知らされる。
       - name: 学習または配布の失敗を知らせる
         if: >-
           always() && steps.gate.outputs.skip != 'true'

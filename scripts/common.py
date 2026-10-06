@@ -31,6 +31,67 @@ SENGEN_MIN_ODDS = 3.1
 SENGEN_EXCLUDE_VENUES = frozenset({3, 4, 14})  # 江戸川/平和島/鳴門(荒れ水面)
 SENGEN_MIN_RNO = 5  # 1-4Rはモデル過大評価のため両プラン(竹/松)対象外
 
+# モデルの世代(gen)ごとのしきい値。1 = 現行(二値3本 + 3段の式)、2 = 作り直した候補
+# (条件づけ分解ロジット1本。確率の目盛りが上に伸びるので、同じ 0.36 だと厳選が1日約12件に増える)。
+# 上の定数はそのまま世代1の値として使う。レースごとに「その買い目を作ったモデルの世代」を
+# race["g"] に持ち(無ければ世代1)、しきい値と較正表はレースの g で引く。同じ日に世代の違う
+# 買い目が混ざっても(朝の作り直しの前後、予備のモデルで動いた実行機など)、各レースは自分の
+# 世代の数字で判定される。画面(docs/index.html)にも同じ表の写しを持つ。
+# 世代2の top3p_min / cand_top4p_min は仮の値(件数を今とそろえる方針)。実験の候補モデルでは検証期間で
+# 0.457 だったが、本番のコードで学習し直したモデルでは件数がそろう値は 0.451(試験期間の厳選は
+# 0.45 で 1.72件/日・的中 54.7%、0.46 で 1.37件/日・54.8%。現行 0.36 は 1.82件/日・54.1%)。
+# cand_top4p_min も 0.46 では取り直しの対象が 7.1件/日(現行 12.7件/日)に減る(そろえるなら 0.43)。
+# 毎朝の学習し直しで ±0.006 程度動くので、切り替え(段階B)の直前に dry_run の model_report で
+# 確かめてから確定する(持ち主の判断。この値を変えれば画面 docs/index.html の写しも同じ値にする)。
+# min_odds / min_rno / exclude_venues は世代で変えない。
+# JSON に書けるよう値は list / 数値だけにする(frozenset は使わない)。
+SENGEN_CFG_BY_GEN = {
+    1: {"top3p_min": SENGEN_TOP3P_MIN, "min_odds": SENGEN_MIN_ODDS, "min_rno": SENGEN_MIN_RNO,
+        "exclude_venues": sorted(SENGEN_EXCLUDE_VENUES), "cand_top4p_min": 0.36},
+    2: {"top3p_min": 0.46, "min_odds": SENGEN_MIN_ODDS, "min_rno": SENGEN_MIN_RNO,
+        "exclude_venues": sorted(SENGEN_EXCLUDE_VENUES), "cand_top4p_min": 0.46},
+}
+
+_WARNED = set()
+
+
+def _warn_once(msg):
+    """同じ警告を1プロセスで1回だけ出す(レースごとの判定の中から呼ぶので、毎回出すと周回のログが埋まる)。"""
+    if msg not in _WARNED:
+        _WARNED.add(msg)
+        print(msg, flush=True)
+
+
+def race_gen(race) -> int:
+    """レースの買い目を作ったモデルの世代。印(race["g"])が無い・読めないレースは世代1
+    (印を付け始める前の日のファイルと同じ扱い)。"""
+    try:
+        g = (race or {}).get("g")
+    except Exception:
+        return 1
+    if g is None:
+        return 1
+    try:
+        return int(g)
+    except Exception:
+        return 1
+
+
+def sengen_cfg_for(gen_or_race):
+    """世代の番号、またはレース(dict。race_gen で世代を読む)から、その世代のしきい値を返す。
+    知らない世代は世代1の値に落とす(現行の動きを変えない側)。警告は1回だけ出す。
+    戻り値は写し(呼び出し側が書き足しても表は汚れない)。"""
+    gen = race_gen(gen_or_race) if isinstance(gen_or_race, dict) else gen_or_race
+    try:
+        gen = int(gen)
+    except Exception:
+        gen = 1
+    cfg = SENGEN_CFG_BY_GEN.get(gen)
+    if cfg is None:
+        _warn_once(f"sengen_cfg: unknown model gen {gen!r}; using gen 1 thresholds")
+        cfg = SENGEN_CFG_BY_GEN[1]
+    return dict(cfg)
+
 
 # 当日予測バッジ(注目/様子見)の実績記録(2026-09-02開始): 較正済みTOP5的中率
 # (docs/calib.json、フロントのcalT5と同一式)が BADGE_MIN_CAL 以上なら注目(att=1)、
@@ -47,7 +108,8 @@ _CAL_T5L = [[7.5, 4.6], [17.5, 17.8], [22.5, 21.3], [27.5, 30.3], [32.5, 37.9],
 _CALIB_CACHE = None
 
 
-def _calib_tbl(key):
+def _load_calib():
+    """docs/calib.json をプロセスごとに1回だけ読む。読めなければ空(内蔵の表に落ちる)。"""
     global _CALIB_CACHE
     if _CALIB_CACHE is None:
         try:
@@ -58,7 +120,28 @@ def _calib_tbl(key):
                 .read_text(encoding="utf-8"))
         except Exception:
             _CALIB_CACHE = {}
-    tbl = _CALIB_CACHE.get(key)
+    return _CALIB_CACHE if isinstance(_CALIB_CACHE, dict) else {}
+
+
+def _calib_tbl(key, gen=1):
+    """較正表を世代で引く。順に calib.json の gens[str(gen)][key] → トップレベルの key(現在の
+    世代の表) → 内蔵の表。世代の表が要るのに無い時(世代2の表がまだ無い、gens があるのに
+    その世代が無い)は黙って落とさず、ログに1行出してからトップレベルへ落ちる。
+    世代1で calib.json に gens が無い(今の形)のは正常なので何も出さない。"""
+    cal = _load_calib()
+    try:
+        g = str(int(gen))
+    except Exception:
+        g = "1"
+    gens = cal.get("gens")
+    gens = gens if isinstance(gens, dict) else {}
+    per_gen = gens.get(g)
+    tbl = per_gen.get(key) if isinstance(per_gen, dict) else None
+    if tbl:
+        return tbl
+    if g != "1" or gens:
+        _warn_once(f"calib: no table for gen {g} key {key}; falling back to the top-level table")
+    tbl = cal.get(key)
     return tbl if tbl else {"t5e": _CAL_T5E, "t5l": _CAL_T5L}[key]
 
 
@@ -77,9 +160,11 @@ def cal_pct(p, tbl):
 
 
 def badge_attention(race):
-    """注目=1/様子見=0。フロントのactLbl(calT5>=40。1-4Rはt5e表、5R以降はt5l表)と同一判定。"""
+    """注目=1/様子見=0。フロントのactLbl(calT5>=40。1-4Rはt5e表、5R以降はt5l表)と同一判定。
+    較正表はレースの世代(race["g"]。無ければ1)の表を使う: 世代が違えば確率の目盛りが違うので、
+    同じ生の確率でも実際の的中率が違う。"""
     top5p = sum((p.get("p") or 0) for p in (race.get("picks") or [])[:5])
-    tbl = _calib_tbl("t5e" if (race.get("no") or 12) <= 4 else "t5l")
+    tbl = _calib_tbl("t5e" if (race.get("no") or 12) <= 4 else "t5l", race_gen(race))
     return 1 if cal_pct(top5p, tbl) >= BADGE_MIN_CAL else 0
 
 
@@ -120,10 +205,20 @@ def sengen_top3p(picks):
     return sum((p.get("p") or 0) for p in (picks or [])[:3])
 
 
-def is_sengen(top3p, venue, rno):
+def is_sengen(top3p, venue, rno, cfg=None):
+    """厳選の確率条件(top3p のしきい値・除外会場・5R以降)。cfg(sengen_cfg_for の戻り値)が
+    あればその値、無ければ世代1の定数(今までと同じ)。cfg に欠けた項目も世代1の値で補う
+    (古い形の sengen_cfg を渡された時のため)。"""
     try:
-        return (top3p >= SENGEN_TOP3P_MIN and int(venue) not in SENGEN_EXCLUDE_VENUES
-                and int(rno) >= SENGEN_MIN_RNO)
+        if cfg is None:
+            return (top3p >= SENGEN_TOP3P_MIN and int(venue) not in SENGEN_EXCLUDE_VENUES
+                    and int(rno) >= SENGEN_MIN_RNO)
+        ex = cfg.get("exclude_venues")
+        if ex is None:
+            ex = SENGEN_EXCLUDE_VENUES
+        return (top3p >= cfg.get("top3p_min", SENGEN_TOP3P_MIN)
+                and int(venue) not in ex
+                and int(rno) >= cfg.get("min_rno", SENGEN_MIN_RNO))
     except Exception:
         return False
 
@@ -192,6 +287,8 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None, late=False):
 
     判定は既存ルール(is_sengen, update_results._picks_okと同一)を
     その時点のrace(picks/odds/no)とres(order/pay3t、任意)から再現する。
+    しきい値(top3p_min / min_odds / min_rno / exclude_venues)と注目の較正表は、レースの
+    世代 race["g"](買い目を作ったモデルの世代。無ければ1)で引く(sengen_cfg_for / badge_attention)。
     - resを渡した場合(結果確定後のフォールバック呼び出し): 的中買い目(c==order)は
       pay3t/100(確定実配当)を優先してオッズ判定する。
     - res無し(締切15分前チェックポイントの呼び出し): 取得済みt3オッズのみで判定する。
@@ -230,8 +327,13 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None, late=False):
             return pay / 100.0
         return t3.get(c)
 
+    # しきい値はレースの世代(race["g"]。無ければ1)で引く。引数は増やさない: 手動用の古い経路
+    # (update_live.py / fetch_results_only.py)や過去3日の取りこぼし回収(update_all._carryover)も、
+    # 渡されたレースの印だけで自動的に正しい世代の数字で判定される。
+    cfg = sengen_cfg_for(race)
+    min_odds = cfg.get("min_odds", SENGEN_MIN_ODDS)
     top3p = sengen_top3p(race.get("picks") or [])
-    take_quasi = is_sengen(top3p, vcode, rno)
+    take_quasi = is_sengen(top3p, vcode, rno, cfg)
     tk = 0
     take_below = []  # 竹: 実効オッズが下限3.1倍未満だったピックのeff_odds値
     take_missing = False  # 上位3点のどれかのオッズが取得できていない
@@ -245,7 +347,7 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None, late=False):
                 # レースが、確かめないまま厳選になっていた(2026-08-28 尼崎6R・10R)。
                 ok = False
                 take_missing = True
-            elif o < SENGEN_MIN_ODDS:
+            elif o < min_odds:
                 ok = False
                 take_below.append(o)
         tk = 1 if ok else 0
@@ -290,12 +392,14 @@ def stamp_plans(race, vcode, res=None, now_hhmm=None, late=False):
 
     if tk != 1 and "rs" not in race:
         if take_quasi and take_below:
+            # 文言の「3.1倍未満」は画面(index.html)が先頭一致で拾う。min_odds はどの世代も 3.1 なので
+            # 固定の文字列のまま。世代で min_odds を変える時は、この文言と画面の両方を直すこと。
             race["rs"] = f"3.1倍未満 {min(take_below):.1f}倍"
         elif take_quasi and take_missing:
             race["rs"] = "オッズ未取得"
         elif race.get("qc") and not take_quasi:
             # 確率ドリフトによる脱落。朝に「候補」として画面に出したレースが、
-            # 展示反映のライブ再予測でTOP3合計確率が閾値(0.36)を割り、打刻時には
+            # 展示反映のライブ再予測でTOP3合計確率が閾値(世代1は0.36)を割り、打刻時には
             # 候補ですらなくなった場合。理由を書かないと候補が痕跡なく消え、
             # 「都合の悪いレースを無かったことにした」のと見分けがつかない
             # (2026-09-12の多摩川8Rで発覚。10日で朝の候補9件中2件が該当していた)。

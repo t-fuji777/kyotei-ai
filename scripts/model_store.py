@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """学習済みモデルの配布と取得。標準ライブラリのみ(pip install 不要)。
 
-学習済みモデル(3本で約10MB)は毎朝の再学習でほぼ全体が変わるため、git に積むと履歴が
+学習済みモデル(形1は3本で約10MB、形2は1本で約4.5MB)は毎朝の再学習でほぼ全体が変わるため、git に積むと履歴が
 1日あたり約4MB増える。そこで毎日のモデルは GitHub Release(タグ model-live)の資産に置き、
 git には「どの資産が現行か」を示す小さな参照先だけを積む。
 
@@ -22,10 +22,21 @@ git には「どの資産が現行か」を示す小さな参照先だけを積�
 壊れたモデルファイルを LightGBM に渡すと、Python の例外にならずプロセスごと落ちることがある。
 そのため取得時の sha256 照合と valid_dir の検査を必ず先に通す。
 
+モデルの形(format): 配布物のファイル構成。meta.json と参照先の "format" で表し、無ければ 1。
+  形1 = model_win.txt / model_top2.txt / model_top3.txt + meta.json(二値3本。現行)
+  形2 = model.txt + meta.json(条件づけ分解ロジット1本。世代2)
+検査・資産の作成と展開・予備の更新は、その一式の形のファイル一覧(FORMATS)で動く。知らない形は使わない。
+予備(data/model)は、配布中のモデルと形が違っても --allow-format-change を付けない限り据え置く
+(予備は「古いコードへ巻き戻した時にも読める保険」なので、形を替えるのは人が決めた時だけ)。
+形を替える時は、もう一方の形のファイルを data/model から消す(残すと古いコードが「新しい meta +
+古い3本」を正常なモデルとみなして、古いモデルを新しい学習日として使ってしまう)。
+
 使い方:
   python scripts/model_store.py fetch [--force]   参照先の資産を取得(済みなら何もしない)。終了コード 0=成功 / 1=失敗
   python scripts/model_store.py publish           data/model_build を Release へ上げ、参照先を書く(gh と GH_TOKEN が必要)。0 / 1
-  python scripts/model_store.py freeze [--force]  予備(data/model)が30日以上前の学習なら更新する
+  python scripts/model_store.py freeze [--force] [--allow-format-change]
+                                                  予備(data/model)が30日以上前の学習なら更新する。形が違う元からの
+                                                  更新は --allow-format-change を付けた時だけ(付けなければ据え置き・終了コード 0)
   python scripts/model_store.py verify [--json]   配布の健全性を判定する(watchdog 用)。0=正常 / 1=警告 / 2=異常
   python scripts/model_store.py status            現在の状態を表示
 """
@@ -48,8 +59,10 @@ ROOT = Path(__file__).resolve().parent.parent
 JST = timezone(timedelta(hours=9))
 TAG = "model-live"
 DEFAULT_REPO = "t-fuji777/kyotei-ai"
-MODEL_FILES = ("model_win.txt", "model_top2.txt", "model_top3.txt")
-FILES = ("meta.json", "model_top2.txt", "model_top3.txt", "model_win.txt")   # tar に入れる順(固定)
+MODEL_FILES = ("model_win.txt", "model_top2.txt", "model_top3.txt")            # 形1のモデルファイル
+FILES = ("meta.json", "model_top2.txt", "model_top3.txt", "model_win.txt")   # 形1の tar に入れる順(固定。tar_files(1) と同じ)
+FORMATS = {1: MODEL_FILES, 2: ("model.txt",)}                                # 形ごとのモデルファイル(meta.json を除く)
+DEFAULT_FORMAT = 1                                                           # "format" が無い meta.json / 参照先の形
 ASSET_RE = re.compile(r"model-[0-9]{8}-[0-9]{4}-([0-9a-f]{12})\.tar\.gz")           # fullmatch で使う
 SHA_RE = re.compile(r"[0-9a-f]{64}")
 VID_RE = re.compile(r"[0-9a-f]{12}")
@@ -161,14 +174,64 @@ def _age_days(trained_at, now=None):
     return (now.astimezone(JST).date() - d).days
 
 
+# ---------------------------------------------------------------- 形(format)
+
+def model_format(obj):
+    """meta.json / 参照先(dict)の形。"format" が無ければ DEFAULT_FORMAT(=1。形の番号を書き始める前の
+    一式はすべて形1)。知らない番号・整数でない(bool・文字列・null)なら None(使わない)。"""
+    if not isinstance(obj, dict):
+        return None
+    f = obj.get("format", DEFAULT_FORMAT)
+    if isinstance(f, bool) or not isinstance(f, int) or f not in FORMATS:
+        return None
+    return f
+
+
+def model_files(fmt):
+    """その形のモデルファイル名(meta.json を除く)。知らない形は KeyError。"""
+    return FORMATS[fmt]
+
+
+def tar_files(fmt):
+    """その形の一式を tar に入れる順(meta.json + モデルファイル。名前順で固定。形1は FILES と同じ)。"""
+    return tuple(sorted(("meta.json",) + FORMATS[fmt]))
+
+
+def crlf_model_files(d, meta=None):
+    """改行が CRLF のモデルファイルの名前の一覧(その形の全モデルファイルを見る)。
+
+    CRLF のモデル(Windows の作業ツリーにある git の予備など)を LightGBM に渡すと、例外にならず
+    プロセスごと落ちるので、読む側(predict_today.load_models)は渡す前にこれで弾く。valid_dir は
+    CRLF でも通す(作業ツリーでの検査を通すため)ので、別の関数にしてある。meta を省けば d の
+    meta.json を読む。形が分からない・ファイルが読めない時は空(判定は valid_dir に任せる)。
+    """
+    try:
+        d = Path(d)
+        if meta is None:
+            meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+        fmt = model_format(meta)
+        if fmt is None:
+            return []
+        bad = []
+        for n in FORMATS[fmt]:
+            with open(d / n, "rb") as f:
+                if f.read(6) == b"tree\r\n":
+                    bad.append(n)
+        return bad
+    except Exception:
+        return []
+
+
 # ---------------------------------------------------------------- 検査と候補
 
 def valid_dir(d):
     """モデル一式が揃っていて壊れていなければ meta(dict) を返す。駄目なら None。例外は出さない。
 
-    meta.json に trained_at(YYYY-MM-DD で始まる文字列)があり、モデル3本がそれぞれ100KB以上、
-    先頭が 'tree'、末尾1MBに 'end of parameters' があること。Windows の作業ツリーでは改行が
-    CRLF になるので 'tree' + 改行 では判定しない。末尾の検査は書きかけ(途中で切れたファイル)を弾く。
+    meta.json に trained_at(YYYY-MM-DD で始まる文字列)があり、形(model_format。無ければ1)が分かり、
+    その形のモデルファイルがそれぞれ100KB以上、先頭が 'tree'、末尾1MBに 'end of parameters' があること。
+    Windows の作業ツリーでは改行が CRLF になるので 'tree' + 改行 では判定しない。末尾の検査は
+    書きかけ(途中で切れたファイル)を弾く。もう一方の形のファイルが残っていても検査には影響しない
+    (使うのは meta.json の形のファイルだけ)。戻り値の meta は meta.json の中身そのまま(format を補わない)。
     """
     try:
         d = Path(d)
@@ -178,7 +241,10 @@ def valid_dir(d):
         ta = meta.get("trained_at")
         if not isinstance(ta, str) or not DATE_RE.match(ta):
             return None
-        for n in MODEL_FILES:
+        fmt = model_format(meta)
+        if fmt is None:
+            return None
+        for n in FORMATS[fmt]:
             p = d / n
             size = p.stat().st_size
             if size < MIN_MODEL_BYTES:
@@ -210,7 +276,10 @@ def _pointer_problem(ptr):
         return "size が不正"
     if not isinstance(ta, str) or not DATE_RE.match(ta):
         return "trained_at が不正"
-    if (not isinstance(files, dict) or set(files) != set(FILES)
+    fmt = model_format(ptr)                              # "format" が無ければ形1(今までの参照先)
+    if fmt is None:
+        return "format が不正"
+    if (not isinstance(files, dict) or set(files) != set(tar_files(fmt))
             or any(not isinstance(h, str) or not SHA_RE.fullmatch(h) for h in files.values())):
         return "files が不正"
     return None
@@ -271,7 +340,7 @@ def candidates():
 # ---------------------------------------------------------------- 資産(tar.gz)の作成と展開
 
 def build_tarball(src, out_dir):
-    """4ファイルの決定的な tar.gz を作る(同じ入力なら同じバイト列)。(path, sha256, size) を返す。"""
+    """その形の一式(tar_files)の決定的な tar.gz を作る(同じ入力なら同じバイト列)。(path, sha256, size) を返す。"""
     src, out_dir = Path(src), Path(out_dir)
     meta = valid_dir(src)
     if not meta:
@@ -282,7 +351,7 @@ def build_tarball(src, out_dir):
     with open(tmp, "wb") as raw:
         with gzip.GzipFile(filename="", fileobj=raw, mode="wb", compresslevel=6, mtime=0) as gz:
             with tarfile.open(fileobj=gz, mode="w", format=tarfile.GNU_FORMAT) as tf:
-                for n in FILES:
+                for n in tar_files(model_format(meta)):
                     ti = tarfile.TarInfo(n)
                     ti.size = (src / n).stat().st_size
                     ti.mtime, ti.mode, ti.uid, ti.gid, ti.uname, ti.gname = 0, 0o644, 0, 0, "", ""
@@ -303,16 +372,22 @@ def make_pointer(src, tar_name, sha, size):
     if not meta:
         raise RuntimeError("モデルが揃っていないか壊れている: %s" % src)
     period = meta.get("period")
-    return {"v": 1, "tag": TAG, "asset": tar_name, "sha256": sha, "size": size,
+    fmt = model_format(meta)
+    return {"v": 1, "format": fmt, "tag": TAG, "asset": tar_name, "sha256": sha, "size": size,
             "trained_at": meta["trained_at"],
             "period_end": period[1] if isinstance(period, list) and len(period) == 2 else None,
-            "files": {n: _sha256(Path(src) / n) for n in FILES}}
+            "files": {n: _sha256(Path(src) / n) for n in tar_files(fmt)}}
 
 
 def _extract_verified(tar_path, ptr, out_dir):
-    """size と sha256 を照合してから、決めた4ファイルだけを out_dir へ取り出し、中身も照合する。
+    """size と sha256 を照合してから、参照先の形の一式(files のキー)だけを out_dir へ取り出し、中身も照合する。
     どこかが合わなければ例外。extractall は使わない(想定外のパスへ書かせない)。"""
     tar_path, out_dir = Path(tar_path), Path(out_dir)
+    fmt = model_format(ptr)
+    expected = set(tar_files(fmt)) if fmt is not None else set()
+    if not isinstance(ptr.get("files"), dict) or set(ptr["files"]) != expected:
+        # read_pointer を通った参照先なら起きない。検証前の dict を渡された時の歯止め
+        raise RuntimeError("参照先の files が形と合わない(format=%r)" % ptr.get("format"))
     size = tar_path.stat().st_size
     if size != ptr["size"]:
         raise RuntimeError("size 不一致(実際 %d / 参照先 %d)" % (size, ptr["size"]))
@@ -323,17 +398,19 @@ def _extract_verified(tar_path, ptr, out_dir):
     seen = set()
     with tarfile.open(tar_path, "r:gz") as tf:
         for m in tf:
-            if not m.isreg() or m.name not in FILES or m.name in seen or m.size > MAX_BYTES:
+            if not m.isreg() or m.name not in expected or m.name in seen or m.size > MAX_BYTES:
                 raise RuntimeError("想定外の中身が入っている: %r" % m.name)
             seen.add(m.name)
             src = tf.extractfile(m)
             with open(out_dir / m.name, "wb") as dst:
                 shutil.copyfileobj(src, dst)
-    if seen != set(FILES):
-        raise RuntimeError("ファイルが足りない: %s" % sorted(set(FILES) - seen))
+    if seen != expected:
+        raise RuntimeError("ファイルが足りない: %s" % sorted(expected - seen))
     meta = valid_dir(out_dir)
     if not meta:
         raise RuntimeError("取り出したモデルが検査を通らない")
+    if model_format(meta) != fmt:
+        raise RuntimeError("取り出したモデルの形が参照先と違う(%s / %s)" % (model_format(meta), fmt))
     if meta["trained_at"] != ptr["trained_at"]:
         raise RuntimeError("trained_at が参照先と違う(%s / %s)" % (meta["trained_at"], ptr["trained_at"]))
     for n, h in ptr["files"].items():
@@ -343,7 +420,7 @@ def _extract_verified(tar_path, ptr, out_dir):
 
 
 def _matches_pointer(d, ptr):
-    """d のモデル一式が参照先と同じ中身か(検査を通り、4ファイルの sha256 が一致)。例外は出さない。"""
+    """d のモデル一式が参照先と同じ中身か(検査を通り、参照先の files の全ファイルの sha256 が一致)。例外は出さない。"""
     try:
         d = Path(d)
         if not valid_dir(d):
@@ -613,40 +690,65 @@ def publish():
 
 # ---------------------------------------------------------------- 予備の更新
 
-def freeze(force=False, now=None):
+def freeze(force=False, now=None, allow_format_change=False):
     """予備(data/model)を更新する。(更新したか, 説明) を返す。元が無い時は例外。
 
     元は data/model_build(無ければ data/model_live の現行)。予備が壊れている、予備の学習が
     FREEZE_DAYS 日以上前、または force の時だけ複写する。
+
+    元と予備で形が違う時は、allow_format_change が無い限り複写しない(据え置き。force でも同じ。
+    失敗ではなく (False, 理由) を返し、呼び出し元が1行ログに出す)。予備は古いコードへ巻き戻した時にも
+    読める保険なので、形を替えるのは人が明示した時だけ。30日の自動更新でも黙って置き換えない。
+    予備が壊れている(valid_dir が None)時は比べる形が無いので、元の形で作り直す(壊れた予備は
+    保険にならず、verify の M3 が直るまで異常を出し続けるため)。
+    形を替える複写では、もう一方の形のファイルを data/model から消す。
     """
     src = _p("build") if valid_dir(_p("build")) else live_current()
     sm = valid_dir(src) if src is not None else None
     if not sm:
         raise RuntimeError("予備の元になるモデルが無い(data/model_build も data/model_live も使えない)")
+    sfmt = model_format(sm)
     frozen = _p("frozen")
     fm = valid_dir(frozen)
+    ffmt = model_format(fm) if fm else None
     if fm and not force:
         age = _age_days(fm["trained_at"], now)
         if age is not None and age < FREEZE_DAYS:
             return False, "予備は%d日前の学習(%d日未満)。更新しない" % (age, FREEZE_DAYS)
         if sm["trained_at"] <= fm["trained_at"]:
             return False, "元のモデルが予備より新しくない。更新しない"
+    if fm and ffmt != sfmt and not allow_format_change:
+        return False, ("予備は形%dのまま据え置く(元のモデルは形%d・trained_at=%s)。"
+                       "形を替える更新は --allow-format-change を付けた時だけ行う" % (ffmt, sfmt, sm["trained_at"]))
     frozen.mkdir(parents=True, exist_ok=True)
-    order = MODEL_FILES + ("meta.json",)                  # meta.json を最後に置き換える
+    order = FORMATS[sfmt] + ("meta.json",)                # meta.json を最後に置き換える
+    others = [n for f, names in FORMATS.items() if f != sfmt for n in names if (frozen / n).exists()]
     # 一時ファイルは無視対象の data/model_live の下に作る(同じファイルシステムなので置き換えは
     # 原子的)。git 管理下の data/model に作ると、途中で止められた時に残骸がコミットされ得る。
     # 置き換えの途中で止まると新旧のモデルが混ざるが、meta.json は古いままなので、次の freeze が
     # やり直す(各モデルは単体では正常で、予測は止まらない)。
+    # もう一方の形のファイルは meta.json を置き換える前に消す。途中で止まった時に「新しい meta +
+    # 古い形のファイル」(古いコードが正常とみなす組み合わせ)を残さないため。消した後・meta の前で
+    # 止まれば、どの形でも検査を通らない(壊れている)ので、次の freeze が作り直す。
     stage = _p("live") / (".freeze-%d" % os.getpid())
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(parents=True)
     try:
         for n in order:
             shutil.copyfile(Path(src) / n, stage / n)
-        for n in order:
+        for n in order[:-1]:
             os.replace(stage / n, frozen / n)
+        for n in others:
+            try:
+                (frozen / n).unlink()
+            except FileNotFoundError:
+                pass
+        os.replace(stage / "meta.json", frozen / "meta.json")
     finally:
         shutil.rmtree(stage, ignore_errors=True)
+    if ffmt is not None and ffmt != sfmt:
+        return True, "予備を更新した(trained_at=%s)。形%d→形%d(%s を消した)" % (
+            sm["trained_at"], ffmt, sfmt, ", ".join(others) or "消すものなし")
     return True, "予備を更新した(trained_at=%s)" % sm["trained_at"]
 
 
@@ -658,9 +760,11 @@ def status():
     act = c[0] if c else None
     return {"active": act[2] if act else None,
             "active_trained_at": act[1]["trained_at"] if act else None,
-            "candidates": [{"kind": k, "trained_at": m["trained_at"]} for _d, m, k in c],
+            "active_format": model_format(act[1]) if act else None,
+            "candidates": [{"kind": k, "trained_at": m["trained_at"], "format": model_format(m)} for _d, m, k in c],
             "pointer_asset": (ptr or {}).get("asset"),
             "pointer_trained_at": (ptr or {}).get("trained_at"),
+            "pointer_format": model_format(ptr) if ptr else None,
             "pointer_problem": problem,
             "in_sync": bool(act) and problem is None and (
                 ptr is None or act[1]["trained_at"] >= ptr["trained_at"]),
@@ -719,19 +823,35 @@ def _verify(now, thresholds):
         crit.append("M2 使えるモデルが%d日前の学習のまま(trained_at=%s)" % (age, effective))
     elif age is not None and age >= 1 and now.hour >= 12:
         warn.append("M4 本日学習のモデルが未配布(trained_at=%s)" % effective)
+    # 予備が配布中のモデルと形が違う間、freeze は予備を据え置く(--allow-format-change が無い限り)。
+    # その予備が古いのは「定期更新が止まっている」のではなく意図した据え置きなので、M5 にはしない。
+    # 据え置き中であることは notes と frozen_held_format で出す(watchdog の判定には影響しない)。
+    ffmt = model_format(fm) if fm else None
+    pfmt = model_format(ptr) if ptr else None
+    held = ffmt is not None and pfmt is not None and ffmt != pfmt
+    notes = []
+    if held:
+        notes.append("予備モデル(形%d・trained_at=%s)は配布中のモデル(形%d)と形が違うので据え置き中。"
+                     "置き換えるなら freeze --allow-format-change" % (ffmt, fm["trained_at"], pfmt))
     fage = _age_days(fm["trained_at"], now) if fm else None
     if fage is not None and fage >= frozen_warn:
-        warn.append("M5 予備モデルが%d日前の学習のまま(定期更新が止まっている)" % fage)
+        if held:
+            notes.append("M5 相当: 予備モデルは%d日前の学習だが、形の違いで据え置き中なので警告にしない" % fage)
+        else:
+            warn.append("M5 予備モデルが%d日前の学習のまま(定期更新が止まっている)" % fage)
     return {"level": "critical" if crit else ("warning" if warn else "ok"),
-            "criticals": crit, "warnings": warn,
+            "criticals": crit, "warnings": warn, "notes": notes,
             # M2(学習が止まっている)だけの時は false。毎朝の daily 自体が失敗し続けている状態で、
             # 監視から起動を重ねても直らない(当日の予測が無ければ、公開JSON側の判定が起動する)。
             "needs_republish": republish,
             "effective_trained_at": effective,
             "pointer_asset": (ptr or {}).get("asset"),
             "pointer_trained_at": (ptr or {}).get("trained_at"),
+            "pointer_format": pfmt,
             "asset_ok": asset_ok,
             "frozen_trained_at": fm["trained_at"] if fm else None,
+            "frozen_format": ffmt,
+            "frozen_held_format": held,
             "checked_at": now.strftime("%Y-%m-%d %H:%M JST")}
 
 
@@ -753,6 +873,9 @@ def main(argv=None):
     ap.add_argument("cmd", choices=["fetch", "publish", "freeze", "verify", "status"])
     ap.add_argument("--force", action="store_true",
                     help="fetch: 直前の失敗による再試行待ちを飛ばす / freeze: 日数に関わらず更新する")
+    ap.add_argument("--allow-format-change", action="store_true",
+                    help="freeze: 予備と形が違うモデルでも予備を置き換える(もう一方の形のファイルは消す)。"
+                         "付けなければ形が違う時は据え置く(失敗ではない)")
     ap.add_argument("--json", action="store_true", help="verify: JSON で出力する")
     a = ap.parse_args(argv)
     if a.cmd == "fetch":
@@ -771,8 +894,8 @@ def main(argv=None):
             return 1
     if a.cmd == "freeze":
         try:
-            _changed, msg = freeze(force=a.force)
-            _say("freeze: %s" % msg)
+            _changed, msg = freeze(force=a.force, allow_format_change=a.allow_format_change)
+            _say("freeze: %s" % msg)                      # 据え置き(形の違い)もここで1行出す
             return 0
         except Exception as e:
             _warn("freeze に失敗: %s" % _err(e))
@@ -797,6 +920,8 @@ def main(argv=None):
                 _out("  critical: " + c)
             for w in res["warnings"]:
                 _out("  warning : " + w)
+            for n in res.get("notes") or []:
+                _out("  note    : " + n)
         return {"ok": 0, "warning": 1}.get(res["level"], 2)
     _out(json.dumps(status(), ensure_ascii=False, indent=2))
     return 0

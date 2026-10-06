@@ -16,8 +16,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import stamp_plans, badge_attention, sengen_top3p, is_sengen
-from fetch_result import fetch_result, fetch_before_html, parse_before
+from common import stamp_plans, badge_attention, sengen_top3p, is_sengen, sengen_cfg_for, SENGEN_CFG_BY_GEN
+from fetch_result import fetch_result, fetch_before_html, parse_before, ex_complete
 from fetch_odds import fetch_odds, fetch_racename, fetch_t3
 
 ROOT = Path(__file__).parent.parent
@@ -34,9 +34,17 @@ ODDS_MAX_PER_RUN = 8   # keep small so the whole run finishes in time
 MORNING_ODDS_MAX_PER_RUN = 12       # lightweight t3-only sweep, far-out races
 MORNING_ODDS_FROM_HHMM = (7, 45)    # advance (zen-uri) odds appear ~7:45 JST
 SENGEN_REFETCH_MIN = 10             # re-fetch sengen/premier candidates within N min of deadline (final odds check)
-CAND_TOP4P_MIN = 0.36               # top-4 cumulative prob threshold for the refetch heuristic; sengen
-                                     # (top3p>=0.36) candidates are a subset of top4p>=0.36 candidates, so
-                                     # this single top4p check covers both the sengen and premier tiers
+# 締切10分前の本オッズ取り直しの対象(top4p のしきい値)。世代1は 0.36: 厳選(top3p>=0.36)の候補は
+# top4p>=0.36 の部分集合なので、この1つで竹・松(終売)の両方を覆っていた。
+# しきい値はレースの世代(r["g"]。無ければ1)で引く(_cand_top4p_min)。世代2は確率の目盛りが上に
+# 伸びるので、0.36 のままだと対象が1日 12件 → 32件に増える(prob_consumers.md 2章(a))。
+# この定数名は世代1の値として残す(以前からの名前。判定には _cand_top4p_min を使う)。
+CAND_TOP4P_MIN = SENGEN_CFG_BY_GEN[1]["cand_top4p_min"]
+
+
+def _cand_top4p_min(r) -> float:
+    """取り直しの対象にする top4p のしきい値を、レースの世代で引く。"""
+    return sengen_cfg_for(r).get("cand_top4p_min", CAND_TOP4P_MIN)
 
 
 def _mins_to_deadline(now, dl):
@@ -128,9 +136,10 @@ def do_stamps(pred, now, skip=None, only=None, refresh=None) -> int:
             # レースを「候補」として表示するため、一度でも確率条件を満たしたレースは
             # 公開済みとして記録し、後で条件を外れたら見送り理由を書けるようにする
             # (書かないと候補が痕跡なく消える。2026-09-12発覚)。
+            # しきい値はレースの世代(r["g"]。無ければ1)で引く。
             if "qc" not in r:
                 _p3 = sengen_top3p(r.get("picks") or [])
-                if is_sengen(_p3, v["code"], r["no"]):
+                if is_sengen(_p3, v["code"], r["no"], sengen_cfg_for(r)):
                     r["qc"] = 1
                     r["qp"] = round(_p3, 4)
             mins = _mins_to_deadline(now, r.get("deadline"))
@@ -148,7 +157,7 @@ def do_stamps(pred, now, skip=None, only=None, refresh=None) -> int:
             # 取り直しの失敗で打刻を止めない(保存済みのオッズで判定する)。
             if refresh is not None and mins >= 0:
                 try:
-                    if is_sengen(sengen_top3p(r.get("picks") or []), v["code"], r["no"]):
+                    if is_sengen(sengen_top3p(r.get("picks") or []), v["code"], r["no"], sengen_cfg_for(r)):
                         refresh(v, r)
                 except Exception as e:
                     print(f"  judge-odds {v.get('code')}-{r.get('no')}R: refresh failed ({type(e).__name__})", flush=True)
@@ -404,6 +413,7 @@ def do_odds(pred, now, ymd, tick=None) -> int:
             if r.get("result") and o.get("t3") and not o.get("prov"):
                 continue
             _p4 = sum((pk.get("p") or 0) for pk in (r.get("picks") or [])[:4])
+            _p4_min = _cand_top4p_min(r)   # レースの世代のしきい値(世代1 = 0.36)
             if o.get("t3") and not o.get("prov"):
                 m0 = _mins_to_deadline(now, r.get("deadline"))
                 if m0 is None:
@@ -411,10 +421,10 @@ def do_odds(pred, now, ymd, tick=None) -> int:
                 # real odds stored and deadline still ahead: normally skip, but
                 # re-fetch sengen/premier candidates in the final minutes so the
                 # final odds-band judgment runs on near-final odds rather than the
-                # ~60-min value. top4p>=0.36 covers both tiers (see CAND_TOP4P_MIN).
+                # ~60-min value. top4p>=cand_top4p_min covers both tiers (see CAND_TOP4P_MIN).
                 # races 1-4 are excluded from both tiers (5R以降のみ対象), so they
                 # never qualify for this final-minutes re-fetch either.
-                if m0 >= 0 and not (_p4 >= CAND_TOP4P_MIN and r["no"] >= 5 and m0 <= SENGEN_REFETCH_MIN):
+                if m0 >= 0 and not (_p4 >= _p4_min and r["no"] >= 5 and m0 <= SENGEN_REFETCH_MIN):
                     continue
             mins = _mins_to_deadline(now, r.get("deadline"))
             if mins is None:
@@ -422,7 +432,7 @@ def do_odds(pred, now, ymd, tick=None) -> int:
             # too early: more than ODDS_BEFORE_MAX minutes before deadline
             if mins > ODDS_BEFORE_MAX:
                 continue
-            targets.append((_p4 < CAND_TOP4P_MIN, mins, v["code"], r["no"]))
+            targets.append((_p4 < _p4_min, mins, v["code"], r["no"]))
     if not targets:
         print("no races need odds")
         return 0
@@ -602,7 +612,9 @@ def _fill_st_ex(r, ymd, vcode) -> bool:
     if not stx:
         return False
     r["st_ex"] = {str(k): val for k, val in stx.items()}
-    if not r.get("ex") and len(bi.get("ex", {})) == 6:
+    # 展示タイムの保存条件は predict_today.predict_live と同じ(欠場の印の艇を除く全艇にあれば保存。
+    # fetch_result.ABSENT_RULE が False なら今までどおり6艇そろいだけ)。取れた艇の分だけ保存する
+    if not r.get("ex") and ex_complete(bi):
         r["ex"] = bi["ex"]
     if bi.get("weather"):
         r["weather"] = bi["weather"]

@@ -80,15 +80,56 @@ def fetch_result(ymd: str, jcd: int, rno: int) -> dict | None:
 
 BEFORE_URL = "https://www.boatrace.jp/owpc/pc/race/beforeinfo?rno={rno}&jcd={jcd:02d}&hd={ymd}"
 
+# 欠場艇の規則(設計 4.5)。直前情報のページで欠場艇の行(tbody)には is-miss が付き、展示タイムが空になる
+# (2026-10-03 場18 11R 2号艇、2026-10-01 場16 12R 1号艇で確認)。True なら、欠場の印の艇を除く全艇に
+# 展示タイムがあれば直前の再予測に進み、欠場艇は買い目から外す(世代2は absent_mask、世代1は強さを 1e-9)。
+# False にすると今までどおり「展示タイムが6艇そろった時だけ」に戻る(印は読むが使わない)。
+# 朝の予測には関係しない(番組表に欠場の印は無い)。
+ABSENT_RULE = True
+# 展示タイムが出ている艇がこれより少なければ再予測しない(学習データの欠場艇ありレースは4艇以上に展示あり。
+# data_gaps.md 4-4。ページがまだ埋まりきっていない途中の状態を欠場と取り違えないための下限)
+MIN_EX_BOATS = 4
+
 
 def fetch_before_html(ymd, jcd, rno):
     raw = http_get(BEFORE_URL.format(rno=rno, jcd=jcd, ymd=ymd), timeout=20, retries=2)
     return raw.decode("utf-8", errors="replace")
 
 
+def absent_lanes(bi) -> list:
+    """parse_before の戻り値から欠場艇の枠(昇順)。ABSENT_RULE が False なら常に空。"""
+    if not ABSENT_RULE:
+        return []
+    try:
+        return sorted(int(x) for x in (bi.get("absent") or []))
+    except Exception:
+        return []
+
+
+def ex_complete(bi) -> bool:
+    """直前の再予測(と r["ex"] の保存)に進んでよい展示タイムのそろい方か。
+    欠場の印(is-miss)が付いた艇を除く全艇に展示タイムがあり、かつ MIN_EX_BOATS 艇以上に展示があること。
+    ABSENT_RULE が False なら今までどおり6艇そろいだけを通す。predict_today.predict_live と
+    update_all の展示の保存が同じ条件を使う。"""
+    try:
+        ex = bi.get("ex") or {}
+        absent = set(absent_lanes(bi))
+        if len(ex) < MIN_EX_BOATS:
+            return False
+        return all((lane in ex) for lane in range(1, 7) if lane not in absent)
+    except Exception:
+        return False
+
+
+# 欠場の印: class 属性(" か ' で囲む)の中に単語として is-miss がある。\b で前後を区切るので is-missing や
+# is-miss2 には合わず、"is-miss" "is-fs is-miss" "is-miss is-fs" には合う(data_gaps.md 4章の実例の形)
+_RE_MISS = re.compile(r"""class=(["'])[^"']*(?<![\w-])is-miss(?![\w-])[^"']*\1""")
+
+
 def parse_before(html):
-    """beforeinfo HTML -> {"ex": {lane: tenji_time}, "wind": int(m), "wave": int(cm)}.
-    展示タイム=各艦tbody内の >X.XX< (体重·チルト·STと区別可)。"""
+    """beforeinfo HTML -> {"ex": {lane: tenji_time}, "st": {lane: 展示ST}, "wind": int(m), "wave": int(cm),
+    "weather": {...} | None, "absent": [欠場艇の枠(is-miss の付いた tbody)]}.
+    展示タイム=各艦tbody内の >X.XX< (体重·チルト·STと区別可)。欠場艇は展示タイムが空なので ex に入らない。"""
     h = re.sub(r"\s+", " ", html)
 
     def wnum(title):
@@ -96,10 +137,15 @@ def parse_before(html):
         return int(m.group(1)) if m else None
 
     ex = {}
+    absent = []
     for tb in re.findall(r'<tbody[\s\S]*?</tbody>', h):
         ml = re.search(r'is-boatColor(\d)', tb)
         if not ml:
             continue
+        # 欠場の印は class 属性の中の単語 is-miss だけに合わせる(部分一致だと is-missing のような
+        # 別名の class が付いた艇まで欠場と誤判定し、出走する艇を買い目から外してしまう)
+        if _RE_MISS.search(tb) and int(ml.group(1)) not in absent:
+            absent.append(int(ml.group(1)))
         me = re.search(r'>(\d\.\d{2})<', tb)
         if me:
             ex[int(ml.group(1))] = float(me.group(1))
@@ -118,7 +164,8 @@ def parse_before(html):
     weather = {"temp": wflt("気温"), "sky": sky_m.group(1).strip() if sky_m else None, "wspd": wnum("風速"), "wdir": int(wdir_m.group(1)) if wdir_m else None, "wtemp": wflt("水温"), "wave": wnum("波高")}
     if all(v is None for v in weather.values()):
         weather = None
-    return {"ex": ex, "st": st, "wind": wnum("風速"), "wave": wnum("波高"), "weather": weather}
+    return {"ex": ex, "st": st, "wind": wnum("風速"), "wave": wnum("波高"), "weather": weather,
+            "absent": sorted(absent)}
 
 
 def _probe_before(ymd, jcd, rno):

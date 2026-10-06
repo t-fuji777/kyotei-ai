@@ -14,7 +14,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 from build_dataset import build_day, save_year
 from common import sengen_counts, sengen_picks, SENGEN_STAMP_FROM  # noqa: F401 (実績の数え方。recompute_sengen.py と共用)
-from common import (is_sengen, sengen_top3p, SENGEN_MIN_ODDS,
+from common import (is_sengen, sengen_top3p, SENGEN_MIN_ODDS, sengen_cfg_for,
                      is_matsu, matsu_top4p, MATSU_MIN_ODDS, MATSU_MAX_ODDS)
 
 ROOT = Path(__file__).parent.parent
@@ -28,10 +28,11 @@ def _atomic_write_text(path: Path, text: str):
     os.replace(tmp, path)
 
 
-def _picks_ok(r, act=None, pay=None):
+def _picks_ok(r, act=None, pay=None, min_odds=SENGEN_MIN_ODDS):
     """価値フィルタ: 上位3点にオッズ3.1倍未満が含まれれば厳選対象外(300円ボックスで
     的中しても損になるため)。的中買い目(c==act)は暫定オッズが最終に更新されず残る
-    ことがあるため、確定した実配当(pay/100)を優先して判定する(UI pickOdds と同一)。"""
+    ことがあるため、確定した実配当(pay/100)を優先して判定する(UI pickOdds と同一)。
+    min_odds は世代のしきい値(sengen_cfg_for(r)["min_odds"])。既定は世代1の 3.1。"""
     t3 = (r.get("odds") or {}).get("t3") or {}
     for p in r["picks"][:3]:
         c = p["c"]
@@ -39,7 +40,7 @@ def _picks_ok(r, act=None, pay=None):
             o = pay / 100.0
         else:
             o = t3.get(c)
-        if o is not None and o < SENGEN_MIN_ODDS:
+        if o is not None and o < min_odds:
             return False
     return True
 
@@ -62,6 +63,16 @@ def _matsu_ok(r, act=None, pay=None):
         if o_min < MATSU_MIN_ODDS:
             return False
     return True
+
+
+def _model_gen(pred: dict) -> int:
+    """当日ファイルの model_gen(朝の予測を作ったモデルの世代)。無い・読めない過去の日は1。
+    recompute_sengen.py と同じ読み方。"""
+    try:
+        g = (pred or {}).get("model_gen")
+        return int(g) if g is not None else 1
+    except Exception:
+        return 1
 
 
 def evaluate(ymd: str, day_df: pd.DataFrame):
@@ -119,7 +130,9 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
         pay = g_all["pay3t_amount"].dropna()
         pays[key] = float(pay.iloc[0]) if len(pay) else 0.0
 
-    day = {"date": ymd, "races": 0, "win_hit": 0,
+    # gen: その日の朝の予測を作ったモデルの世代(当日ファイルの model_gen。無い過去の日は1)。
+    # 画面が世代ごとに足し分けるための印で、total の足し算(main の t)には入れない。
+    day = {"date": ymd, "gen": _model_gen(pred), "races": 0, "win_hit": 0,
            "top1_hit": 0, "top5_hit": 0, "top6_hit": 0, "top10_hit": 0,
            "stake5": 0, "return5": 0, "stake6": 0, "return6": 0,
            "fuku_hit": 0, "sen_n": 0, "sen_hit": 0,
@@ -169,9 +182,12 @@ def evaluate(ymd: str, day_df: pd.DataFrame):
             elif "tk" in rres:
                 is_tk = bool(rres["tk"])
             else:
-                # 打刻の無いレースを後から条件に当てはめて数えるのは、打刻の方式を始める前の日だけ
+                # 打刻の無いレースを後から条件に当てはめて数えるのは、打刻の方式を始める前の日だけ。
+                # しきい値はレースの世代(r["g"]。無ければ1 = 0.36)で引く。
+                _cfg = sengen_cfg_for(r)
                 is_tk = (str(ymd) < SENGEN_STAMP_FROM
-                         and is_sengen(top3p, v["code"], r["no"]) and _picks_ok(r, act, _pay))
+                         and is_sengen(top3p, v["code"], r["no"], _cfg)
+                         and _picks_ok(r, act, _pay, _cfg.get("min_odds", SENGEN_MIN_ODDS)))
             if is_tk:
                 day["sen_n"] += 1
                 day["sen_pred_sum"] += top3p

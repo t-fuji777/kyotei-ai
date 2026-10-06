@@ -120,11 +120,14 @@ def test_unstamped_races_count_only_before_the_stamping_era():
     r = race(5, P, odds={"t3": {c: 5.0 for c in P}})
     old = evaluate([r], {5: ("1-2-3", 1230)}, ymd="20260803")
     assert old["sen_n"] == 1 and old["sen_hit"] == 1 and old["sen_ret"] == 1230
+    # 世代の印(g)も model_gen も無い = 世代1 = 0.36(p 0.15 x 3 = 0.45 が厳選になる)。日の行の gen も 1
+    assert old["gen"] == 1
     for ymd in ("20260804", "20261001"):
         new = evaluate([r], {5: ("1-2-3", 1230)}, ymd=ymd)
         assert new["sen_n"] == 0 and new["sen_hit"] == 0 and new["races"] == 1, (ymd, new["sen_n"])
     pred = with_results([r], {5: ("1-2-3", 1230)})
     assert RS.recompute_day(pred, "20260803")["sen_n"] == 1 and RS.recompute_day(pred, "20261001")["sen_n"] == 0
+    assert RS.recompute_day(pred, "20260803")["gen"] == 1
 
 
 if __name__ == "__main__":

@@ -2,7 +2,10 @@
 """scripts/model_store.py(モデルの取得・検証・配布・予備更新)を、通信なしで確かめる。
 
 Release の代わりに一時ディレクトリを置き、MODEL_BASE_URL(file://)で取得先を差し替える。
-gh コマンドは偽物(FakeGh)に差し替える。モデルは検査を通る形の合成ファイルを使う。
+gh コマンドは偽物(FakeGh)に差し替える。モデルは検査を通る形の合成ファイルを使う
+(形1 = model_win/top2/top3 の3本: make_model、形2 = model.txt 1本: make_model2)。
+形1の確認は今までどおり(世代1の動きを変えないことの見張り)。形2の節では、取得・検証・展開・
+参照先・予備の据え置き(形が違えば --allow-format-change が無い限り複写しない)・形の変更を確かめる。
 実物のモデルが要る項目だけは、作業ツリーの data/model(Windows では改行が CRLF になり、
 LightGBM に渡すとプロセスごと落ちる)ではなく、git show HEAD:data/model/<名前> で取り出した
 LF 版を使う(git や lightgbm が無い環境では飛ばす)。
@@ -991,14 +994,384 @@ def test_publish_prunes_old_assets_but_failure_is_only_a_warning():
     assert quiet(ms.main, ["publish"])[0] == 0
 
 
+# ------------------------------------------------------------------ 形2(model.txt 1本 + meta.json)
+
+FILES2 = ("meta.json", "model.txt")                 # 形2の tar の順(名前順)
+
+
+def make_model2(d, trained_at, tag=""):
+    """形2の合成モデル。model.txt は形1と同じ検査(100KB超・先頭 tree・末尾 end of parameters)を通る。"""
+    d = Path(d)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "model.txt").write_bytes(body(tag + "model.txt"))
+    (d / "meta.json").write_text(json.dumps(
+        {"format": 2, "gen": 2, "trained_at": trained_at, "period": ["20210611", "20261001"]}), encoding="utf-8")
+    return d
+
+
+def fake_publish2(rel, trained_at, tag=""):
+    """形2の配布(gh なし): build → tar.gz → 偽Release → 参照先。"""
+    make_model2(ms._p("build"), trained_at, tag)
+    stage = ms.ROOT / "_stage"
+    tar, sha, size = ms.build_tarball(ms._p("build"), stage)
+    ptr = ms.make_pointer(ms._p("build"), tar.name, sha, size)
+    shutil.copyfile(tar, rel / tar.name)
+    ms._atomic_write(ms._p("pointer"), json.dumps(ptr, indent=1) + "\n")
+    shutil.rmtree(stage)
+    return ptr
+
+
+def names_in(d):
+    return sorted(p.name for p in Path(d).iterdir() if p.is_file())
+
+
+def test_format_helpers():
+    """形の表と、meta / 参照先から形を読む決まり(無ければ1、知らない・整数でないなら None)。"""
+    assert ms.FORMATS == {1: ms.MODEL_FILES, 2: ("model.txt",)} and ms.DEFAULT_FORMAT == 1
+    assert ms.tar_files(1) == ms.FILES and ms.tar_files(2) == FILES2         # 形1は今までの FILES と同じ順
+    assert ms.model_files(1) == ms.MODEL_FILES and ms.model_files(2) == ("model.txt",)
+    assert ms.model_format({}) == 1 and ms.model_format({"trained_at": "x"}) == 1   # 番号なし = 形1
+    assert ms.model_format({"format": 1}) == 1 and ms.model_format({"format": 2}) == 2
+    for bad in ({"format": 3}, {"format": 0}, {"format": "2"}, {"format": 2.0}, {"format": True},
+                {"format": None}, {"format": [2]}, None, [], "2"):
+        assert ms.model_format(bad) is None, bad
+
+
+def test_format2_valid_dir_and_crlf():
+    root, rel = sandbox()
+    d = make_model2(root / "m2", "2026-10-03 06:12 JST", "a")
+    m = ms.valid_dir(d)
+    assert m and m["format"] == 2 and m["trained_at"] == "2026-10-03 06:12 JST"
+    assert names_in(d) == list(FILES2)
+    # 形2の meta なのに model.txt が無い(形1の3本があっても駄目)
+    (d / "model.txt").unlink()
+    assert ms.valid_dir(d) is None
+    for n in ms.MODEL_FILES:
+        (d / n).write_bytes(body(n))
+    assert ms.valid_dir(d) is None                                       # meta が形2なら見るのは model.txt だけ
+    # 形2のファイルがそろえば、形1のファイルが残っていても検査は通る(消すのは freeze の役目)
+    (d / "model.txt").write_bytes(body("a"))
+    assert ms.valid_dir(d)["format"] == 2
+    # 形の番号なし(=形1)の meta に model.txt だけ → 使わない
+    (d / "meta.json").write_text(json.dumps({"trained_at": "2026-10-03 06:12 JST"}), encoding="utf-8")
+    for n in ms.MODEL_FILES:
+        (d / n).unlink()
+    assert ms.valid_dir(d) is None
+    # 知らない形は、両方の形のファイルがあっても使わない
+    for n in ms.MODEL_FILES:
+        (d / n).write_bytes(body(n))
+    for meta in ({"format": 3}, {"format": "2"}, {"format": True}, {"format": None}):
+        (d / "meta.json").write_text(json.dumps(dict(meta, trained_at="2026-10-03 06:12 JST")), encoding="utf-8")
+        assert ms.valid_dir(d) is None, meta
+    # model.txt の中身の検査は形1と同じ(途中で切れた・小さい・先頭が違う)
+    make_model2(d, "2026-10-03 06:12 JST", "a")
+    full = body("amodel.txt")
+    for label, data in {"途中で切れた": full[: len(full) // 2 + 60000], "小さすぎる": HEAD + TAIL,
+                        "先頭が違う": b"<html>" + full[6:]}.items():
+        (d / "model.txt").write_bytes(data)
+        assert ms.valid_dir(d) is None, label
+    # CRLF: valid_dir は通す(作業ツリー用)が、crlf_model_files がその形の全モデルファイルを見て名前を返す
+    make_model2(d, "2026-10-03 06:12 JST", "a")
+    assert ms.crlf_model_files(d) == []
+    (d / "model.txt").write_bytes((d / "model.txt").read_bytes().replace(b"\n", b"\r\n"))
+    assert ms.valid_dir(d) is not None and ms.crlf_model_files(d) == ["model.txt"]
+    d1 = make_model(root / "m1", "2026-10-03 06:12 JST", "b")
+    assert ms.crlf_model_files(d1) == [] and ms.crlf_model_files(d1, meta=ms.valid_dir(d1)) == []
+    (d1 / "model_top2.txt").write_bytes((d1 / "model_top2.txt").read_bytes().replace(b"\n", b"\r\n"))
+    assert ms.crlf_model_files(d1) == ["model_top2.txt"]                 # 1着モデル以外の CRLF も捕まえる
+    for n in ms.MODEL_FILES:
+        (d1 / n).write_bytes(body(n).replace(b"\n", b"\r\n"))
+    assert ms.crlf_model_files(d1) == list(ms.MODEL_FILES)
+    assert ms.crlf_model_files(root / "none") == [] and ms.crlf_model_files(d1, meta={"format": 9}) == []
+
+
+def test_format2_tarball_and_pointer_rules():
+    root, rel = sandbox()
+    make_model2(ms._p("build"), "2026-10-03 06:12 JST", "a")
+    a = ms.build_tarball(ms._p("build"), root / "s1")
+    b = ms.build_tarball(ms._p("build"), root / "s2")
+    assert a[1] == b[1] and a[0].name == b[0].name == "model-20261003-0612-%s.tar.gz" % a[1][:12]
+    with tarfile.open(a[0], "r:gz") as tf:
+        assert tf.getnames() == list(FILES2)                             # 形2の tar は2ファイルだけ
+    p2 = ms.make_pointer(ms._p("build"), a[0].name, a[1], a[2])
+    assert p2["format"] == 2 and set(p2["files"]) == set(FILES2) and ms._pointer_problem(p2) is None
+    assert p2["files"] == tree_hash(ms._p("build"))
+    # 形と files の組み合わせが合わない参照先は弾く
+    assert ms._pointer_problem(dict(p2, format=1)) == "files が不正"      # 形1 + 形2のファイル
+    assert ms._pointer_problem({k: v for k, v in p2.items() if k != "format"}) == "files が不正"   # 番号なし(=形1) + 形2のファイル
+    for f in (3, "2", 2.0, True, None):
+        assert ms._pointer_problem(dict(p2, format=f)) == "format が不正", f
+    assert ms._pointer_problem(dict(p2, files={n: "0" * 64 for n in ms.FILES})) == "files が不正"   # 形2 + 形1のファイル
+    assert ms._pointer_problem(dict(p2, files=dict(p2["files"], **{"model_win.txt": "0" * 64}))) == "files が不正"
+    # 形1の参照先: make_pointer は format=1 を書く。番号の無い今までの参照先もそのまま通る
+    make_model(ms._p("build"), "2026-10-04 06:05 JST", "b")
+    c = ms.build_tarball(ms._p("build"), root / "s3")
+    p1 = ms.make_pointer(ms._p("build"), c[0].name, c[1], c[2])
+    assert p1["format"] == 1 and set(p1["files"]) == set(ms.FILES) and ms._pointer_problem(p1) is None
+    assert ms._pointer_problem({k: v for k, v in p1.items() if k != "format"}) is None
+    assert ms._pointer_problem(dict(p1, format=2)) == "files が不正"
+    # 形2の参照先をファイルに書けば read_pointer が返す
+    ms._atomic_write(ms._p("pointer"), json.dumps(p2))
+    assert ms.read_pointer() == (p2, None) and ms.load_pointer() == p2
+
+
+def test_format2_fetch_install_candidates_and_status():
+    root, rel = sandbox()                                                # 予備は形1(2026-09-01)
+    p = fake_publish2(rel, "2026-10-03 06:12 JST", "f2")
+    drop_build()
+    (ok, msg), out = quiet(ms.fetch)
+    assert ok and "取得して切り替えた" in out and p["asset"] in out, out
+    cur = ms.live_current()
+    assert cur.name == p["sha256"][:12] and names_in(cur) == list(FILES2)
+    assert tree_hash(cur) == p["files"] and ms.valid_dir(cur)["format"] == 2
+    assert kinds() == [("live", "2026-10-03 06:12 JST"), ("frozen", "2026-09-01 06:00 JST")]
+    st = ms.status()
+    assert st["active"] == "live" and st["active_format"] == 2 and st["pointer_format"] == 2 and st["in_sync"]
+    assert [c["format"] for c in st["candidates"]] == [2, 1]
+    os.environ["MODEL_BASE_URL"] = (root / "nowhere").as_uri()
+    (ok, msg), out = quiet(ms.fetch)
+    assert ok and out == "" and NET["n"] == 1                            # 同期済み: 無言・通信なし
+    os.environ["MODEL_BASE_URL"] = rel.as_uri()
+    # 形の違う候補が混ざっても、並びは学習時刻の新しい順のまま
+    make_model(ms._p("build"), "2026-10-04 06:05 JST", "f1")
+    assert [k for k, _ in kinds()] == ["build", "live", "frozen"]
+    assert [c["format"] for c in ms.status()["candidates"]] == [1, 2, 1]
+    # 形1の参照先に戻れば形1を取得する(形2の版のディレクトリは1つ前として残る)
+    p1 = fake_publish(rel, "2026-10-05 06:00 JST", "back")
+    drop_build()
+    assert quiet(ms.fetch)[0][0]
+    cur1 = ms.live_current()
+    assert names_in(cur1) == list(ms.FILES) and ms.model_format(ms.valid_dir(cur1)) == 1 and tree_hash(cur1) == p1["files"]
+    assert sorted(d.name for d in ms._p("live").iterdir() if d.is_dir()) == sorted([p["sha256"][:12], p1["sha256"][:12]])
+    assert ms.status()["active_format"] == 1
+    # 形2の参照先に戻す(切り替え当日に自己復旧が形1の取得分を残している状態も同じ)
+    ms._atomic_write(ms._p("pointer"), json.dumps(p, indent=1) + "\n")
+    assert quiet(ms.fetch)[0][0] and ms.live_current() == cur and ms.status()["active_format"] == 2
+    assert quiet(ms.main, ["status"])[0] == 0
+
+
+def test_format2_asset_contents_are_checked_against_pointer_format():
+    """取り出す時は参照先の形の一式だけを受け付ける。「新しい meta + 古い3本」のような混ざった中身は弾く。"""
+    root, rel = sandbox()
+    s1 = make_model(root / "_s1", "2026-10-03 06:12 JST", "x")
+    s2 = make_model2(root / "_s2", "2026-10-03 06:12 JST", "y")
+
+    def evil(build_tar, fmt):
+        tmp = ms.ROOT / "_evil.tar.gz"
+        build_tar(tmp)
+        sha = ms._sha256(tmp)
+        name = "model-20261003-0612-%s.tar.gz" % sha[:12]
+        shutil.move(str(tmp), str(rel / name))
+        ptr = {"v": 1, "format": fmt, "tag": ms.TAG, "asset": name, "sha256": sha,
+               "size": (rel / name).stat().st_size, "trained_at": "2026-10-03 06:12 JST", "period_end": None,
+               "files": {n: "0" * 64 for n in ms.tar_files(fmt)}}
+        assert ms._pointer_problem(ptr) is None
+        ms._atomic_write(ms._p("pointer"), json.dumps(ptr))
+        return ptr
+
+    def meta2_with_old_three(path):                 # 形2の meta + 形1の3本(参照先は形1)
+        with tarfile.open(path, "w:gz") as tf:
+            tf.add(s2 / "meta.json", arcname="meta.json")
+            for n in ms.MODEL_FILES:
+                tf.add(s1 / n, arcname=n)
+
+    def meta1_with_model_txt(path):                 # 形1の meta + model.txt(参照先は形2)
+        with tarfile.open(path, "w:gz") as tf:
+            tf.add(s1 / "meta.json", arcname="meta.json")
+            tf.add(s2 / "model.txt", arcname="model.txt")
+
+    def model_txt_in_format1_pointer(path):         # 形2の一式(参照先は形1)
+        with tarfile.open(path, "w:gz") as tf:
+            for n in FILES2:
+                tf.add(s2 / n, arcname=n)
+
+    def both_formats(path):                         # 形2の一式 + 形1の3本(参照先は形2)
+        with tarfile.open(path, "w:gz") as tf:
+            for n in FILES2:
+                tf.add(s2 / n, arcname=n)
+            for n in ms.MODEL_FILES:
+                tf.add(s1 / n, arcname=n)
+
+    for build_tar, fmt, word in ((meta2_with_old_three, 1, "検査を通らない"), (meta1_with_model_txt, 2, "検査を通らない"),
+                                 (model_txt_in_format1_pointer, 1, "想定外"), (both_formats, 2, "想定外")):
+        ptr = evil(build_tar, fmt)
+        (ok, msg), out = quiet(ms.fetch, force=True)
+        assert not ok and word in msg, (build_tar.__name__, msg)
+        assert ms.live_current() is None
+    # 検証前の dict(形と files が合わない)を直接渡しても、取り出す前に止まる
+    bad = dict(evil(model_txt_in_format1_pointer, 1), format=2)
+    try:
+        ms._extract_verified(rel / bad["asset"], bad, root / "_x")
+        raise AssertionError("形と files が合わなければ例外のはず")
+    except RuntimeError as e:
+        assert "形と合わない" in str(e)
+    assert not (root / "_x").exists()
+    # 正しい形2の資産は通る(同じ手順で)
+    p = fake_publish2(rel, "2026-10-03 06:12 JST", "ok")
+    drop_build()
+    assert quiet(ms.fetch, force=True)[0][0] and tree_hash(ms.live_current()) == p["files"]
+    # trained_at の食い違いは形2でも拒否(未取得の資産で確かめる。取得済みの版と同じ sha256 なら同期済みで通信しない)
+    cur = ms.live_current()
+    p_next = fake_publish2(rel, "2026-10-04 06:12 JST", "next")
+    drop_build()
+    bad = dict(p_next, trained_at="2026-10-04 06:13 JST")
+    ms._atomic_write(ms._p("pointer"), json.dumps(bad))
+    (ok, msg), out = quiet(ms.fetch, force=True)
+    assert not ok and "trained_at が参照先と違う" in msg and ms.live_current() == cur, msg
+
+
+def test_freeze_holds_frozen_when_format_differs():
+    """予備と形が違う元からの更新は、--allow-format-change が無い限り据え置く(force でも・30日後でも)。
+    据え置きは失敗ではなく、理由を1行出して終了コード 0。許可した時はもう一方の形のファイルを消す。"""
+    root, rel = sandbox()                                                # 予備は形1(2026-09-01)
+    frozen = ms._p("frozen")
+    before = tree_hash(frozen)
+    make_model2(ms._p("build"), "2026-10-03 06:10 JST", "g2")
+    # 日数の規則が先(30日未満なら形に関わらず更新しない)
+    changed, msg = ms.freeze(now=datetime(2026, 9, 20, 7, 0, tzinfo=ms.JST))
+    assert changed is False and "更新しない" in msg and "据え置" not in msg, msg
+    # 30日たっても形が違えば据え置く(30日後の自動更新で黙って置き換わらない)
+    changed, msg = ms.freeze(now=datetime(2026, 10, 5, 7, 0, tzinfo=ms.JST))
+    assert changed is False and "据え置" in msg and "allow-format-change" in msg and "形1" in msg and "形2" in msg, msg
+    assert tree_hash(frozen) == before and ms.valid_dir(frozen)["trained_at"] == "2026-09-01 06:00 JST"
+    # force(train.yml の freeze --force)でも形は替えない
+    changed, msg = ms.freeze(force=True, now=datetime(2026, 10, 5, 7, 0, tzinfo=ms.JST))
+    assert changed is False and "据え置" in msg and tree_hash(frozen) == before
+    # CLI: 失敗にしない(終了コード 0)。理由は1行
+    code, out = quiet(ms.main, ["freeze", "--force"])
+    assert code == 0 and "据え置" in out and out.count("\n") == 1 and "警告" not in out, out
+    # 明示の指定で置き換える。形1の3本は消え、形2の一式だけになる
+    changed, msg = ms.freeze(force=True, allow_format_change=True, now=datetime(2026, 10, 5, 7, 0, tzinfo=ms.JST))
+    assert changed is True and "形1→形2" in msg and "model_win.txt" in msg, msg
+    assert names_in(frozen) == list(FILES2) and ms.valid_dir(frozen)["format"] == 2
+    assert tree_hash(frozen) == tree_hash(ms._p("build"))
+    assert not [p for p in ms._p("live").iterdir() if p.name.startswith(".freeze-")]
+    # 形2 → 形1 に戻す時も同じ決まり(model.txt を消す)。参照先は消えない
+    ptr = fake_publish2(rel, "2026-10-05 06:00 JST", "pub")
+    drop_build()                                                         # build に形2の model.txt を残さない
+    make_model(ms._p("build"), "2026-10-06 06:00 JST", "g1")
+    changed, msg = ms.freeze(force=True, now=datetime(2026, 10, 6, 7, 0, tzinfo=ms.JST))
+    assert changed is False and "形2のまま据え置く" in msg, msg
+    code, out = quiet(ms.main, ["freeze", "--force", "--allow-format-change"])
+    assert code == 0 and "形2→形1" in out and "model.txt" in out, out
+    assert names_in(frozen) == sorted(ms.FILES + ("live_pointer.json",)) and ms.model_format(ms.valid_dir(frozen)) == 1
+    assert ms.load_pointer() == ptr and tree_hash(ms._p("build")).items() <= tree_hash(frozen).items()
+    # 同じ形どうしなら今までどおり(指定なしで更新する)
+    make_model(ms._p("build"), "2026-11-10 06:00 JST", "g1b")
+    changed, msg = ms.freeze(now=datetime(2026, 11, 10, 7, 0, tzinfo=ms.JST))
+    assert changed is True and "形" not in msg and ms.valid_dir(frozen)["trained_at"] == "2026-11-10 06:00 JST"
+    # 元が取得済みの現行版(build なし)でも据え置きの判定は同じ
+    drop_build()
+    fake_publish2(rel, "2026-12-25 06:00 JST", "dec")
+    drop_build()
+    assert quiet(ms.fetch)[0][0] and ms.valid_dir(ms.live_current())["format"] == 2
+    changed, msg = ms.freeze(now=datetime(2026, 12, 25, 7, 0, tzinfo=ms.JST))
+    assert changed is False and "据え置" in msg and ms.model_format(ms.valid_dir(frozen)) == 1
+    # 予備が壊れていれば、比べる形が無いので元の形で作り直す(壊れた予備は保険にならない)
+    (frozen / "model_win.txt").write_bytes(b"broken")
+    assert ms.valid_dir(frozen) is None
+    changed, msg = ms.freeze(now=datetime(2026, 12, 25, 8, 0, tzinfo=ms.JST))
+    assert changed is True and ms.valid_dir(frozen)["format"] == 2, msg
+    assert names_in(frozen) == sorted(FILES2 + ("live_pointer.json",))   # 壊れた形1の残りも消えている
+
+
+def test_freeze_format_change_removes_old_files_before_meta():
+    """形を替える複写は、もう一方の形のファイルを消してから meta.json を置く(途中で止まっても
+    「新しい meta + 古い形のファイル」を残さない)。meta.json は最後。"""
+    root, rel = sandbox()
+    frozen = ms._p("frozen")
+    make_model2(ms._p("build"), "2026-10-03 06:10 JST", "g2")
+    order, at_meta = [], []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        order.append(Path(dst).name)
+        if Path(dst).name == "meta.json" and Path(dst).parent == frozen:
+            at_meta.append(names_in(frozen))
+        return real_replace(src, dst)
+
+    ms.os.replace = spy
+    try:
+        assert ms.freeze(force=True, allow_format_change=True, now=datetime(2026, 10, 3, 7, 0, tzinfo=ms.JST))[0] is True
+    finally:
+        ms.os.replace = real_replace
+    assert order[-1] == "meta.json" and sorted(order) == list(FILES2), order
+    assert at_meta == [["meta.json", "model.txt"]], at_meta           # meta を置く時点で形1の3本は無い
+    assert names_in(frozen) == list(FILES2)
+
+
+def test_verify_does_not_flag_frozen_held_for_format():
+    """形の違いで据え置いている予備は、古くても M5(定期更新が止まっている)にしない。据え置き中である
+    ことは notes / frozen_held_format で出す。予備の破損(M3)はこれまでどおり異常。"""
+    root, rel = sandbox()                                                # 予備は形1(2026-09-01)
+    th = {"model_stale_crit_days": 2, "model_frozen_warn_days": 45}
+    p2 = fake_publish2(rel, "2026-11-15 06:00 JST", "f2")
+    drop_build()
+    res = ms.verify(now=datetime(2026, 11, 15, 9, 0, tzinfo=ms.JST), thresholds=th)   # 予備は75日前
+    assert res["level"] == "ok" and res["warnings"] == [] and res["asset_ok"] is True, res
+    assert res["pointer_format"] == 2 and res["frozen_format"] == 1 and res["frozen_held_format"] is True
+    assert any("据え置き" in n for n in res["notes"]) and any(n.startswith("M5 相当") for n in res["notes"]), res
+    assert res["effective_trained_at"] == "2026-11-15 06:00 JST" and res["needs_republish"] is False
+    # 同じ古さでも、形が同じ(形1の参照先)なら M5 の警告(今までどおり)
+    fake_publish(rel, "2026-11-15 06:00 JST", "f1")
+    drop_build()
+    res1 = ms.verify(now=datetime(2026, 11, 15, 9, 0, tzinfo=ms.JST), thresholds=th)
+    assert res1["level"] == "warning" and any(w.startswith("M5") for w in res1["warnings"]), res1
+    assert res1["frozen_held_format"] is False and res1["notes"] == []
+    # 据え置き中でも、資産が取れなければ実効は予備になり M1 + M2 は今までどおり
+    ms._atomic_write(ms._p("pointer"), json.dumps(p2, indent=1) + "\n")
+    (rel / p2["asset"]).unlink()
+    res = ms.verify(now=datetime(2026, 11, 15, 9, 0, tzinfo=ms.JST), thresholds=th)
+    assert res["level"] == "critical" and res["needs_republish"] is True, res
+    assert any(c.startswith("M1") for c in res["criticals"]) and any(c.startswith("M2") for c in res["criticals"])
+    assert res["effective_trained_at"] == "2026-09-01 06:00 JST" and res["frozen_held_format"] is True
+    # 予備が壊れていれば M3(形は比べられないので据え置きではない)
+    (ms._p("frozen") / "model_top3.txt").write_bytes(b"x")
+    res = ms.verify(now=datetime(2026, 11, 15, 9, 0, tzinfo=ms.JST), thresholds=th)
+    assert any(c.startswith("M3") for c in res["criticals"]) and res["frozen_held_format"] is False
+    # 文字での出力にも据え置きの行が出る(参照先の学習時刻を未来にして、実行日の影響を受けないようにする)
+    make_model(ms._p("frozen"), "2026-09-01 06:00 JST", "frozen")
+    fake_publish2(rel, "2099-01-01 06:00 JST", "far")
+    drop_build()
+    code, out = quiet(ms.main, ["verify"])
+    assert code == 0 and "[ok]" in out and "note    : " in out and "据え置き" in out, out
+    code, out = quiet(ms.main, ["verify", "--json"])
+    assert code == 0 and json.loads(out)["frozen_held_format"] is True
+
+
+def test_format2_publish_with_fake_gh():
+    """配布(publish)も形2で通る: tar は2ファイル、参照先に format=2、取得側は同じ中身になる。"""
+    root, rel = sandbox()
+    gh = use_fake_gh(rel, exists=False)
+    make_model2(ms._p("build"), "2026-10-03 06:12 JST", "p2")
+    ptr, out = quiet(ms.publish)
+    assert ptr["format"] == 2 and set(ptr["files"]) == set(FILES2) and ms.load_pointer() == ptr
+    assert len(gh.names("upload")) == 1 and ptr["files"] == tree_hash(ms._p("build"))
+    with tarfile.open(rel / ptr["asset"], "r:gz") as tf:
+        assert tf.getnames() == list(FILES2)
+    drop_build()
+    assert quiet(ms.fetch)[0][0] and tree_hash(ms.live_current()) == ptr["files"]
+    assert ms.valid_dir(ms.live_current())["format"] == 2
+    # publish は予備(形1)に触れない
+    assert ms.model_format(ms.valid_dir(ms._p("frozen"))) == 1
+
+
 # ------------------------------------------------------------------ 実物のモデル(LF 版)
 
 def real_model_dir():
-    """git show HEAD:data/model/<名前> で LF 版を取り出す。取り出せなければ None。"""
+    """git show HEAD:data/model/<名前> で LF 版を取り出す。取り出せなければ None。
+    取り出す名前は予備の meta.json の形で決める(予備を形2に置き換えた後も黙って飛ばさない)。"""
     d = Path(tempfile.mkdtemp(prefix="ms_real_"))
     TMP_ROOTS.append(d)
     try:
-        for n in ms.FILES:
+        r = subprocess.run(["git", "-C", str(REPO), "show", "HEAD:data/model/meta.json"],
+                           capture_output=True, timeout=120)
+        if r.returncode != 0 or not r.stdout:
+            return None
+        fmt = ms.model_format(json.loads(r.stdout.decode("utf-8")))
+        if fmt is None:
+            return None
+        for n in ms.tar_files(fmt):
             r = subprocess.run(["git", "-C", str(REPO), "show", "HEAD:data/model/" + n],
                                capture_output=True, timeout=120)
             if r.returncode != 0 or not r.stdout:
@@ -1006,7 +1379,7 @@ def real_model_dir():
             (d / n).write_bytes(r.stdout)
     except Exception:
         return None
-    if b"\r\n" in (d / "model_win.txt").read_bytes()[:4096] or ms.valid_dir(d) is None:
+    if ms.crlf_model_files(d) or ms.valid_dir(d) is None:
         return None
     return d
 
@@ -1042,7 +1415,8 @@ def test_real_model_roundtrip_is_identical():
         SKIPPED.append("test_real_model_roundtrip_is_identical(予測の一致・load_models)")
         return
     rng = np.random.default_rng(0)
-    for n in ms.MODEL_FILES:
+    real_fmt = ms.model_format(ms.valid_dir(real))
+    for n in ms.model_files(real_fmt):                                    # 形1なら3本、形2なら1本
         a = lgb.Booster(model_file=str(real / n))
         b = lgb.Booster(model_file=str(cur / n))
         x = rng.normal(size=(200, a.num_feature()))
@@ -1062,7 +1436,10 @@ def test_real_model_roundtrip_is_identical():
     try:
         (meta, models, sengen), out = quiet(pt.load_models)
         assert "model: live trained_at=%s" % ptr["trained_at"] in out, out
-        assert meta["trained_at"] == ptr["trained_at"] and set(models) == {"win", "top2", "top3"}
+        assert meta["trained_at"] == ptr["trained_at"]
+        # models のキーは形で決まる(形1は今までどおり3本。形2のキーは predict_today 側の決め: {"pl"})
+        expect_keys = {"win", "top2", "top3"} if real_fmt == 1 else {"pl"}
+        assert set(models) == expect_keys, (real_fmt, set(models))
         assert "top5_min" in sengen and "venues" in sengen
         # この場で学習した新しいモデルがあれば、それを使う(朝の予測は Release に依存しない)
         shutil.copytree(real, ms._p("build"))

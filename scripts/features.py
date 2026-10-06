@@ -239,3 +239,50 @@ def add_features(hist: pd.DataFrame, target: pd.DataFrame, fan=None) -> pd.DataF
     target["ex_rank"] = g.rank(method="min")
     target["ex_diff"] = target["ex_time"] - g.transform("min")
     return target
+
+
+# ---------------------------------------------------------------- 世代2(現行45 + 履歴108)
+# 世代1(上の add_features / FEATURES)は変えない。以下は世代2のモデルだけが使う。
+from features_hist import (HIST_COLS, HIST_LIVE_COLS, HIST_AUX_COLS,  # noqa: E402
+                           HIST_INPUT_COLS, build_hist)
+
+FEATURES_V2 = FEATURES + HIST_COLS          # 153個。この順が学習と予測の列の位置になる
+assert len(FEATURES_V2) == 153 and len(set(FEATURES_V2)) == 153
+EX_COLS = ["ex_time", "ex_rank", "ex_diff", "wind", "wave"]   # 直前情報(現行の5列)
+LIVE_COLS_V2 = EX_COLS + HIST_LIVE_COLS     # 直前に変わる9列。学習で隠すのも、直前予測で埋めるのもこの9列
+
+
+def add_features_v2(hist: pd.DataFrame, target: pd.DataFrame, fan=None) -> pd.DataFrame:
+    """add_features(hist, target, fan) の45個に、履歴108個(HIST_COLS)と中間値(HIST_AUX_COLS)を足して返す。
+    戻り値の列の取り出しは out[FEATURES_V2]。
+
+    - 学習(hist と target が同じ表): その表で build_hist を1回。
+      注意: 履歴は、直前情報を隠す(EX_COLS を NaN にする)前の表から作ること。過去の展示を使う列
+      (h_m_exrel*, h_exh* など)が半分のレースで壊れるため。隠すのは行列にした後。
+    - 当日(target = 当日の番組表の全レースの行。結果の列は無くてよい): hist の後ろに target を足した表で
+      build_hist を1回通し、target の行を取り出す。target に無い列は NaN で補う(pd.concat がそうする)。
+      hist に target の日以降の行が混ざっていれば除く(--date で過去の日を作り直す時に同じレースが2回入らないため)。
+      モーターの入れ替え判定はその日・その会場の全行で決まるので、対象レースだけでなくその日の全レースを渡すこと。
+      target には motor_no / boat_no / distance を入れること(無いと h_m_* / h_b_* / h_dist1200 が番組表と合わない)。
+    """
+    same = hist is target
+    base = add_features(hist, target, fan=fan)
+    if same:
+        H = build_hist(base)
+    else:
+        tmin = str(target["date"].min())
+        h = hist
+        late = (h["date"].astype(str) >= tmin).to_numpy()
+        if late.any():
+            print(f"features_v2: hist に対象日 {tmin} 以降の行が {int(late.sum())} 行ある。履歴からは除く", flush=True)
+            h = h[~late]
+        hc = [c for c in HIST_INPUT_COLS if c in h.columns]
+        tc = [c for c in HIST_INPUT_COLS if c in target.columns]
+        allrows = pd.concat([h[hc], target[tc]], ignore_index=True)
+        del h
+        H_all = build_hist(allrows)
+        H = H_all.iloc[len(allrows) - len(target):]
+        del H_all, allrows
+    hcols = {c: H[c].to_numpy() for c in HIST_COLS + HIST_AUX_COLS}
+    del H
+    return pd.concat([base, pd.DataFrame(hcols, index=base.index)], axis=1)
