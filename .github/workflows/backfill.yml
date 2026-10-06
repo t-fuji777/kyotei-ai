@@ -9,10 +9,10 @@ on:
         description: "end YYYYMMDD"
         required: true
 concurrency:
-  group: data
+  group: backfill-check
   cancel-in-progress: false
 permissions:
-  contents: write
+  contents: read
 jobs:
   chunk:
     runs-on: ubuntu-latest
@@ -50,31 +50,3 @@ jobs:
           name: entries-${{ matrix.year }}
           path: data/races/entries_${{ matrix.year }}.csv.gz
           if-no-files-found: ignore
-  assemble:
-    needs: chunk
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install lhafile pandas requests
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: entries-*
-          path: data/races/
-          merge-multiple: true
-      - name: fetch fan data
-        run: python scripts/fetch_fan.py --start ${{ github.event.inputs.start }}
-      - name: commit
-        env:
-          IN_START: ${{ github.event.inputs.start }}
-          IN_END: ${{ github.event.inputs.end }}
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add data/races data/fan
-          git diff --cached --quiet || git commit -m "backfill $IN_START-$IN_END"
-          git pull --rebase
-          git push
