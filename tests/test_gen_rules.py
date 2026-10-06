@@ -36,7 +36,7 @@ G2 = C.sengen_cfg_for(2)
 
 def race(no, top3p=0.40, g=None, odds=HIGH, deadline="12:14", **kw):
     """上位3点に top3p を等分、4点目以降は 0.02(top4p = top3p + 0.02、top5p = top3p + 0.04)。
-    top3p 0.40 は世代1(0.36)では候補、世代2(仮 0.46)では候補でない、という境目の値。"""
+    top3p 0.40 は世代1(0.36)では候補、世代2(0.45)では候補でない、という境目の値。"""
     p = top3p / 3
     r = {"no": no, "deadline": deadline, "type": "x", "rn_full": True,
          "picks": [{"c": c, "p": (p if i < 3 else 0.02)} for i, c in enumerate(COMBOS)],
@@ -106,7 +106,7 @@ def test_table_gen1_is_the_existing_constants():
     assert sorted(c1["exclude_venues"]) == sorted(C.SENGEN_EXCLUDE_VENUES) == [3, 4, 14]
     assert c1["cand_top4p_min"] == 0.36
     c2 = C.SENGEN_CFG_BY_GEN[2]
-    assert c2["top3p_min"] == 0.46 and c2["cand_top4p_min"] == 0.46, "世代2の仮の値(段階Bで確定)"
+    assert c2["top3p_min"] == 0.45 and c2["cand_top4p_min"] == 0.43, "世代2の値(2026-10-06 に取り直し後のデータで確定: 検証 0.4534・試験 0.4493)"
     for k in ("min_odds", "min_rno", "exclude_venues"):
         assert c2[k] == c1[k], f"{k} は世代で変えない"
     assert set(c1) == set(c2) == {"top3p_min", "min_odds", "min_rno", "exclude_venues", "cand_top4p_min"}
@@ -134,7 +134,7 @@ def test_sengen_cfg_for_accepts_gen_or_race():
     cfg = C.sengen_cfg_for(2)
     cfg["gen"] = 2
     cfg["top3p_min"] = 0
-    assert "gen" not in C.SENGEN_CFG_BY_GEN[2] and C.SENGEN_CFG_BY_GEN[2]["top3p_min"] == 0.46
+    assert "gen" not in C.SENGEN_CFG_BY_GEN[2] and C.SENGEN_CFG_BY_GEN[2]["top3p_min"] == 0.45
 
 
 def test_is_sengen_default_is_gen1_and_cfg_overrides():
@@ -146,7 +146,7 @@ def test_is_sengen_default_is_gen1_and_cfg_overrides():
         assert C.is_sengen(*args) == C.is_sengen(*args, G1), args
     # 世代2のしきい値
     assert C.is_sengen(0.40, 1, 5) and not C.is_sengen(0.40, 1, 5, G2)
-    assert C.is_sengen(0.46, 1, 5, G2) and not C.is_sengen(0.4599, 1, 5, G2)
+    assert C.is_sengen(0.45, 1, 5, G2) and not C.is_sengen(0.4499, 1, 5, G2)
     assert not C.is_sengen(0.9, 14, 5, G2) and not C.is_sengen(0.9, 1, 4, G2)
     # 古い形の cfg(項目が欠ける)は世代1の値で補う。明示の空の除外会場は「除外なし」
     assert C.is_sengen(0.40, 1, 5, {"top3p_min": 0.40}) and not C.is_sengen(0.40, 3, 5, {"top3p_min": 0.40})
@@ -174,7 +174,7 @@ def test_stamp_plans_uses_the_race_gen():
             r1b = race(5, g=1)
             C.stamp_plans(r1b, 1, None, "12:00")
             assert {k: v for k, v in r1b.items() if k != "g"} == r1
-            # g=2 → 0.46 に届かず候補ですらない(見送り理由も書かない)。os は今までどおり残す
+            # g=2 → 0.45 に届かず候補ですらない(見送り理由も書かない)。os は今までどおり残す
             r2 = race(5, g=2)
             C.stamp_plans(r2, 1, None, "12:00")
             assert r2["tk"] == 0 and "rs" not in r2 and "pr" not in r2 and r2["g"] == 2
@@ -358,7 +358,7 @@ def test_do_results_fallback_stamp_uses_the_race_gen():
 
 def test_do_odds_refetch_threshold_by_gen():
     """締切10分前の本オッズ取り直し(top4p のしきい値 cand_top4p_min)。本オッズ取得済み・締切8分前・
-    top4p 0.42: 印なし(0.36)は取り直す、g=2(仮 0.46)は取り直さない、g=2 でも 0.47 なら取り直す。4R は対象外。"""
+    top4p 0.42: 印なし(0.36)は取り直す、g=2(0.43)は取り直さない、g=2 でも 0.47 なら取り直す。4R は対象外。"""
     now = datetime(2026, 10, 1, 12, 0, tzinfo=JST)
     races = [race(5, deadline="12:08"), race(6, g=2, deadline="12:08"), race(7, g=2, top3p=0.45, deadline="12:08"),
              race(4, deadline="12:08"), race(8, g=1, deadline="12:08")]
@@ -395,23 +395,23 @@ def test_do_odds_refetch_threshold_by_gen():
         assert 14 not in fetched and fetched == list(range(5, 13)), fetched
     finally:
         U.fetch_odds, U.time = saved
-    assert U.CAND_TOP4P_MIN == 0.36 and U._cand_top4p_min({}) == 0.36 and U._cand_top4p_min({"g": 2}) == 0.46
+    assert U.CAND_TOP4P_MIN == 0.36 and U._cand_top4p_min({}) == 0.36 and U._cand_top4p_min({"g": 2}) == 0.43
 
 
 # ---------------------------------------------------------------- update_results.py / recompute_sengen.py
 
 def test_unstamped_days_before_the_stamping_era_use_the_race_gen():
     """打刻の無い日(8/3 以前)の判定: レースの g(無ければ世代1 = 0.36)。同じ日に混ざっても各レースは自分の世代。"""
-    races = [race(5, top3p=0.45), race(6, top3p=0.45, g=2), race(7, top3p=0.47, g=2), race(8, top3p=0.45, g=1)]
+    races = [race(5, top3p=0.44), race(6, top3p=0.44, g=2), race(7, top3p=0.47, g=2), race(8, top3p=0.44, g=1)]
     results = {k: ("1-2-3", 1230) for k in (5, 6, 7, 8)}
     day = evaluate(races, results, ymd="20260803")
     assert day["races"] == 4 and day["top5_hit"] == 4
-    assert day["sen_n"] == 3 and day["sen_hit"] == 3 and day["sen_ret"] == 3 * 1230, day   # 5R・7R・8R(6R は 0.46 に届かない)
+    assert day["sen_n"] == 3 and day["sen_hit"] == 3 and day["sen_ret"] == 3 * 1230, day   # 5R・7R・8R(6R は 0.45 に届かない)
     agg = RS.recompute_day(with_results(races, results, ymd="20260803"), "20260803")
     for k in ("sen_n", "sen_hit", "sen_stake", "sen_ret", "sen_hitloss"):
         assert agg[k] == day[k], (k, agg[k], day[k])
     # 価値フィルタ(3.1倍未満)も世代の min_odds(どちらも 3.1)
-    low = [race(5, top3p=0.45, odds=LOW), race(6, top3p=0.47, g=2, odds=LOW)]
+    low = [race(5, top3p=0.44, odds=LOW), race(6, top3p=0.47, g=2, odds=LOW)]
     assert evaluate(low, {5: ("6-5-4", 30000), 6: ("6-5-4", 30000)}, ymd="20260803")["sen_n"] == 0
     assert RS.recompute_day(with_results(low, {5: ("6-5-4", 30000), 6: ("6-5-4", 30000)}, ymd="20260803"), "20260803")["sen_n"] == 0
     # 8/4 以降は打刻が無ければ世代に関係なく数えない(今までどおり)

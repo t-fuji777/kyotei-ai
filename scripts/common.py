@@ -48,8 +48,8 @@ SENGEN_MIN_RNO = 5  # 1-4Rはモデル過大評価のため両プラン(竹/松)
 SENGEN_CFG_BY_GEN = {
     1: {"top3p_min": SENGEN_TOP3P_MIN, "min_odds": SENGEN_MIN_ODDS, "min_rno": SENGEN_MIN_RNO,
         "exclude_venues": sorted(SENGEN_EXCLUDE_VENUES), "cand_top4p_min": 0.36},
-    2: {"top3p_min": 0.46, "min_odds": SENGEN_MIN_ODDS, "min_rno": SENGEN_MIN_RNO,
-        "exclude_venues": sorted(SENGEN_EXCLUDE_VENUES), "cand_top4p_min": 0.46},
+    2: {"top3p_min": 0.45, "min_odds": SENGEN_MIN_ODDS, "min_rno": SENGEN_MIN_RNO,
+        "exclude_venues": sorted(SENGEN_EXCLUDE_VENUES), "cand_top4p_min": 0.43},
 }
 
 _WARNED = set()

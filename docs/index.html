@@ -244,7 +244,7 @@ const $=s=>document.querySelector(s);
 // レース=世代2より前のファイルは世代1)で引く。世代2の top3p_min は仮の値(切り替え時に確定)。
 const SENGEN_CFG_BY_GEN={
   1:{top3p_min:0.36,min_odds:3.1,min_rno:5,exclude_venues:[3,4,14],cand_top4p_min:0.36},
-  2:{top3p_min:0.46,min_odds:3.1,min_rno:5,exclude_venues:[3,4,14],cand_top4p_min:0.46}
+  2:{top3p_min:0.45,min_odds:3.1,min_rno:5,exclude_venues:[3,4,14],cand_top4p_min:0.43}
 };
 // 世代の読み取り(common.race_gen と同じ規則): 無い・読めない・1未満は世代1
 const _genOf=v=>{const g=Math.floor(+v);return (v!=null&&isFinite(g)&&g>=1)?g:1;};
@@ -914,7 +914,7 @@ function renderModel(rep){
     <div class="kv"><span>学習日時</span><span class="num">${esc(rep.trained_at||"-")}</span></div>
     <div class="kv"><span>学習期間</span><span class="num">${esc(period)}</span></div>
     <div class="kv"><span>学習行数</span><span class="num">${rowsTrain.toLocaleString()}</span></div>${genRow}
-    <div class="kv"><span>プラン条件</span><span class="num">厳選プラン: 5R以降・TOP3合計確率36%以上・全3点オッズ3.1倍以上・安定水面のみ<br>7,339レースのバックテストで決定<br>オッズは締切15分前時点の値で判定(締切までに変動します)</span></div>
+    <div class="kv"><span>プラン条件</span><span class="num">厳選プラン: 5R以降・TOP3合計確率${Math.round((sengenCfgFor((rep&&rep.gen)||1).top3p_min)*100)}%以上・全3点オッズ3.1倍以上・安定水面のみ<br>${((rep&&rep.gen)||1)>=2?"確率の条件は、学習に使っていない直近の期間で以前と同じ本数になる値(2026年10月に決定)":"7,339レースのバックテストで決定"}<br>オッズは締切15分前時点の値で判定(締切までに変動します)</span></div>
     <div class="sec" style="margin-top:18px">テスト精度(直近期間・未学習データ)</div>
     <div style="font-size:11px;color:var(--dim);margin:-2px 0 8px">学習時に測ったモデル単体の精度。すべてTOP5基準で、厳選プランの成績とは別物です。プランの実績は的中実績タブをご覧ください。</div>
     <div class="kv"><span>1着的中率</span><span class="num">${pct(tm.win_hit_rate||0)} (基準 ${pct(bm.win_hit_rate||0)})</span></div>

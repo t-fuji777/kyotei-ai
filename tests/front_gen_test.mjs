@@ -182,22 +182,22 @@ function race(o = {}) {
   eq("G2 g=1 / g=2 / 文字列の \"2\" / 2.0", [A.raceGen({ g: 1 }), A.raceGen({ g: 2 }), A.raceGen({ g: "2" }), A.raceGen({ g: 2.0 })], [1, 2, 2, 2]);
   eq("G3 読めない値(0, -1, \"x\", NaN)は世代1", [A.raceGen({ g: 0 }), A.raceGen({ g: -1 }), A.raceGen({ g: "x" }), A.raceGen({ g: NaN })], [1, 1, 1, 1]);
   eq("G4 しきい値: 世代1・印なし・読めない値は世代1の表", [A.sengenCfgFor({ g: 1 }).top3p_min, A.sengenCfgFor({}).top3p_min, A.sengenCfgFor(1).top3p_min, A.sengenCfgFor("x").top3p_min], [0.36, 0.36, 0.36, 0.36]);
-  eq("G4 しきい値: 世代2(レース・番号・文字列)", [A.sengenCfgFor({ g: 2 }).top3p_min, A.sengenCfgFor(2).top3p_min, A.sengenCfgFor("2").top3p_min], [0.46, 0.46, 0.46]);
+  eq("G4 しきい値: 世代2(レース・番号・文字列)", [A.sengenCfgFor({ g: 2 }).top3p_min, A.sengenCfgFor(2).top3p_min, A.sengenCfgFor("2").top3p_min], [0.45, 0.45, 0.45]);
   eq("G5 表に無い世代(3)は世代1の値に落ちる(現行の動きを変えない側)", A.sengenCfgFor({ g: 3 }), A.SENGEN_CFG_BY_GEN[1]);
 }
 
 // ================= T: 厳選の候補判定 =================
 {
   // 打刻の無いレース(候補): 確率条件は世代のしきい値で
-  eq("T1 top3p 0.40・7R・12場: 印なし=候補 / g=1=候補 / g=2=候補でない(0.46 未満)",
+  eq("T1 top3p 0.40・7R・12場: 印なし=候補 / g=1=候補 / g=2=候補でない(0.45 未満)",
     [A.sengenOk(race(), 12), A.sengenOk(race({ g: 1 }), 12), A.sengenOk(race({ g: 2 }), 12)], [true, true, false]);
   eq("T1 top3p 0.47: どの世代でも候補", [A.sengenOk(race({ top3p: 0.47 }), 12), A.sengenOk(race({ top3p: 0.47, g: 2 }), 12)], [true, true]);
   eq("T1 top3p 0.35: どの世代でも候補でない", [A.sengenOk(race({ top3p: 0.35 }), 12), A.sengenOk(race({ top3p: 0.35, g: 2 }), 12)], [false, false]);
   // 境目(浮動小数の足し算で「ちょうど」は作れないので、しきい値の上下 0.0001 で見る)
   eq("T2 境目: 世代1は 0.3601 で候補・0.3599 で候補でない",
     [A.sengenOk(race({ top3p: 0.3601 }), 12), A.sengenOk(race({ top3p: 0.3599 }), 12)], [true, false]);
-  eq("T2 境目: 世代2は 0.4601 で候補・0.4599 で候補でない(0.36 と 0.46 の間は世代1だけ候補)",
-    [A.sengenOk(race({ top3p: 0.4601, g: 2 }), 12), A.sengenOk(race({ top3p: 0.4599, g: 2 }), 12), A.sengenOk(race({ top3p: 0.4599, g: 1 }), 12)], [true, false, true]);
+  eq("T2 境目: 世代2は 0.4501 で候補・0.4499 で候補でない(0.36 と 0.45 の間は世代1だけ候補)",
+    [A.sengenOk(race({ top3p: 0.4501, g: 2 }), 12), A.sengenOk(race({ top3p: 0.4499, g: 2 }), 12), A.sengenOk(race({ top3p: 0.4499, g: 1 }), 12)], [true, false, true]);
   eq("T3 4R以前は候補でない(世代に関わらず)", [A.sengenOk(race({ no: 4, top3p: 0.6 }), 12), A.sengenOk(race({ no: 4, top3p: 0.6, g: 2 }), 12), A.sengenOk(race({ no: 5, top3p: 0.6, g: 2 }), 12)], [false, false, true]);
   eq("T4 除外会場(3,4,14)は候補でない(世代に関わらず)", [3, 4, 14].map((v) => A.sengenOk(race({ top3p: 0.6 }), v)).concat([3, 4, 14].map((v) => A.sengenOk(race({ top3p: 0.6, g: 2 }), v))), [false, false, false, false, false, false]);
   // オッズ条件(min_odds)も世代の表から

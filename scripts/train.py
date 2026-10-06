@@ -32,7 +32,7 @@ ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
 # 学習する世代。1 = 現行(本番)、2 = 候補。切り替え(段階B)でここを 2 にする。
 # train.yml の計測用の実行(dry_run)は環境変数 MODEL_GEN で上書きする(空なら定数のまま。resolve_model_gen)。
-MODEL_GEN = 1
+MODEL_GEN = 2
 TARGETS = ("win", "top2", "top3")
 
 
