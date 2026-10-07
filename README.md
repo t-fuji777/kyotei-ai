@@ -68,6 +68,23 @@
 - `scripts/model_store.py` 学習済みモデルの配布(Release)・取得・検証・予備更新
 - `scripts/update_results.py` 結果反映・的中実績更新
 
+## テスト
+
+`tests/` のテストは pytest ではなく1本ずつ直接動かす(通れば最後に `ALL OK`(front_push_test.mjs は「全N件 成功」)が出て終了コード 0)。リポジトリの根で:
+
+```
+PYTHONUTF8=1 python -X utf8 tests/test_parse_b.py   # Python のテスト(Windows では PYTHONUTF8=1 を付ける)
+node tests/front_push_test.mjs                       # アプリ側(docs/index.html, docs/sw.js)のテスト
+```
+
+手元の依存は `pip install -r requirements.txt`(`test_workflows_gen2.py` が yml の構造まで見るには `pyyaml` も)。
+
+- 軽いテスト(通信なし・リポジトリの中身だけで動く・合計1〜2分)は `.github/workflows/tests.yml` が自動で回す。動くのは main への push で `scripts/` `tests/` `docs/index.html` `docs/sw.js` と `tests.yml` 自身のどれかが変わった時(Actions から手動実行も可)。開催中ループや daily の「auto results」の commit(`docs/predictions/` など)では動かない。回すもの: `test_parse_b` `test_daily_gate` `test_record_rules` `test_update_all_stamps` `test_gen_rules` `test_build_calib` `test_fetch_before` `test_workflows_gen2` `test_notify_push` `test_model_store` `test_train_v2 --quick`(`test_merge_dayfile` `test_boards` は有れば)、node の `front_push_test.mjs` `front_gen_test.mjs`。1本ずつ手順に分け、途中で1本落ちても残りを回し、1本でも落ちればワークフローは失敗(要約に結果の一覧が出る。落ちた手順のログを見る)。
+- 重いテストは手元だけで回す(tests.yml では回さない):
+  - `test_features_hist.py` `test_model_v2.py` `test_predict_v2.py`: 実験フォルダ(環境変数 `KYOTEI_REBUILD_DIR`)の成果物や main のクローンが要り、全期間の履歴の特徴量を何度も作るので 2〜4分・作業メモリ 4GB 台
+  - `test_notify_integration.py`: 実物の pywebpush / py_vapid を入れ、127.0.0.1 に偽の配信サーバーを立てて通信する(入っていなければ飛ばすだけ)
+  - `test_train_v2.py` を `--quick` 無しで: entries での世代2の学習(約3〜6分・作業メモリ 3GB 台)
+
 ## 免責
 
 予測は参考情報です。的中・回収を保証するものではありません。

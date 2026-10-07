@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from common import stamp_plans, badge_attention, sengen_top3p, is_sengen, sengen_cfg_for, SENGEN_CFG_BY_GEN
 from fetch_result import fetch_result, fetch_before_html, parse_before, ex_complete
 from fetch_odds import fetch_odds, fetch_racename, fetch_t3
+import boards
 
 ROOT = Path(__file__).parent.parent
 JST = timezone(timedelta(hours=9))
@@ -101,6 +102,27 @@ def _axis_from_odds(nr, odds):
                if odds.get("t3", {}).get(c2) is not None},
         "axis": axis, "axis_combo": axis_combo,
     }
+
+
+# ---- 3連単の板(全120通り)の記録(2026-10-07) ----
+# 当日ファイルに残るオッズは買い目(上位10点)の分だけ(_axis_from_odds)。将来「締切直前のオッズをモデルの
+# 確率に合成する」効果を測れるよう、fetch_odds / fetch_t3 で取ったばかりの板を取得時刻・締切までの分と一緒に
+# data/boards/YYYYMMDD.jsonl へ追記する(scripts/boards.py)。通信は増やさない(取った板をそのまま書くだけ)。
+# 止めたいときはここを False にして main へ入れる。既存の処理(_axis_from_odds・os・jt・final/prov)は変えない。
+RECORD_BOARDS = True
+
+
+def _record_board(ymd, v, r, t3, kind) -> None:
+    """取ったばかりの3連単の板を data/boards に残す。kind は boards.KINDS("morning" / "pre" / "final" / "judge")。
+    締切までの分は取得した今の時刻で測る(full は開始時刻の now を使い回すので、ここでは時計を取り直す)。
+    失敗しても取得・判定を止めない(boards.record も例外を出さないが、二重に守る)。"""
+    if not RECORD_BOARDS:
+        return
+    try:
+        now_ = datetime.now(JST)
+        boards.record(ymd, v["code"], r["no"], t3, kind, _mins_to_deadline(now_, r.get("deadline")), now_, root=ROOT)
+    except Exception as e:
+        print(f"  boards {v.get('code')}-{r.get('no')}R: record failed ({type(e).__name__})", flush=True)
 
 
 STAMP_LEAD_MIN = 15  # 締切何分前からチェックポイント確定を打刻するか
@@ -211,6 +233,7 @@ def _make_refresher(ymd, fresh=None):
             print(f"  judge-odds {v['code']}-{r['no']}R: not available, judging with stored odds", flush=True)
             return
         fresh[key] = (time.monotonic(), datetime.now(JST).strftime("%H:%M:%S"))
+        _record_board(ymd, v, r, t3, "judge")   # 判定直前の板を全120通り残す(当日ファイルには買い目の分だけ)
         combos = [p["c"] for p in (r.get("picks") or [])]
         ex = r.get("odds") or {}
         # 取り直した板だけで置き換える。古い板の値を残すと、今は売られていない買い目(欠場など)を
@@ -467,6 +490,9 @@ def do_odds(pred, now, ymd, tick=None) -> int:
             _m = _mins_to_deadline(now, r.get("deadline"))
             if _m is not None and _m < 0:
                 ex["final"] = True
+            # 取ったばかりの板を全120通り残す(final が立つ取得は "final"、締切前の取得は "pre")
+            if odds.get("t3"):
+                _record_board(ymd, v, r, odds["t3"], "final" if (_m is not None and _m < 0) else "pre")
             r["odds"] = ex
             n += 1
             print(f"  odds {v['code']}-{r['no']}R: t3={len(odds.get('t3',{}))}")
@@ -506,6 +532,7 @@ def do_morning_odds(pred, now, ymd, tick=None) -> int:
             time.sleep(0.3)
             if not t3:
                 continue
+            _record_board(ymd, v, r, t3, "morning")   # 朝の暫定の板を全120通り残す
             ex = r.get("odds", {})
             ex.update(_axis_from_odds(r, {"t3": t3}))
             ex["prov"] = True

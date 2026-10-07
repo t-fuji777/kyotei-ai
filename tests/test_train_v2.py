@@ -8,9 +8,11 @@
       わざとずらすと止まる(SystemExit)。数秒。
   (1b) 6艇そろわないレースを混ぜた合成データで main_v2 を通す: そのレースの行は行列から外れるが特徴量の
       入口(全行)には残り、最終日の自己検査は6艇そろったレースだけで通る。meta.params に num_threads が残らない。
+      較正の種は試験期間の後半(日付の中央値以降)の着順ありレースだけ(件数と built_from。check_seed)。
   (2) entries の一部(既定 2025-04-01 以降。環境変数 TRAIN_V2_FROM)で main_v2 を木を少なくして通し、
       出力(model.txt / meta.json / 較正の種 / 報告)の項目と自己検査が動くこと、読み込み側(predict_today.check_meta_v2 /
-      model_store.valid_dir)がその一式を受け付けることを確かめる。約3〜6分・作業メモリ3GB台。--quick で省く。
+      model_store.valid_dir)がその一式を受け付けることを確かめる。較正の種は (1b) と同じ規則で件数を照合する。
+      約3〜6分・作業メモリ3GB台。--quick で省く。
 出力先はすべて .tmp_train_v2_<pid>/(本番の data/model_build・docs/model_report.json・data/calib_seed_gen2.json には
 触れない。同じ作業ツリーで同時に走っても互いの一時フォルダを消さない)。
 """
@@ -91,11 +93,57 @@ def booster_for_synthetic(F):
     return M.fit_races(X6[:240], order[:240], X6[240:], order[240:], rounds=12, early_stop=5, log=lambda m: None)
 
 
+def _n_complete_races(six):
+    """6艇そろったレースの表のうち、1〜3着が1艇ずつ付いたレース(main_v2 の complete)の数。"""
+    pos = pd.to_numeric(six["pos"], errors="coerce")
+    keys = [six["date"].astype(str), six["venue"], six["race_no"]]
+    c = pd.concat([(pos == k).groupby(keys).sum().rename(k) for k in (1, 2, 3)], axis=1)
+    return int((c == 1).all(axis=1).sum())
+
+
+def seed_expectation(df):
+    """較正の種の期待値を entries から main_v2 とは別の道で数える。規則(2026-10-07):
+    行列に入る(6艇そろった)レースの日付の後ろ10%が試験期間、その日付の中央値(偶数個なら後ろ側)以降が
+    種の期間で、種の件数はその期間の着順のそろったレース数。採点(test_metrics)は試験期間全体のままなので、
+    前半の日付が種に入っていないことは「種の件数 < 試験期間全体の着順ありレース数」で見る。"""
+    six = T.six_row_races(df, log=lambda m: None)
+    date = six["date"].astype(str)
+    dates = np.sort(date.unique())
+    d_va = dates[int(len(dates) * 0.90)]
+    te_dates = dates[dates >= d_va]
+    d_seed = te_dates[len(te_dates) // 2]
+    return {"d_va": str(d_va), "d_seed": str(d_seed), "d_last": str(dates[-1]), "test_days": int(len(te_dates)),
+            "n_seed": _n_complete_races(six[date >= d_seed]), "n_test_complete": _n_complete_races(six[date >= d_va])}
+
+
+def check_seed(seed_path, meta, df, label):
+    """種のファイルが build_calib の読める形で、meta.calib_seed と同じ中身、件数と built_from が
+    「試験期間の後半だけ」の規則どおりであることを確かめる。"""
+    seed = BC.load_seed(seed_path)
+    assert seed is not None and seed["gen"] == 2 and seed["bins"] == meta["calib_seed"]
+    assert BC.validate_seed(seed) is None
+    for key, tbl in seed["bins"].items():
+        assert all(h <= n for n, h in tbl)
+    n_seed = BC.seed_total_races(seed["bins"])
+    exp = seed_expectation(df)
+    assert exp["test_days"] >= 2 and exp["n_seed"] > 0, exp                # 規則を見るには試験期間が2日以上要る
+    assert n_seed == exp["n_seed"], (n_seed, exp)                           # 後半の着順ありレース数と一致
+    assert n_seed < exp["n_test_complete"] <= meta["races_test"], (n_seed, exp)   # 前半は入っていない
+    assert "train.py" in seed["built_from"]
+    assert f"test の後半 {exp['d_seed']}-{exp['d_last']}" in seed["built_from"], seed["built_from"]
+    assert f"({n_seed} races" in seed["built_from"] and f"test {exp['d_va']}-{exp['d_last']}" in seed["built_from"], seed["built_from"]
+    ok("%s 較正の種: build_calib.load_seed が受け付け、meta.calib_seed と同じ。試験期間 %d 日のうち後半 %s-%s の"
+       "着順ありレース %d 件だけ(試験期間全体は %d 件)、built_from に期間と件数" % (
+           label, exp["test_days"], exp["d_seed"], exp["d_last"], n_seed, exp["n_test_complete"]))
+    return seed
+
+
 # ============================================================ (0) MODEL_GEN の読み方
 def test_resolve_model_gen():
     say("--- (0) 環境変数 MODEL_GEN")
-    assert T.MODEL_GEN == 1, "定数は 1(段階A)"
-    assert T.resolve_model_gen({}) == 1 and T.resolve_model_gen({"MODEL_GEN": ""}) == 1 and T.resolve_model_gen({"MODEL_GEN": "  "}) == 1
+    # 定数は 2(段階B。2026-10-07 に世代2へ切り替え、翌朝の学習から新しいモデル)
+    assert T.MODEL_GEN == 2, "定数は 2(段階B)"
+    assert T.resolve_model_gen({}) == 2 and T.resolve_model_gen({"MODEL_GEN": ""}) == 2 and T.resolve_model_gen({"MODEL_GEN": "  "}) == 2
     assert T.resolve_model_gen({"MODEL_GEN": "1"}) == 1 and T.resolve_model_gen({"MODEL_GEN": "2"}) == 2
     assert T.resolve_model_gen({"MODEL_GEN": " 2 "}) == 2
     for bad in ("3", "abc", "0", "1.0", "-1"):
@@ -111,8 +159,8 @@ def test_resolve_model_gen():
     cp = subprocess.run([sys.executable, "-X", "utf8", "-c",
                          "import sys; sys.path.insert(0, %r); import train, predict_today; print('GEN', train.MODEL_GEN)" % str(ROOT / "scripts")],
                         capture_output=True, text=True, env=env, cwd=str(ROOT))
-    assert cp.returncode == 0 and "GEN 1" in cp.stdout, (cp.returncode, cp.stdout[-300:], cp.stderr[-800:])
-    ok("(0) MODEL_GEN: 空=定数、1/2=その値、それ以外は SystemExit。import 時には読まない(MODEL_GEN=abc でも predict_today が読める)")
+    assert cp.returncode == 0 and "GEN 2" in cp.stdout, (cp.returncode, cp.stdout[-300:], cp.stderr[-800:])
+    ok("(0) MODEL_GEN: 空=定数(2)、1/2=その値、それ以外は SystemExit。import 時には読まない(MODEL_GEN=abc でも predict_today が読める)")
 
 
 # ============================================================ (1) 合成データで自己検査
@@ -210,6 +258,8 @@ def test_main_v2_with_incomplete_race():
     assert meta["params"] == M.model_params({"num_threads": 2}) == M.model_params(None)
     ok("(1b) main_v2: 5行のレースは行列から外れ、全行を特徴量の入口に残したまま最終日の自己検査(5/6 レース)が通る。"
        "meta.params に num_threads / verbosity / force_col_wise は残らない")
+    # 較正の種は試験期間(40日の後ろ4日)の後半2日だけ。最終日の5行のレースは行列に無いので種にも入らない
+    check_seed(TMP / "seed_syn.json", meta, df, "(1b)")
 
 
 # ============================================================ (2) entries の一部で main_v2
@@ -265,15 +315,9 @@ def test_main_v2_subset():
        "feature_importance(153・降順)/self_check")
     say("  TEST %s" % json.dumps(meta["test_metrics"], ensure_ascii=False))
     say("  self_check %s" % json.dumps(meta["self_check"], ensure_ascii=False))
-    # 較正の種(build_calib が読める形)
-    seed = BC.load_seed(seed_path)
-    assert seed is not None and seed["gen"] == 2 and seed["bins"] == meta["calib_seed"]
-    assert BC.validate_seed(seed) is None
-    n_seed = BC.seed_total_races(seed["bins"])
-    assert 0 < n_seed <= meta["races_test"] and "train.py" in seed["built_from"]
-    for key, tbl in seed["bins"].items():
-        assert all(h <= n for n, h in tbl)
-    ok("(2) 較正の種: data 用の JSON を build_calib.load_seed が受け付け、meta.calib_seed と同じ(%d レース)" % n_seed)
+    # 較正の種(build_calib が読める形)。試験期間の後半(日付の中央値以降)の着順ありレースだけから作られる
+    seed = check_seed(seed_path, meta, sub, "(2)")
+    say("  seed built_from: %s" % seed["built_from"])
     # 読み込み側が受け付ける
     booster = lgb.Booster(model_file=str(build / "model.txt"))
     assert booster.num_feature() == len(FEATURES_V2) + M.N_STAGE and booster.num_trees() == meta["best_iterations"]["pl"]

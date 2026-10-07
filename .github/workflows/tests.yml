@@ -1,0 +1,166 @@
+name: tests
+# tests/ の軽いテストを自動で回す(これまで手で回していたものを Actions に乗せる。2026-10-07)。
+#   - 回すのは、通信なし・リポジトリの中身だけで動く・数十秒〜数分で終わるもの。1本ずつ手順に分け、
+#     途中で1本落ちても残りを回して、どれが落ちたかを一度に出す。1本でも落ちればジョブは失敗。
+#   - 回さないもの(手元だけで回す。README の「テスト」):
+#       tests/test_features_hist.py / test_model_v2.py / test_predict_v2.py
+#         実験フォルダ(rebuild/。環境変数 KYOTEI_REBUILD_DIR)の成果物や main のクローンが要り、全期間の
+#         履歴の特徴量を何度も作るので 2〜4分・作業メモリ4GB台。Actions の実行機には成果物が無く、重すぎる。
+#       tests/test_notify_integration.py
+#         実物の pywebpush / py_vapid / cryptography を入れ、127.0.0.1 に偽の配信サーバーを立てて通信する。
+#         pywebpush が無ければ「飛ばした」で正常終了するだけなので、ここで回しても確かめたことにならない。
+#       tests/test_train_v2.py の --quick 無し
+#         entries での世代2の学習(約3〜6分・作業メモリ3GB台)。ここでは --quick(合成データだけ)で回す。
+#   - リポジトリへは何も書き込まない(contents: read)。開催中ループ(auto-update)や daily の「auto results」の
+#     commit は docs/predictions/ などしか変えないので paths に当たらず、このワークフローは動かない
+#     (private リポジトリの Actions の分を使わない)。
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/**"
+      - "tests/**"
+      - "docs/index.html"
+      - "docs/sw.js"
+      - ".github/workflows/tests.yml"
+# 他のワークフロー(data / auto-update / watchdog など)とは別の group にして、互いに待たせない。
+# 続けて push された時は古い回を止めて最新だけ回す(結果が要るのは最新のコードだけ)。
+concurrency:
+  group: tests
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    # 手元の実測は全部で約40秒(test_model_store 20秒・test_build_calib 6秒・他は数秒)。
+    # Actions の実行機は遅いことがあり pip install も入るので、余裕を見て 25分。
+    timeout-minutes: 25
+    env:
+      # 各テストは「PYTHONUTF8=1 で、リポジトリの根から」回す(手元の回し方と同じ。表示は日本語)。
+      # run の作業ディレクトリは既定でリポジトリの根(GITHUB_WORKSPACE)なので cd は要らない。
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # lightgbm は4系に固定(daily.yml / train.yml / auto-update.yml と同じ指定)。
+      # pyyaml は test_workflows_gen2.py が yml の構造(手順の順番・if 条件)を見るのに使う(無いと文字列の確認だけに落ちる)。
+      # lhafile(LZH の解凍)と pywebpush は軽いテストでは使わない(通信を伴う経路は偽物に差し替えてある)。
+      - id: deps
+        run: pip install pandas numpy "lightgbm>=4.6,<5" requests pyyaml
+      # ---- ここから1本ずつ。各手順の if は「前のテストが落ちても回す(!cancelled())。ただし準備(deps)が
+      #      失敗していれば回さない(ImportError で全部落ちて見づらいだけ)」。
+      #      「(有れば)」の2本は、ファイルがまだ無ければ省く(hashFiles が空)。
+      - name: test_parse_b (番組表 B の解析)
+        id: parse_b
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_parse_b.py
+      - name: test_daily_gate (daily の同日再実行の判定)
+        id: daily_gate
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_daily_gate.py
+      - name: test_record_rules (厳選の実績の数え方)
+        id: record_rules
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_record_rules.py
+      - name: test_update_all_stamps (打刻のタイミングと通知の呼び出し)
+        id: update_all_stamps
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_update_all_stamps.py
+      - name: test_gen_rules (世代ごとのしきい値・較正表の引き方)
+        id: gen_rules
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_gen_rules.py
+      - name: test_build_calib (較正表)
+        id: build_calib
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_build_calib.py
+      - name: test_fetch_before (直前情報の欠場の印)
+        id: fetch_before
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_fetch_before.py
+      - name: test_workflows_gen2 (ワークフロー yml の形)
+        id: workflows_gen2
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_workflows_gen2.py
+      - name: test_notify_push (Web Push 送信。偽物に差し替え)
+        id: notify_push
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_notify_push.py
+      - name: test_model_store (モデルの取得・検証・配布・予備)
+        id: model_store
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_model_store.py
+      - name: test_train_v2 --quick (世代2の学習。合成データだけ)
+        id: train_v2
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_train_v2.py --quick
+      - name: test_merge_dayfile (有れば)
+        id: merge_dayfile
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && hashFiles('tests/test_merge_dayfile.py') != '' }}
+        run: python tests/test_merge_dayfile.py
+      - name: test_boards (有れば)
+        id: boards
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' && hashFiles('tests/test_boards.py') != '' }}
+        run: python tests/test_boards.py
+      - name: front_push_test.mjs (アプリのプッシュ通知まわり)
+        id: front_push
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: node tests/front_push_test.mjs
+      - name: front_gen_test.mjs (アプリの「モデルの世代」まわり)
+        id: front_gen
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: node tests/front_gen_test.mjs
+      # ---- まとめ。全部回したあと、結果の一覧を要約(Summary)に出し、1本でも落ちていれば非0で終わる。
+      #      落ちたテストは上の手順が赤で残っているので、そのログを見る。
+      #      skipped は「(有れば)」のファイルがまだ無くて省いたもの(失敗ではない)。
+      - name: まとめ (1本でも落ちていれば失敗)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        env:
+          RESULTS: |
+            test_parse_b=${{ steps.parse_b.outcome }}
+            test_daily_gate=${{ steps.daily_gate.outcome }}
+            test_record_rules=${{ steps.record_rules.outcome }}
+            test_update_all_stamps=${{ steps.update_all_stamps.outcome }}
+            test_gen_rules=${{ steps.gen_rules.outcome }}
+            test_build_calib=${{ steps.build_calib.outcome }}
+            test_fetch_before=${{ steps.fetch_before.outcome }}
+            test_workflows_gen2=${{ steps.workflows_gen2.outcome }}
+            test_notify_push=${{ steps.notify_push.outcome }}
+            test_model_store=${{ steps.model_store.outcome }}
+            test_train_v2 --quick=${{ steps.train_v2.outcome }}
+            test_merge_dayfile=${{ steps.merge_dayfile.outcome }}
+            test_boards=${{ steps.boards.outcome }}
+            front_push_test.mjs=${{ steps.front_push.outcome }}
+            front_gen_test.mjs=${{ steps.front_gen.outcome }}
+        run: |
+          {
+            echo "### tests"
+            echo ""
+            echo "| テスト | 結果 |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          NG=0
+          while IFS='=' read -r name outcome; do
+            if [ -z "$name" ]; then continue; fi
+            case "$outcome" in
+              success) mark="OK" ;;
+              skipped) mark="無し(省略)" ;;
+              *) mark="NG ($outcome)"; NG=$((NG + 1)) ;;
+            esac
+            echo "| $name | $mark |" >> "$GITHUB_STEP_SUMMARY"
+            echo "$mark  $name"
+          done <<< "$RESULTS"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$NG" != 0 ]; then
+            echo "$NG 本落ちた(落ちた手順のログを見る)" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "全部通った" | tee -a "$GITHUB_STEP_SUMMARY"

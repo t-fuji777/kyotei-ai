@@ -48,6 +48,10 @@ jobs:
           git config user.email github-actions@github.com
           commit_push() {
             git add docs/predictions
+            # 3連単の板の記録(scripts/boards.py が update_all から data/boards/YYYYMMDD.jsonl に追記)も
+            # ここで送る。フォルダは最初の板を書いた時にできるので、有る時だけ add する(無いパスを
+            # add すると git が fatal で止まり、bash -e で周回ごと落ちる。daily.yml の較正の種と同じ形)。
+            if [ -d data/boards ]; then git add data/boards; fi
             if git diff --cached --quiet; then
               # update_all.py が取得の合間に行う公開(scripts/publish_stamps.sh)は push を1回しか
               # 試さず、断られたらコミットをローカルに残す。差分が無くても、未送信のコミットが
@@ -59,12 +63,48 @@ jobs:
             fi
             for attempt in 1 2 3 4 5; do
               git fetch origin main || true
+              # rebase 前の共通祖先。rebase の後に「上流が BASE 以降に変えた当日ファイル」を見つけるために取る
+              # (失敗しても空で進む。bash -e なので代入の中で || true が要る)
+              BASE=$(git merge-base HEAD origin/main 2>/dev/null || true)
               git rebase -X theirs origin/main || { echo "rebase failed, syncing to remote"; git rebase --abort || true; git reset --hard origin/main || true; return; }
+              merge_day_files "$BASE" || true
               if git push origin HEAD:main; then echo "pushed (try $attempt)"; return; fi
               echo "push rejected (try $attempt), retrying"
               sleep 3
             done
             echo "push not completed this iteration (will retry next loop)"
+          }
+          # 上流が rebase 前の共通祖先(BASE)以降に変えた当日ファイルを、JSON 単位で merge する。
+          # 当日ファイルは1行 JSON なので、上の `git rebase -X theirs` は「どちらかの版が丸ごと勝つ」しか
+          # できず、-X theirs は再適用する側 = 周回のローカルコミットが勝つ。そのため daily が 7:00 以降に
+          # ずれ込んだ日、daily の predict today が push した直後の周回が、周回の先頭で同期した古い当日
+          # ファイル(前日モデルの買い目)で daily の予測を丸ごと上書きしていた(2026-10-06: 08:05 の
+          # daily update を 08:06 の auto results が巻き戻し、daily_gate が「本日学習のモデルで作られて
+          # いない」と判定して daily がもう1回フル実行された)。scripts/merge_dayfile.py は上流の版を土台に
+          # 周回の観測(結果・オッズ・展示・打刻)を重ね、打刻済み・live のレースの買い目は周回のものを残す。
+          # latest.json は当日ファイルの写しなので merge 結果を写す(--latest。date が同じ時だけ)。
+          # 手元(周回)が触っていないファイルは rebase で上流の版になっているので merge しない。
+          # merge_dayfile が失敗した(終了コード非0)時は何もせず、今までどおり -X theirs の結果のまま進む。
+          # 対象は commit_push だけ: publish_stamps.sh は rebase しない(push が断られたらここへ回る)。
+          # self_heal の `git pull --rebase -X theirs` は当日ファイルが無い時にしか走らないので対象外。
+          # commit_push から `|| true` 付きで呼ぶので、この中では bash -e が効かない(途中で失敗しても
+          # 周回は止まらない)。
+          merge_day_files() {
+            [ -n "$1" ] || return 0
+            local f tmp
+            for f in $(git diff --name-only "$1" origin/main -- docs/predictions 2>/dev/null | grep -E '^docs/predictions/[0-9]{8}\.json$'); do
+              if [ ! -f "$f" ] || git diff --quiet origin/main HEAD -- "$f"; then continue; fi
+              tmp=$(mktemp)
+              if git show "origin/main:$f" > "$tmp" 2>/dev/null \
+                 && python scripts/merge_dayfile.py "$f" "$tmp" "$f" --latest docs/predictions/latest.json; then
+                echo "merge_dayfile: $f を上流の版と merge した"
+              else
+                echo "merge_dayfile: $f は merge できず。rebase -X theirs の結果(周回の版)のまま進む"
+              fi
+              rm -f "$tmp"
+            done
+            git add docs/predictions
+            git diff --cached --quiet || git commit -q -m "merge day file"
           }
           # 各周回の先頭でリモートへ追随する。commit_push は「差分なし」で早期
           # return して fetch しないため、書くものが無い間は古い作業ツリーのまま

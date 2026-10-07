@@ -609,11 +609,19 @@ def main_v2(entries=None, rounds=model_v2.ROUNDS_V2, early_stop=model_v2.EARLY_S
     say("BASELINE: " + json.dumps(rep_base, ensure_ascii=False))
     del te2
 
-    # 較正の種(設計 4.6): 試験期間の「直前情報あり」の予測のビン別の件数・的中数
+    # 較正の種(設計 4.6): 試験期間の「直前情報あり」の予測のビン別の件数・的中数。
+    # 種にするのは試験期間の後半(日付の中央値以降。日付が偶数個なら後ろ側の半分)だけ: 前半の種で後半を
+    # 見ると上側の帯で表示%が実際より 2〜4pt 高く出た(較正の目盛りが時期で動く)ので、今の目盛りに近い
+    # 後半だけから作る(2026-10-07)。採点(test_metrics など)は試験期間全体のまま。種の縮め先
+    # build_calib.SEED_TARGET_RACES もそのまま(後半だけなら約15,000 レースで重みは約0.67になる)。
     trained_at = datetime.now(JST).strftime("%Y-%m-%d %H:%M JST")
-    seed_rows = _seed_rows(rno_r[te_idx], pos6[te_idx], P, complete[te_idx])
-    seed = make_seed(seed_rows, built_from=f"train.py {trained_at} test {d_va}-{udates[-1]} live ({len(seed_rows)} races)")
-    say(f"calib seed: {len(seed_rows)} races")
+    te_dates = udates[udates >= d_va]                      # 試験期間の日付(昇順)
+    d_seed = te_dates[len(te_dates) // 2]                  # この日以降が種(1日だけなら全部)
+    seed_sel = date_r[te_idx] >= d_seed                    # te_idx・P と同じ並びの位置
+    seed_rows = _seed_rows(rno_r[te_idx][seed_sel], pos6[te_idx][seed_sel], P[seed_sel], complete[te_idx][seed_sel])
+    seed = make_seed(seed_rows, built_from=f"train.py {trained_at} test の後半 {d_seed}-{udates[-1]} live "
+                                           f"({len(seed_rows)} races; test {d_va}-{udates[-1]})")
+    say(f"calib seed: {len(seed_rows)} races (test の後半 {d_seed}-{udates[-1]}: {int(seed_sel.sum())} of {len(te_idx)} test races)")
 
     # 特徴量の重要度(gain の絶対値・降順)。153列は feature_importance、段の特徴6列は stage_importance
     gain = np.asarray(booster.feature_importance("gain"), dtype=np.float64)
