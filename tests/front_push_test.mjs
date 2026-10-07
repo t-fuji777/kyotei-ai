@@ -264,7 +264,7 @@ for (const [label, impl, diag] of [["507", status(507), "応答507"], ["回線�
   check("A2 押した後は有効", env.text().includes(ON));
   eq("A3 通信", env.state.fetchCalls, ["POST /sub"]);
   await env.els.pushTest.onclick();
-  eq("A4 テスト通知が1件出る(tag は aritei-test)", env.state.shown.map((s) => s.title + "/" + s.opt.tag), ["厳選プラン確定 from アリテイ/aritei-test"]);
+  eq("A4 テスト通知が1件出る(tag は aritei-test)", env.state.shown.map((s) => s.title + "/" + s.opt.tag), ["厳選プラン確定/aritei-test"]);
   check("A4 テスト通知の本文と、押した後の結果の表示", env.state.shown[0].opt.body.includes("下関5R 締切17:19") && env.state.shown[0].opt.body.includes("的中率") && env.text().includes("テスト通知を表示しました"), env.text());
   eq("A4 テスト通知では Worker へ通信しない", env.state.fetchCalls, ["POST /sub"]);
 }
