@@ -514,7 +514,7 @@ def test_result_and_bundles_keep_the_default_title():
         reset([sub(1)])
         set_now("17:40")                                  # 5R は締切後(確定は送らない)。結果だけが出る
         N.notify_events(pred_of(race5(result={"order": "1-5-4", "pay3t": 1430})), YMD)
-        assert payloads() == [{"title": "アリテイ", "body": "不的中 下関5R", "tag": "res-%s-19-5" % YMD}], payloads()
+        assert payloads() == [{"title": "厳選の結果", "body": "不的中 下関5R", "tag": "res-%s-19-5" % YMD}], payloads()
     with state_file():
         reset([sub(1)])
         set_now("17:05")                                  # 確定が2件同時 → まとめて1通
@@ -616,7 +616,7 @@ def test_cancelled_race_is_reported():
         set_now("17:30")
         pred["venues"][0]["races"][0]["result"] = {"status": "中止", "ninki": None}
         assert N.notify_events(pred, YMD) is False
-        assert payloads()[1] == {"title": "アリテイ", "body": "中止 下関5R(返還)", "tag": res}, payloads()
+        assert payloads()[1] == {"title": "厳選の結果", "body": "中止 下関5R(返還)", "tag": res}, payloads()
         assert saved_ids(path) == ["conf-%s-19-5" % YMD, res]
 
 

@@ -56,6 +56,9 @@ PUSH_TITLE = "アリテイ"   # 通知の題名の既定値
 # 付けるので、題名に入れると「厳選プラン確定 from アリテイ from アリテイ」と二重になり2行に折れる(実機で確認)。
 # Android は題名の上にサイト名を別に出すので、どちらでも1段目は「厳選プラン確定 (from アリテイ)」の見え方になる。
 CONF_TITLE_FMT = "{plan}プラン確定"
+# 結果の通知の題名。既定の「アリテイ」だと、iPhone が足す「from アリテイ」と並んで同じ言葉が2行続くので、
+# 何の知らせかが分かる題名にする(本文は「的中 … / 不的中 …」)。
+RES_TITLE = "厳選の結果"
 # 1件の送信の時間切れ(接続, 応答待ち)秒。接続の時間切れは宛先ホストのIPアドレスの数だけ繰り返される
 # ので、これだけでは上限にならない。上限を実際に守るのは下の PUSH_TOTAL_SEC(待つ側で切り上げる)。
 PUSH_TIMEOUT = (3, 8)
@@ -777,6 +780,8 @@ def notify_events(pred: dict, ymd: str) -> bool:
                 heads, bodies = zip(*(m.split("\n", 1) for m in msgs))
                 title = _push_body(heads[0])
                 body = "\n".join(bodies)
+            elif ids and all(i.startswith("res-") for i in ids):
+                title = RES_TITLE
             push_ok = send_push(body, tag=_event_tag(ids), title=title, ttl=_event_ttl(ids, secs_left))
         if webhook_ok or push_ok:
             sent.update(ids)
