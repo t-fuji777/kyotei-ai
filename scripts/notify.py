@@ -49,6 +49,8 @@ RES_MAX_AGE_MIN = 120
 PUSH_SUBS_URL_DEFAULT = "https://aritei-push.t-fujino.workers.dev"
 PUSH_CONTACT = "mailto:t.fujino@meihogp.co.jp"
 PUSH_TITLE = "アリテイ"   # 通知の題名の既定値
+# 厳選確定の通知の題名(1段目)。本文は 2段目「会場・レース番号・締切時刻」、3段目「的中率」(2026-10-07 の指定)。
+CONF_TITLE_FMT = "{plan}プラン確定 from " + PUSH_TITLE
 # 1件の送信の時間切れ(接続, 応答待ち)秒。接続の時間切れは宛先ホストのIPアドレスの数だけ繰り返される
 # ので、これだけでは上限にならない。上限を実際に守るのは下の PUSH_TOTAL_SEC(待つ側で切り上げる)。
 PUSH_TIMEOUT = (3, 8)
@@ -166,16 +168,33 @@ def _conf_events(pred: dict, ymd: str):
             no = r.get("no")
             eid = f"conf-{ymd}-{vcode}-{no}"
             plan = _plan_label(r)
-            pt = r.get("pt")
-            time_part = f" {pt}" if pt else ""
             deadline = r.get("deadline", "")
-            msg = f"{APP_TAG} {plan}プラン確定{time_part} / {vname}{no}R 締切{deadline}"
-            # 通知だけ見て買えるよう、上位3点を添える(打刻後は買い目が凍結されている)。
-            picks = [p.get("c") for p in (r.get("picks") or [])[:3] if p.get("c")]
-            if picks:
-                msg += "\n買い目 " + " / ".join(picks)
+            # 3段の形(2026-10-07 の指定): 1段目 = 題名「厳選プラン確定 from アリテイ」、
+            # 2段目 = 会場・レース番号・締切時刻、3段目 = 的中率(アプリの厳選カードと同じ較正済みの%)。
+            # 買い目と確定時刻は載せない(アプリで見る)。Web Push では1段目を題名に、残りを本文にする。
+            msg = CONF_TITLE_FMT.format(plan=plan) + f"\n{vname}{no}R 締切{deadline}"
+            hit = _hit_rate_text(r)
+            if hit:
+                msg += "\n" + hit
             out.append((eid, msg))
     return out
+
+
+def _hit_rate_text(r: dict):
+    """厳選カードに出している較正済みの的中率(%)。上位3点の確率の合計を、レースの世代の較正表
+    (1〜4R は t3e、5R 以降は t3l)で実測の的中率に直す(docs/index.html の calT3 と同じ式)。
+    較正表が読めない時は None(その行は出さない)。"""
+    try:
+        import common
+        top3p = common.sengen_top3p(r.get("picks"))
+        if not top3p:
+            return None
+        key = "t3e" if (r.get("no") or 12) <= 4 else "t3l"
+        tbl = common._calib_tbl(key, common.race_gen(r))
+        return f"的中率 {common.cal_pct(top3p, tbl)}%"
+    except Exception as e:
+        print(f"notify: 的中率を出せない({type(e).__name__}: {e})")
+        return None
 
 
 def _res_events(pred: dict, ymd: str):
@@ -746,11 +765,13 @@ def notify_events(pred: dict, ymd: str) -> bool:
         push_ok = False
         if push_ready:
             title, body = "", text
-            if len(ids) == 1 and ids[0].startswith("conf-") and "\n" in msgs[0]:
-                # 確定が1件だけの時は、1行目(何が確定したか)を題名に、残り(買い目)を本文にする。
-                # 畳まれた通知は本文が1行しか見えないので、開かなくても買い目まで読めるようにする。
-                head, body = msgs[0].split("\n", 1)
-                title = _push_body(head)
+            if ids and all(i.startswith("conf-") for i in ids) and all("\n" in m for m in msgs):
+                # 確定だけの通知は、1行目(「厳選プラン確定 from アリテイ」)を題名に、残り(会場・レース・
+                # 締切 / 的中率)を本文にする。複数の確定を1通にまとめた時も題名は1つで、本文に
+                # レースごとの2行を続ける(題名が同じなので先頭のものを使う)。
+                heads, bodies = zip(*(m.split("\n", 1) for m in msgs))
+                title = _push_body(heads[0])
+                body = "\n".join(bodies)
             push_ok = send_push(body, tag=_event_tag(ids), title=title, ttl=_event_ttl(ids, secs_left))
         if webhook_ok or push_ok:
             sent.update(ids)

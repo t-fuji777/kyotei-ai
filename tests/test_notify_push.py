@@ -20,6 +20,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import notify as N
 
+# 文面のテストは較正表(docs/calib.json)の値に左右されないよう、的中率を固定する。
+_REAL_HIT_RATE = N._hit_rate_text
+N._hit_rate_text = lambda r: "的中率 54%"
+
 JST = timezone(timedelta(hours=9))
 YMD = "20261003"
 WORKER = "https://aritei-push.example.workers.dev"
@@ -425,7 +429,25 @@ def test_conf_message_carries_the_picks():
         {"no": 6, "tk": 0, "mt": 0, "pt": "17:30", "deadline": "17:45", "picks": [{"c": "1-2-3", "p": 0.2}]},
     ]}]}
     ev = N._conf_events(pred, "20261003")
-    assert ev == [("conf-20261003-19-5", "[アリテイ] 厳選プラン確定 17:04 / 下関5R 締切17:19\n買い目 1-3-4 / 1-4-3 / 1-3-5")], ev
+    assert ev == [("conf-20261003-19-5", "厳選プラン確定 from アリテイ\n下関5R 締切17:19\n的中率 54%")], ev
+    # 的中率が出せない時は、その行だけ無い
+    saved = N._hit_rate_text
+    N._hit_rate_text = lambda r: None
+    try:
+        assert N._conf_events(pred, "20261003")[0][1] == "厳選プラン確定 from アリテイ\n下関5R 締切17:19"
+    finally:
+        N._hit_rate_text = saved
+
+
+def test_hit_rate_text_uses_the_calibrated_top3_rate():
+    """的中率はアプリの厳選カードと同じ(較正表で上位3点の合計確率を実測の的中率に直す)。"""
+    import common as C
+    r = {"no": 5, "picks": [{"c": "1-2-3", "p": 0.2}, {"c": "1-3-2", "p": 0.15}, {"c": "2-1-3", "p": 0.1}]}
+    want = C.cal_pct(0.45, C._calib_tbl("t3l", 1))
+    assert _REAL_HIT_RATE(r) == f"的中率 {want}%"
+    r1 = dict(r, no=3)
+    assert _REAL_HIT_RATE(r1) == f"的中率 {C.cal_pct(0.45, C._calib_tbl('t3e', 1))}%"
+    assert _REAL_HIT_RATE({"no": 5, "picks": []}) is None
 
 
 def test_stale_ids():
@@ -482,8 +504,8 @@ def test_single_confirmation_uses_first_line_as_title_and_carries_a_tag():
         reset([sub(1)])
         set_now("17:05")
         N.notify_events(pred_of(race5()), YMD)
-        assert payloads() == [{"title": "厳選プラン確定 17:04 / 下関5R 締切17:19",
-                               "body": "買い目 1-3-4 / 1-4-3 / 1-3-5",
+        assert payloads() == [{"title": "厳選プラン確定 from アリテイ",
+                               "body": "下関5R 締切17:19\n的中率 54%",
                                "tag": "conf-%s-19-5" % YMD}], payloads()
 
 
@@ -498,9 +520,8 @@ def test_result_and_bundles_keep_the_default_title():
         set_now("17:05")                                  # 確定が2件同時 → まとめて1通
         N.notify_events(pred_of(race5(), race5(no=6, deadline="17:25", pt="17:05")), YMD)
         p = payloads()
-        assert len(p) == 1 and p[0]["title"] == "アリテイ"
-        assert p[0]["body"].startswith("厳選プラン確定 17:04 / 下関5R 締切17:19\n買い目")
-        assert "下関6R 締切17:25" in p[0]["body"]
+        assert len(p) == 1 and p[0]["title"] == "厳選プラン確定 from アリテイ"
+        assert p[0]["body"] == "下関5R 締切17:19\n的中率 54%\n下関6R 締切17:25\n的中率 54%", p[0]["body"]
         assert p[0]["tag"].startswith("ev-") and len(p[0]["tag"]) == 19
         ids = ["conf-%s-19-5" % YMD, "conf-%s-19-6" % YMD]
         assert p[0]["tag"] == N._event_tag(ids) and N._event_tag(ids) != N._event_tag(ids[::-1])
