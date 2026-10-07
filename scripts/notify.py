@@ -49,7 +49,9 @@ RES_MAX_AGE_MIN = 120
 PUSH_SUBS_URL_DEFAULT = "https://aritei-push.t-fujino.workers.dev"
 PUSH_CONTACT = "mailto:t.fujino@meihogp.co.jp"
 PUSH_TITLE = "アリテイ"   # 通知の題名の既定値
-# 厳選確定の通知の題名(1段目)。本文は 2段目「会場・レース番号・締切時刻」、3段目「的中率」(2026-10-07 の指定)。
+# 厳選確定の通知の題名(1段目)。本文は1行「会場・レース番号 締切時刻　的中率」(2026-10-07 の指定)。
+# iPhone は題名の下に「from アリテイ」の行を必ず自分で足す(消せない)ので、本文を2行にすると4段になる。
+# 3段に収めるため、会場・レース・締切と的中率は1行にまとめる(実機で確認)。
 # 「from アリテイ」は書かない: iPhone は Web Push の題名の後ろにアプリ名を「from アリテイ」と自動で
 # 付けるので、題名に入れると「厳選プラン確定 from アリテイ from アリテイ」と二重になり2行に折れる(実機で確認)。
 # Android は題名の上にサイト名を別に出すので、どちらでも1段目は「厳選プラン確定 (from アリテイ)」の見え方になる。
@@ -172,13 +174,13 @@ def _conf_events(pred: dict, ymd: str):
             eid = f"conf-{ymd}-{vcode}-{no}"
             plan = _plan_label(r)
             deadline = r.get("deadline", "")
-            # 3段の形(2026-10-07 の指定): 1段目 = 題名「厳選プラン確定」(端末がアプリ名を添える)、
-            # 2段目 = 会場・レース番号・締切時刻、3段目 = 的中率(アプリの厳選カードと同じ較正済みの%)。
-            # 買い目と確定時刻は載せない(アプリで見る)。Web Push では1段目を題名に、残りを本文にする。
+            # 3段の形(2026-10-07 の指定): 題名「厳選プラン確定」(iPhone はその下に「from アリテイ」を自分で足す)、
+            # 本文は1行「会場・レース番号 締切時刻　的中率」(的中率はアプリの厳選カードと同じ較正済みの%)。
+            # 買い目と確定時刻は載せない(アプリで見る)。Web Push では1行目を題名に、残りを本文にする。
             msg = CONF_TITLE_FMT.format(plan=plan) + f"\n{vname}{no}R 締切{deadline}"
             hit = _hit_rate_text(r)
             if hit:
-                msg += "\n" + hit
+                msg += "　" + hit
             out.append((eid, msg))
     return out
 
@@ -769,9 +771,9 @@ def notify_events(pred: dict, ymd: str) -> bool:
         if push_ready:
             title, body = "", text
             if ids and all(i.startswith("conf-") for i in ids) and all("\n" in m for m in msgs):
-                # 確定だけの通知は、1行目(「厳選プラン確定」)を題名に、残り(会場・レース・
-                # 締切 / 的中率)を本文にする。複数の確定を1通にまとめた時も題名は1つで、本文に
-                # レースごとの2行を続ける(題名が同じなので先頭のものを使う)。
+                # 確定だけの通知は、1行目(「厳選プラン確定」)を題名に、残り(会場・レース・締切と
+                # 的中率の1行)を本文にする。複数の確定を1通にまとめた時も題名は1つで、本文に
+                # レースごとの1行を続ける(題名が同じなので先頭のものを使う)。
                 heads, bodies = zip(*(m.split("\n", 1) for m in msgs))
                 title = _push_body(heads[0])
                 body = "\n".join(bodies)

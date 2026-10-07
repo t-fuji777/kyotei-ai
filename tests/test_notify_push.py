@@ -429,7 +429,7 @@ def test_conf_message_carries_the_picks():
         {"no": 6, "tk": 0, "mt": 0, "pt": "17:30", "deadline": "17:45", "picks": [{"c": "1-2-3", "p": 0.2}]},
     ]}]}
     ev = N._conf_events(pred, "20261003")
-    assert ev == [("conf-20261003-19-5", "厳選プラン確定\n下関5R 締切17:19\n的中率 54%")], ev
+    assert ev == [("conf-20261003-19-5", "厳選プラン確定\n下関5R 締切17:19　的中率 54%")], ev
     # 的中率が出せない時は、その行だけ無い
     saved = N._hit_rate_text
     N._hit_rate_text = lambda r: None
@@ -505,7 +505,7 @@ def test_single_confirmation_uses_first_line_as_title_and_carries_a_tag():
         set_now("17:05")
         N.notify_events(pred_of(race5()), YMD)
         assert payloads() == [{"title": "厳選プラン確定",
-                               "body": "下関5R 締切17:19\n的中率 54%",
+                               "body": "下関5R 締切17:19　的中率 54%",
                                "tag": "conf-%s-19-5" % YMD}], payloads()
 
 
@@ -521,7 +521,7 @@ def test_result_and_bundles_keep_the_default_title():
         N.notify_events(pred_of(race5(), race5(no=6, deadline="17:25", pt="17:05")), YMD)
         p = payloads()
         assert len(p) == 1 and p[0]["title"] == "厳選プラン確定"
-        assert p[0]["body"] == "下関5R 締切17:19\n的中率 54%\n下関6R 締切17:25\n的中率 54%", p[0]["body"]
+        assert p[0]["body"] == "下関5R 締切17:19　的中率 54%\n下関6R 締切17:25　的中率 54%", p[0]["body"]
         assert p[0]["tag"].startswith("ev-") and len(p[0]["tag"]) == 19
         ids = ["conf-%s-19-5" % YMD, "conf-%s-19-6" % YMD]
         assert p[0]["tag"] == N._event_tag(ids) and N._event_tag(ids) != N._event_tag(ids[::-1])
