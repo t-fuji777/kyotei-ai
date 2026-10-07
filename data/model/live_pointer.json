@@ -1,16 +1,14 @@
 {
  "v": 1,
- "format": 1,
+ "format": 2,
  "tag": "model-live",
- "asset": "model-20261007-0624-a7d0ffbaaedd.tar.gz",
- "sha256": "a7d0ffbaaedd5cadfd9ec37813ae1665976ed9cccf8b060756f09a1004f428a0",
- "size": 5150548,
- "trained_at": "2026-10-07 06:24 JST",
- "period_end": "20261006",
+ "asset": "model-20261008-0658-ba353d3618fd.tar.gz",
+ "sha256": "ba353d3618fd2535acf8d99e39ea9832727e9b56c75548d3e186ce468e21c26b",
+ "size": 2471376,
+ "trained_at": "2026-10-08 06:58 JST",
+ "period_end": "20261007",
  "files": {
-  "meta.json": "0b62d3271c968e934e147b217d48852fcbc846e5c3fb52c3b20dd51358ae5840",
-  "model_top2.txt": "3d80d7cdd11ace3db7163f9a1c33a524bd6b177d9a3b2ddaf907b97a53f4f90e",
-  "model_top3.txt": "eb24dd6c023d57b505bfa6b525ac8cf72594a2db187cc7047bbf06a0ca97e45f",
-  "model_win.txt": "b716da2fbb5635372e2bc4e4749756efb0337de371452257187646c446f75837"
+  "meta.json": "401bb4354a1026dd021c2dde734dce44a7da95daf739bd41e0855fb9597d8ff1",
+  "model.txt": "6be227cc714178fa7387a60a268a2069e3ab83b1dd98d05f00ace3750e8a68f5"
  }
 }
