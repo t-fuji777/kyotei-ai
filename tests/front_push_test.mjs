@@ -265,7 +265,7 @@ for (const [label, impl, diag] of [["507", status(507), "応答507"], ["回線�
   eq("A3 通信", env.state.fetchCalls, ["POST /sub"]);
   await env.els.pushTest.onclick();
   eq("A4 テスト通知が1件出る(tag は aritei-test)", env.state.shown.map((s) => s.title + "/" + s.opt.tag), ["厳選プラン確定 from アリテイ/aritei-test"]);
-  check("A4 テスト通知の本文と、押した後の結果の表示", env.state.shown[0].opt.body.includes("この端末の通知設定は正常") && env.text().includes("テスト通知を表示しました"), env.text());
+  check("A4 テスト通知の本文と、押した後の結果の表示", env.state.shown[0].opt.body.includes("下関5R 締切17:19") && env.state.shown[0].opt.body.includes("的中率") && env.text().includes("テスト通知を表示しました"), env.text());
   eq("A4 テスト通知では Worker へ通信しない", env.state.fetchCalls, ["POST /sub"]);
 }
 // B) 登録の POST が失敗 → 正直な表示 → 次の起動時に自動で登録し直す
