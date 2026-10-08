@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""厳選プランの確定(conf)と結果(res)を外部Webhook/Web Pushへ通知する。松は2026-09-01終売(mt=1は今後発生しない)。
+"""厳選プランの確定(conf)と結果(res)を外部Webhook/Web Pushへ通知する。
+対象は race["tk"]==1(厳選が確定したレース)だけ。松プランは2026-09-01に終売(以後 mt は常に0)なので、
+このモジュールは松を見ない(2026-10-09 に松の分岐を撤去)。
 
 環境変数 NOTIFY_WEBHOOK が未設定/空ならWebhook送信は行わない。設定時のみ、
 送信先URLからTelegram(api.telegram.orgを含む)/ Discord互換 を自動判別してPOSTする。
@@ -56,7 +58,7 @@ PUSH_TITLE = "アリテイ"   # 通知の題名の既定値
 # 「from アリテイ」は書かない: iPhone は Web Push の題名の後ろにアプリ名を「from アリテイ」と自動で
 # 付けるので、題名に入れると「厳選確定 from アリテイ from アリテイ」と二重になり2行に折れる(実機で確認)。
 # Android は題名の上にサイト名を別に出すので、どちらでも1段目は「厳選確定 (from アリテイ)」の見え方になる。
-CONF_TITLE_FMT = "{plan}確定"   # 「厳選確定」「松確定」
+CONF_TITLE = "厳選確定"
 # 結果の通知の題名。既定の「アリテイ」だと、iPhone が足す「from アリテイ」と並んで同じ言葉が2行続くので、
 # 何の知らせかが分かる題名にする(本文は「【○】会場NR 払戻…円 / 【×】会場NR」)。
 RES_TITLE = "厳選結果"
@@ -157,34 +159,22 @@ def send_webhook(url: str, text: str) -> bool:
         return False
 
 
-def _plan_label(r: dict) -> str:
-    tk, mt = r.get("tk") == 1, r.get("mt") == 1
-    if tk and mt:
-        return "厳選・松"
-    if tk:
-        return "厳選"
-    if mt:
-        return "松"
-    return ""
-
-
 def _conf_events(pred: dict, ymd: str):
-    """確定イベント: tk==1 or mt==1のレースを検出し(id, 文面)を返す。"""
+    """確定イベント: tk==1(厳選が確定した)レースを検出し(id, 文面)を返す。"""
     out = []
     for v in pred.get("venues") or []:
         vname = v.get("name", "")
         vcode = v.get("code")
         for r in v.get("races") or []:
-            if r.get("tk") != 1 and r.get("mt") != 1:
+            if r.get("tk") != 1:
                 continue
             no = r.get("no")
             eid = f"conf-{ymd}-{vcode}-{no}"
-            plan = _plan_label(r)
             deadline = r.get("deadline", "")
             # 3段の形(2026-10-07 の指定): 題名「厳選確定」(iPhone はその下に「from アリテイ」を自分で足す)、
             # 本文は1行「会場・レース番号 締切時刻 的中率」(的中率はアプリの厳選カードと同じ較正済みの%)。
             # 買い目と確定時刻は載せない(アプリで見る)。Web Push では1行目を題名に、残りを本文にする。
-            msg = CONF_TITLE_FMT.format(plan=plan) + f"\n{vname}{no}R 締切{deadline}"
+            msg = CONF_TITLE + f"\n{vname}{no}R 締切{deadline}"
             hit = _hit_rate_text(r)
             if hit:
                 msg += " " + hit     # 半角空白(2026-10-09 の指定)
@@ -210,16 +200,15 @@ def _hit_rate_text(r: dict):
 
 
 def _res_events(pred: dict, ymd: str):
-    """結果イベント: tk==1 or mt==1のレースにresult.orderが付いたら(id, 文面)を返す。
-    厳選=picks上位3点内、(終売済みの)松=上位4点内で的中判定。両該当ならそれぞれ記載する。
+    """結果イベント: tk==1(厳選が確定した)レースにresult.orderが付いたら(id, 文面)を返す。
+    的中判定は確定時の買い目の上位3点内。
     着順が無く status だけの結果(中止・不成立)は、その旨を1行で返す。"""
     out = []
     for v in pred.get("venues") or []:
         vname = v.get("name", "")
         vcode = v.get("code")
         for r in v.get("races") or []:
-            tk, mt = r.get("tk") == 1, r.get("mt") == 1
-            if not tk and not mt:
+            if r.get("tk") != 1:
                 continue
             res = r.get("result") or {}
             order = res.get("order")
@@ -234,27 +223,18 @@ def _res_events(pred: dict, ymd: str):
                 continue
             picks = [p.get("c") for p in (r.get("picks") or [])]
             pay = res.get("pay3t")
-            plans = []
-            if tk:
-                # 的中は確定した時点の買い目で数える(scripts/common.py の sengen_picks と同じ規則。
-                # os は確定時の買い目の上位4点をその順で持つ)。確定の後に買い目が差し替わっても、
-                # 通知で知らせた買い目と違う目で「的中」にしない。
-                osd = r.get("os")
-                top3 = list(osd.keys())[:3] if isinstance(osd, dict) and len(osd) >= 3 else picks[:3]
-                plans.append(("厳選", order in top3))
-            if mt:
-                plans.append(("松", order in picks[:4]))
-            multi = len(plans) > 1
-            lines = []
-            for label, hit in plans:
-                # 文面(2026-10-09 の指定): 的中は【○】、不的中は【×】。着順(例 6-1-2)は書かない(アプリで見る)。
-                # 例「【○】多摩川6R 払戻430円」「【×】多摩川6R」。厳選と松の両方に当たるレースは印の後に名前を添える。
-                prefix = f"{label} " if multi else ""
-                line = f"{RES_HIT_MARK if hit else RES_MISS_MARK}{prefix}{vname}{no}R"
-                if hit and pay is not None:
-                    line += f" 払戻{pay}円"
-                lines.append(line)
-            out.append((eid, "\n".join(lines)))
+            # 的中は確定した時点の買い目で数える(scripts/common.py の sengen_picks と同じ規則。
+            # os は確定時の買い目の上位4点をその順で持つ)。確定の後に買い目が差し替わっても、
+            # 通知で知らせた買い目と違う目で「的中」にしない。
+            osd = r.get("os")
+            top3 = list(osd.keys())[:3] if isinstance(osd, dict) and len(osd) >= 3 else picks[:3]
+            hit = order in top3
+            # 文面(2026-10-09 の指定): 的中は【○】、不的中は【×】。着順(例 6-1-2)は書かない(アプリで見る)。
+            # 例「【○】多摩川6R 払戻430円」「【×】多摩川6R」。
+            line = f"{RES_HIT_MARK if hit else RES_MISS_MARK}{vname}{no}R"
+            if hit and pay is not None:
+                line += f" 払戻{pay}円"
+            out.append((eid, line))
     return out
 
 
@@ -280,7 +260,7 @@ def _stale_ids(pred: dict, ymd: str) -> set:
     for v in pred.get("venues") or []:
         vcode = v.get("code")
         for r in v.get("races") or []:
-            if r.get("tk") != 1 and r.get("mt") != 1:
+            if r.get("tk") != 1:
                 continue
             no = r.get("no")
             late = r.get("ph") == 1
@@ -297,7 +277,7 @@ def _conf_secs_left(pred: dict, ymd: str) -> dict:
     out = {}
     for v in pred.get("venues") or []:
         for r in v.get("races") or []:
-            if r.get("tk") != 1 and r.get("mt") != 1:
+            if r.get("tk") != 1:
                 continue
             age = _mins_past_deadline(r.get("deadline"), ymd)
             if age is not None:

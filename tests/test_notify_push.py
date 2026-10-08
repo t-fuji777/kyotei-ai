@@ -602,16 +602,17 @@ def test_ttl_follows_the_deadline():
 
 def test_result_wording_marks_without_order():
     """結果の文面(2026-10-09 の指定): 的中は【○】、不的中は【×】、着順は書かない。払戻が無ければ会場とレースだけ。
-    厳選と松の両方のレースは印の後に名前を添えて1行ずつ。確定の題名は「厳選確定」「松確定」(「プラン」なし)。"""
+    松プランは終売(2026-09-01)なので、mt=1 だけのレースは確定も結果も通知しない。"""
     res = "res-%s-19-5" % YMD
     assert N._res_events(pred_of(race5(result={"order": "1-3-4", "pay3t": 1230})), YMD) == [(res, "【○】下関5R 払戻1230円")]
     assert N._res_events(pred_of(race5(result={"order": "1-3-4"})), YMD) == [(res, "【○】下関5R")]
     assert N._res_events(pred_of(race5(result={"order": "6-1-2", "pay3t": 430})), YMD) == [(res, "【×】下関5R")]
-    # 厳選は上位3点、松は上位4点: 1-2-3 は松だけ的中
-    both = N._res_events(pred_of(race5(mt=1, result={"order": "1-2-3", "pay3t": 500})), YMD)
-    assert both == [(res, "【×】厳選 下関5R\n【○】松 下関5R 払戻500円")], both
-    assert N._res_events(pred_of(race5(tk=0, mt=1, result={"order": "1-2-3", "pay3t": 500})), YMD) == [(res, "【○】下関5R 払戻500円")]
-    assert N._conf_events(pred_of(race5(tk=0, mt=1)), YMD) == [("conf-%s-19-5" % YMD, "松確定\n下関5R 締切17:19 的中率 54%")]
+    # 厳選と松の両方が付いた古い形のレースでも、文面は厳選の1行だけ(上位3点で判定: 1-2-3 は4点目なので不的中)
+    assert N._res_events(pred_of(race5(mt=1, result={"order": "1-2-3", "pay3t": 500})), YMD) == [(res, "【×】下関5R")]
+    assert N._res_events(pred_of(race5(tk=0, mt=1, result={"order": "1-2-3", "pay3t": 500})), YMD) == []
+    assert N._conf_events(pred_of(race5(tk=0, mt=1)), YMD) == []
+    assert N._stale_ids(pred_of(race5(tk=0, mt=1)), YMD) == set() and N._conf_secs_left(pred_of(race5(tk=0, mt=1)), YMD) == {}
+    assert N.CONF_TITLE == "厳選確定" and not hasattr(N, "_plan_label"), "松の分岐は撤去済み"
     for m in (N.RES_HIT_MARK, N.RES_MISS_MARK):
         assert all(ord(ch) < 0x2600 or 0x3000 <= ord(ch) for ch in m), ("絵文字の記号は使わない", m)
 
