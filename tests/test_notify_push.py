@@ -429,12 +429,12 @@ def test_conf_message_carries_the_picks():
         {"no": 6, "tk": 0, "mt": 0, "pt": "17:30", "deadline": "17:45", "picks": [{"c": "1-2-3", "p": 0.2}]},
     ]}]}
     ev = N._conf_events(pred, "20261003")
-    assert ev == [("conf-20261003-19-5", "厳選プラン確定\n下関5R 締切17:19　的中率 54%")], ev
+    assert ev == [("conf-20261003-19-5", "厳選確定\n下関5R 締切17:19 的中率 54%")], ev
     # 的中率が出せない時は、その行だけ無い
     saved = N._hit_rate_text
     N._hit_rate_text = lambda r: None
     try:
-        assert N._conf_events(pred, "20261003")[0][1] == "厳選プラン確定\n下関5R 締切17:19"
+        assert N._conf_events(pred, "20261003")[0][1] == "厳選確定\n下関5R 締切17:19"
     finally:
         N._hit_rate_text = saved
 
@@ -486,7 +486,7 @@ def test_notify_events_sends_once():
         set_now("17:40")
         pred["venues"][0]["races"][0]["result"] = {"order": "1-3-4", "pay3t": 1230}
         N.notify_events(pred, YMD)                       # 結果が付いたら結果を送る
-        assert len(SENT) == 2 and "的中 下関5R 1-3-4 払戻1230円" in payloads()[1]["body"]
+        assert len(SENT) == 2 and "【○】下関5R 払戻1230円" in payloads()[1]["body"]
         assert saved_ids(path) == ["conf-%s-19-5" % YMD, "res-%s-19-5" % YMD]
         # 一覧を取れなかった回は「未送信」のまま残り、次の周回で送り直す
         path.unlink()
@@ -504,8 +504,8 @@ def test_single_confirmation_uses_first_line_as_title_and_carries_a_tag():
         reset([sub(1)])
         set_now("17:05")
         N.notify_events(pred_of(race5()), YMD)
-        assert payloads() == [{"title": "厳選プラン確定",
-                               "body": "下関5R 締切17:19　的中率 54%",
+        assert payloads() == [{"title": "厳選確定",
+                               "body": "下関5R 締切17:19 的中率 54%",
                                "tag": "conf-%s-19-5" % YMD}], payloads()
 
 
@@ -514,14 +514,14 @@ def test_result_and_bundles_keep_the_default_title():
         reset([sub(1)])
         set_now("17:40")                                  # 5R は締切後(確定は送らない)。結果だけが出る
         N.notify_events(pred_of(race5(result={"order": "1-5-4", "pay3t": 1430})), YMD)
-        assert payloads() == [{"title": "厳選の結果", "body": "不的中 下関5R", "tag": "res-%s-19-5" % YMD}], payloads()
+        assert payloads() == [{"title": "厳選結果", "body": "【×】下関5R", "tag": "res-%s-19-5" % YMD}], payloads()
     with state_file():
         reset([sub(1)])
         set_now("17:05")                                  # 確定が2件同時 → まとめて1通
         N.notify_events(pred_of(race5(), race5(no=6, deadline="17:25", pt="17:05")), YMD)
         p = payloads()
-        assert len(p) == 1 and p[0]["title"] == "厳選プラン確定"
-        assert p[0]["body"] == "下関5R 締切17:19　的中率 54%\n下関6R 締切17:25　的中率 54%", p[0]["body"]
+        assert len(p) == 1 and p[0]["title"] == "厳選確定"
+        assert p[0]["body"] == "下関5R 締切17:19 的中率 54%\n下関6R 締切17:25 的中率 54%", p[0]["body"]
         assert p[0]["tag"].startswith("ev-") and len(p[0]["tag"]) == 19
         ids = ["conf-%s-19-5" % YMD, "conf-%s-19-6" % YMD]
         assert p[0]["tag"] == N._event_tag(ids) and N._event_tag(ids) != N._event_tag(ids[::-1])
@@ -556,7 +556,7 @@ def test_late_confirmation_and_old_result_are_recorded_without_sending():
         reset([sub(1)])
         set_now("17:30")
         N.notify_events(pred_of(done), YMD)
-        assert [p["body"] for p in payloads()] == ["的中 下関5R 1-3-4 払戻1230円"], payloads()
+        assert [p["body"] for p in payloads()] == ["【○】下関5R 払戻1230円"], payloads()
         assert saved_ids(path) == [conf, res]
     # 締切を過ぎるまで送信が失敗し続けた確定は、締切後は送らない(記録して終わる)
     with state_file() as path:
@@ -600,6 +600,22 @@ def test_ttl_follows_the_deadline():
     assert N._conf_secs_left(pred_of(race5()), YMD) == {conf: 14 * 60.0}
 
 
+def test_result_wording_marks_without_order():
+    """結果の文面(2026-10-09 の指定): 的中は【○】、不的中は【×】、着順は書かない。払戻が無ければ会場とレースだけ。
+    厳選と松の両方のレースは印の後に名前を添えて1行ずつ。確定の題名は「厳選確定」「松確定」(「プラン」なし)。"""
+    res = "res-%s-19-5" % YMD
+    assert N._res_events(pred_of(race5(result={"order": "1-3-4", "pay3t": 1230})), YMD) == [(res, "【○】下関5R 払戻1230円")]
+    assert N._res_events(pred_of(race5(result={"order": "1-3-4"})), YMD) == [(res, "【○】下関5R")]
+    assert N._res_events(pred_of(race5(result={"order": "6-1-2", "pay3t": 430})), YMD) == [(res, "【×】下関5R")]
+    # 厳選は上位3点、松は上位4点: 1-2-3 は松だけ的中
+    both = N._res_events(pred_of(race5(mt=1, result={"order": "1-2-3", "pay3t": 500})), YMD)
+    assert both == [(res, "【×】厳選 下関5R\n【○】松 下関5R 払戻500円")], both
+    assert N._res_events(pred_of(race5(tk=0, mt=1, result={"order": "1-2-3", "pay3t": 500})), YMD) == [(res, "【○】下関5R 払戻500円")]
+    assert N._conf_events(pred_of(race5(tk=0, mt=1)), YMD) == [("conf-%s-19-5" % YMD, "松確定\n下関5R 締切17:19 的中率 54%")]
+    for m in (N.RES_HIT_MARK, N.RES_MISS_MARK):
+        assert all(ord(ch) < 0x2600 or 0x3000 <= ord(ch) for ch in m), ("絵文字の記号は使わない", m)
+
+
 def test_cancelled_race_is_reported():
     """確定を知らせたレースが中止・不成立になったら、その旨を結果として送る(音沙汰なしにしない)。"""
     res = "res-%s-19-5" % YMD
@@ -616,7 +632,7 @@ def test_cancelled_race_is_reported():
         set_now("17:30")
         pred["venues"][0]["races"][0]["result"] = {"status": "中止", "ninki": None}
         assert N.notify_events(pred, YMD) is False
-        assert payloads()[1] == {"title": "厳選の結果", "body": "中止 下関5R(返還)", "tag": res}, payloads()
+        assert payloads()[1] == {"title": "厳選結果", "body": "中止 下関5R(返還)", "tag": res}, payloads()
         assert saved_ids(path) == ["conf-%s-19-5" % YMD, res]
 
 

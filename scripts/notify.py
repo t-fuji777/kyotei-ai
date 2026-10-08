@@ -49,16 +49,20 @@ RES_MAX_AGE_MIN = 120
 PUSH_SUBS_URL_DEFAULT = "https://aritei-push.t-fujino.workers.dev"
 PUSH_CONTACT = "mailto:t.fujino@meihogp.co.jp"
 PUSH_TITLE = "アリテイ"   # 通知の題名の既定値
-# 厳選確定の通知の題名(1段目)。本文は1行「会場・レース番号 締切時刻　的中率」(2026-10-07 の指定)。
+# 厳選確定の通知の題名(1段目)。本文は1行「会場・レース番号 締切時刻 的中率」(2026-10-07 の指定。
+# 2026-10-09 に題名の「プラン」を省き、締切と的中率の間を半角空白にした)。
 # iPhone は題名の下に「from アリテイ」の行を必ず自分で足す(消せない)ので、本文を2行にすると4段になる。
 # 3段に収めるため、会場・レース・締切と的中率は1行にまとめる(実機で確認)。
 # 「from アリテイ」は書かない: iPhone は Web Push の題名の後ろにアプリ名を「from アリテイ」と自動で
-# 付けるので、題名に入れると「厳選プラン確定 from アリテイ from アリテイ」と二重になり2行に折れる(実機で確認)。
-# Android は題名の上にサイト名を別に出すので、どちらでも1段目は「厳選プラン確定 (from アリテイ)」の見え方になる。
-CONF_TITLE_FMT = "{plan}プラン確定"
+# 付けるので、題名に入れると「厳選確定 from アリテイ from アリテイ」と二重になり2行に折れる(実機で確認)。
+# Android は題名の上にサイト名を別に出すので、どちらでも1段目は「厳選確定 (from アリテイ)」の見え方になる。
+CONF_TITLE_FMT = "{plan}確定"   # 「厳選確定」「松確定」
 # 結果の通知の題名。既定の「アリテイ」だと、iPhone が足す「from アリテイ」と並んで同じ言葉が2行続くので、
-# 何の知らせかが分かる題名にする(本文は「的中 … / 不的中 …」)。
-RES_TITLE = "厳選の結果"
+# 何の知らせかが分かる題名にする(本文は「【○】会場NR 払戻…円 / 【×】会場NR」)。
+RES_TITLE = "厳選結果"
+# 結果の印(2026-10-09 の指定)。○ は U+25CB の白丸(絵文字の ⚪ ではない。iPhone でも文字として出る)、× は U+00D7。
+RES_HIT_MARK = "【○】"
+RES_MISS_MARK = "【×】"
 # 1件の送信の時間切れ(接続, 応答待ち)秒。接続の時間切れは宛先ホストのIPアドレスの数だけ繰り返される
 # ので、これだけでは上限にならない。上限を実際に守るのは下の PUSH_TOTAL_SEC(待つ側で切り上げる)。
 PUSH_TIMEOUT = (3, 8)
@@ -177,13 +181,13 @@ def _conf_events(pred: dict, ymd: str):
             eid = f"conf-{ymd}-{vcode}-{no}"
             plan = _plan_label(r)
             deadline = r.get("deadline", "")
-            # 3段の形(2026-10-07 の指定): 題名「厳選プラン確定」(iPhone はその下に「from アリテイ」を自分で足す)、
-            # 本文は1行「会場・レース番号 締切時刻　的中率」(的中率はアプリの厳選カードと同じ較正済みの%)。
+            # 3段の形(2026-10-07 の指定): 題名「厳選確定」(iPhone はその下に「from アリテイ」を自分で足す)、
+            # 本文は1行「会場・レース番号 締切時刻 的中率」(的中率はアプリの厳選カードと同じ較正済みの%)。
             # 買い目と確定時刻は載せない(アプリで見る)。Web Push では1行目を題名に、残りを本文にする。
             msg = CONF_TITLE_FMT.format(plan=plan) + f"\n{vname}{no}R 締切{deadline}"
             hit = _hit_rate_text(r)
             if hit:
-                msg += "　" + hit
+                msg += " " + hit     # 半角空白(2026-10-09 の指定)
             out.append((eid, msg))
     return out
 
@@ -243,14 +247,13 @@ def _res_events(pred: dict, ymd: str):
             multi = len(plans) > 1
             lines = []
             for label, hit in plans:
+                # 文面(2026-10-09 の指定): 的中は【○】、不的中は【×】。着順(例 6-1-2)は書かない(アプリで見る)。
+                # 例「【○】多摩川6R 払戻430円」「【×】多摩川6R」。厳選と松の両方に当たるレースは印の後に名前を添える。
                 prefix = f"{label} " if multi else ""
-                if hit:
-                    if pay is not None:
-                        lines.append(f"{prefix}的中 {vname}{no}R {order} 払戻{pay}円")
-                    else:
-                        lines.append(f"{prefix}的中 {vname}{no}R {order}")
-                else:
-                    lines.append(f"{prefix}不的中 {vname}{no}R")
+                line = f"{RES_HIT_MARK if hit else RES_MISS_MARK}{prefix}{vname}{no}R"
+                if hit and pay is not None:
+                    line += f" 払戻{pay}円"
+                lines.append(line)
             out.append((eid, "\n".join(lines)))
     return out
 
@@ -774,7 +777,7 @@ def notify_events(pred: dict, ymd: str) -> bool:
         if push_ready:
             title, body = "", text
             if ids and all(i.startswith("conf-") for i in ids) and all("\n" in m for m in msgs):
-                # 確定だけの通知は、1行目(「厳選プラン確定」)を題名に、残り(会場・レース・締切と
+                # 確定だけの通知は、1行目(「厳選確定」)を題名に、残り(会場・レース・締切と
                 # 的中率の1行)を本文にする。複数の確定を1通にまとめた時も題名は1つで、本文に
                 # レースごとの1行を続ける(題名が同じなので先頭のものを使う)。
                 heads, bodies = zip(*(m.split("\n", 1) for m in msgs))
