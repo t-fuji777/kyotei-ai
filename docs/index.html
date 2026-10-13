@@ -705,10 +705,9 @@ function renderAcc(acc){
   }
   if(!tt||!tt.races){m.innerHTML='<div class="note">的中実績はまだありません。<br>運用開始の翌日から自動記録されます。</div>';return;}
   // 日別ラベル「3日(月)」形式(先頭ゼロ無しの日+曜)。曜日算出は旧dlabのロジックを流用。
-  // モデルを更新した日(世代が変わった日)には「モデル更新」の印を日付の下に添える。累計は通しで続けるので、
-  // 累計の見出しにも最新の更新日を添える(どこからが新しいモデルの成績かが分かるように)。世代2の日が無ければ何も出ない。
+  // モデルを更新した日(世代が変わった日)は、累計の見出しに最新の更新日を添えて示す(どこからが新しいモデルの
+  // 成績かが分かるように)。日付の下の「モデル更新」の印は 2026-10-13 にマスターの指示で外した。世代2の日が無ければ何も出ない。
   const gstarts=modelGenStarts(acc,pred);
-  const gmark=ymd=>gstarts.some(x=>x.date===String(ymd))?'<span class="gmark">モデル更新</span>':"";
   const dlab2=ymd=>{const s=String(ymd);const w=_WD[new Date(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8)).getDay()];return (+s.slice(6,8))+"日("+w+")";};
   // 月別集計+折りたたみ: 当月(latestDate||pred.date、未取得時は最新の日別行の月)はデフォルト展開。
   // それ以外の月は初期状態で折りたたみ。行クリックで accOpenM[key] をトグルして再描画する。
@@ -772,14 +771,14 @@ function renderAcc(acc){
   const curList=(curGroup?curGroup.list:[]).concat((tj&&pred&&mkey(String(pred.date))===curMKey)?[tj]:[]);
   const curMonthRows=blockRows(mLabel(curMKey,curOpen),curList.length?sumMonth(curList):null,{cls:"stkrow mrow",dataM:curMKey,lastCls:"stkend",dcellCls:"dend"});
   // 本日速報の詳細行は当月の折りたたみに連動して表示/非表示(集計値は当月ブロックに合算済み)
-  const todayRows=(tj&&curOpen)?blockRows(dlab2(pred.date)+'<br><span style="font-size:8px;color:var(--dim)">速報</span>'+gmark(pred.date),tj,{}):"";
-  const curDayRows=(curOpen&&curGroup)?curGroup.list.map(d=>blockRows(dlab2(d.date)+gmark(d.date),d,{})).join(""):"";
+  const todayRows=(tj&&curOpen)?blockRows(dlab2(pred.date)+'<br><span style="font-size:8px;color:var(--dim)">速報</span>',tj,{}):"";
+  const curDayRows=(curOpen&&curGroup)?curGroup.list.map(d=>blockRows(dlab2(d.date),d,{})).join(""):"";
   const pastRows=groups.filter(g=>g.key!==curMKey).map(g=>{
     const open=!!accOpenM[g.key];
     // 月の途中からデータが始まる月(6月=13日〜等)はラベルに開始日を注記する
     const md=Math.min.apply(null,g.list.map(d=>+String(d.date).slice(6,8)));
     const mrows=blockRows(mLabel(g.key,open)+(md>1?'<span style="display:block;font-size:8px;color:var(--dim)">'+md+'日〜</span>':""),sumMonth(g.list),{cls:"mrow",dataM:g.key});
-    const dayRows=open?g.list.map(d=>blockRows(dlab2(d.date)+gmark(d.date),d,{})).join(""):"";
+    const dayRows=open?g.list.map(d=>blockRows(dlab2(d.date),d,{})).join(""):"";
     return mrows+dayRows;
   }).join("");
   // 凡例(※全R=…等)はマスターの指示で撤去(2026-09-02)。3行に伸びてヘッダの他要素と

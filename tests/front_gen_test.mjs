@@ -340,22 +340,22 @@ function race(o = {}) {
   const days1 = [day("20261001"), day("20261002", { gen: 1 })];
   noThrow("A2 的中実績(世代の印なし)が描ける", () => A.renderAcc({ days: days1, total: total(days1) }));
   check("A2 世代2の日が無ければ「モデル更新」の印は出ない", !env.text().includes("モデル更新") && env.text().includes("累計") && env.text().includes("2日(金)"), env.text());
-  // 世代2の日がある → その日の行と累計の見出しに印
+  // 世代2の日がある → 累計の見出しにだけ印(日付の下の印は 2026-10-13 に外した)
   const days2 = [day("20261001"), day("20261002", { gen: 1 }), day("20261003", { gen: 2 }), day("20261004", { gen: 2 })];
   A.setLatest("20261004");
   noThrow("A3 的中実績(世代2の日あり)が描ける", () => A.renderAcc({ days: days2, total: total(days2) }));
   const h = env.main.innerHTML;
   const marks = (h.match(/モデル更新/g) || []).length;
-  eq("A3 印は2か所(累計の見出しと 10/3 の行)", marks, 2);
+  eq("A3 印は1か所(累計の見出しだけ)", marks, 1);
   check("A3 累計の見出しに「モデル更新 10/3」", h.includes("累計</span><span class=\"gmark\">モデル更新 10/3</span>"), h.slice(0, 600));
-  check("A3 3日(土)の行に印、4日(日)・2日(金)の行には無い", h.includes("3日(土)<span class=\"gmark\">モデル更新</span>") && !h.includes("4日(日)<span class=\"gmark\">") && !h.includes("2日(金)<span class=\"gmark\">"), h);
+  check("A3 日付の行には印が無い(3日(土)も含めて)", h.includes("3日(土)") && !h.includes("3日(土)<span class=\"gmark\">") && !h.includes("4日(日)<span class=\"gmark\">") && !h.includes("2日(金)<span class=\"gmark\">"), h);
   // 当日(速報)の行: 実績の行はまだ無く、当日ファイルの model_gen が 2
   const P = { date: "20261005", model_gen: 2, venues: [{ code: 12, name: "住之江", races: [Object.assign(race({ top3p: 0.4, g: 2 }), { result: { order: "1-2-3", pay3t: 1200, hit_win: 1 } })] }] };
   A.setPred(P); A.setLatest("20261005");
   noThrow("A4 本日速報つきの的中実績が描ける", () => A.renderAcc({ days: days1, total: total(days1) }));
   const h2 = env.main.innerHTML;
-  check("A4 速報の行に印、累計の見出しに「モデル更新 10/5」", h2.includes("速報</span><span class=\"gmark\">モデル更新</span>") && h2.includes("モデル更新 10/5"), h2.slice(0, 800));
-  eq("A4 印は2か所", (h2.match(/モデル更新/g) || []).length, 2);
+  check("A4 速報の行には印が無く、累計の見出しに「モデル更新 10/5」", h2.includes("速報</span>") && !h2.includes("速報</span><span class=\"gmark\">") && h2.includes("モデル更新 10/5"), h2.slice(0, 800));
+  eq("A4 印は1か所", (h2.match(/モデル更新/g) || []).length, 1);
   A.setPred(null);
   // 設定タブの「バッジ実測の監視」にモデル更新日
   A.VIEW.acc = { days: days1, total: total(days1) };
