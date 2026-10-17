@@ -2,13 +2,13 @@
  "v": 1,
  "format": 2,
  "tag": "model-live",
- "asset": "model-20261017-0202-0af9e12a999f.tar.gz",
- "sha256": "0af9e12a999f44fe7d494309d95da65eabacb755d154412924ac1aab566fa74b",
- "size": 2300034,
- "trained_at": "2026-10-17 02:02 JST",
- "period_end": "20261016",
+ "asset": "model-20261018-0206-a52dad2e2c67.tar.gz",
+ "sha256": "a52dad2e2c671888a6c3cb73ccf20fc4689d7dd961b46cb37ce4514b6295370f",
+ "size": 2004722,
+ "trained_at": "2026-10-18 02:06 JST",
+ "period_end": "20261017",
  "files": {
-  "meta.json": "919515080f7402feb6817c067299564f64c9498cf4056d94f61d1a2b62b1124f",
-  "model.txt": "50afcb35de55bc071485d804778927e677e16424f49f37ab5d26974da7917dca"
+  "meta.json": "4a28b37c11b5186efe157f5e8e249b2ed274f3a163dcfa6324ce8bf84db42820",
+  "model.txt": "6f004cc6d85fe566eb933f3fef4b88b7e4c8817535d8395a58a67f73969eb497"
  }
 }
