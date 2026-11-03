@@ -86,6 +86,13 @@ def add_features(hist: pd.DataFrame, target: pd.DataFrame, fan=None) -> pd.DataF
         hh = hg[hg["toban"] == toban]
         days = hh["day"].to_numpy()
         if len(days) == 0:
+            # 履歴に無い選手(デビュー戦。5月・11月の新人)。学習時の表は全行から作るので自分の当日の行があり、
+            # 「前日までの出走数」の4列は 0 になる。予測の経路(履歴 = 前日まで)では選手ごと無いので、ここで
+            # 同じ 0 を入れる。率の列は両方とも NaN。2026-11-02 の自己検査で、新人の4列が NaN と 0 で食い違い、
+            # 学習が配布されない事故が起きた(11/1 の新人デビューから毎回)。
+            for i in g["i"].to_numpy():
+                for k in ("r_n365", "r_n90", "r_lane_n365", "r_venue_n365"):
+                    cols[k][i] = 0.0
             continue
         win = hh["is_win"].to_numpy(np.float64)
         top2 = hh["is_top2"].to_numpy(np.float64)

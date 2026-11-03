@@ -86,6 +86,10 @@ jobs:
         id: fetch_before
         if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
         run: python tests/test_fetch_before.py
+      - name: test_features_rookie (履歴に無い新人の特徴量が学習と予測で一致)
+        id: features_rookie
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        run: python tests/test_features_rookie.py
       - name: test_workflows_gen2 (ワークフロー yml の形)
         id: workflows_gen2
         if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
@@ -132,6 +136,7 @@ jobs:
             test_gen_rules=${{ steps.gen_rules.outcome }}
             test_build_calib=${{ steps.build_calib.outcome }}
             test_fetch_before=${{ steps.fetch_before.outcome }}
+            test_features_rookie=${{ steps.features_rookie.outcome }}
             test_workflows_gen2=${{ steps.workflows_gen2.outcome }}
             test_notify_push=${{ steps.notify_push.outcome }}
             test_model_store=${{ steps.model_store.outcome }}
