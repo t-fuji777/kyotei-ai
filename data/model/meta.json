@@ -1,102 +1,681 @@
 {
- "trained_at": "2026-10-02 09:51 JST",
- "rows_train": 1341750,
- "rows_valid": 163788,
- "rows_test": 176076,
+ "format": 2,
+ "gen": 2,
+ "trained_at": "2026-11-03 10:31 JST",
+ "rows_train": 1452048,
+ "rows_valid": 174618,
+ "rows_test": 187062,
+ "races_train": 238622,
+ "races_valid": 28740,
+ "races_test": 31177,
  "period": [
   "20210611",
-  "20261001"
+  "20261102"
  ],
  "best_iterations": {
-  "win": 420,
-  "top2": 543,
-  "top3": 528
+  "pl": 886
+ },
+ "valid_nll3": 3.72411,
+ "features": [
+  "venue",
+  "race_no",
+  "lane",
+  "age",
+  "weight",
+  "class_i",
+  "nat_win",
+  "nat_in2",
+  "loc_win",
+  "loc_in2",
+  "motor_in2",
+  "boat_in2",
+  "r_n365",
+  "r_win365",
+  "r_top2_365",
+  "r_top3_365",
+  "r_n90",
+  "r_win90",
+  "r_avg_st180",
+  "r_f365",
+  "r_lane_n365",
+  "r_lane_win365",
+  "r_venue_n365",
+  "r_venue_win365",
+  "r_avgpos10",
+  "r_makuri365",
+  "v_lane_win365",
+  "v_lane_top2_365",
+  "v_lane_top3_365",
+  "v_makuri365",
+  "v_water",
+  "v_tide",
+  "f_noryoku",
+  "f_win",
+  "f_lane_in2",
+  "f_lane_strank",
+  "ex_time",
+  "ex_rank",
+  "ex_diff",
+  "wind",
+  "wave",
+  "rt_class",
+  "rel_nat_win",
+  "rel_nat_rank",
+  "rel_motor",
+  "h_elo",
+  "h_elo_fd",
+  "h_elola",
+  "h_elola_fd",
+  "h_elo_n",
+  "h_elola_rel",
+  "h_elola_rank",
+  "h_elola_exp",
+  "h_elola_b1",
+  "h_elola_maxoth",
+  "h_plw",
+  "h_plw_rel",
+  "h_plw_p",
+  "h_pl_top2_365",
+  "h_pl_top2_all",
+  "h_pl_top3_365",
+  "h_pl_top3_all",
+  "h_pl_pos365",
+  "h_pl_pos_all",
+  "h_pl_n_all",
+  "h_pl_win_all",
+  "h_pl_st365",
+  "h_pl_st_all",
+  "h_pl_ksashi_all",
+  "h_pl_kmakuri_all",
+  "h_pl_kmz_all",
+  "h_pl_knuki_all",
+  "h_pl_lose_nige_all",
+  "h_pl_lose_sashi_all",
+  "h_pl_lose_makuri_all",
+  "h_pl_lose_mz_all",
+  "h_st_sd365",
+  "h_st_all",
+  "h_st_rel365",
+  "h_st_rank365",
+  "h_k_sashi365",
+  "h_k_makuri365",
+  "h_k_mz365",
+  "h_k_nuki365",
+  "h_b1_win_all",
+  "h_b1_n_all",
+  "h_b1_lose_sashi_all",
+  "h_b1_lose_makuri_all",
+  "h_b1_lose_mz_all",
+  "h_b1_st_all",
+  "h_b1_win365",
+  "h_b2_lose_nige_all",
+  "h_m_n60",
+  "h_m_pos60",
+  "h_m_top2_60",
+  "h_m_exrel60",
+  "h_m_res60",
+  "h_m_n120",
+  "h_m_pos120",
+  "h_m_top2_120",
+  "h_m_exrel120",
+  "h_m_res120",
+  "h_m_nep",
+  "h_m_exrelep",
+  "h_m_resep",
+  "h_m_age",
+  "h_m_res120_rel",
+  "h_m_exrel120_rel",
+  "h_b_n120",
+  "h_b_res120",
+  "h_b_exrel120",
+  "h_s_day",
+  "h_s_n",
+  "h_s_pos",
+  "h_s_win",
+  "h_s_top3",
+  "h_s_exrel",
+  "h_s_st",
+  "h_s_res",
+  "h_s_pos_rel",
+  "h_s_res_rel",
+  "h_s_exrel_rel",
+  "h_pos5",
+  "h_pos20",
+  "h_res10",
+  "h_res30",
+  "h_win_ew30",
+  "h_pos_ew30",
+  "h_win_ew90",
+  "h_top3_ew90",
+  "h_days_since",
+  "h_last_pos",
+  "h_n30",
+  "h_days_since_venue",
+  "h_exh365",
+  "h_exh_all",
+  "h_exh_n365",
+  "h_ex_rel",
+  "h_ex_vs_usual",
+  "h_ex_vs_motor",
+  "h_ex_vs_exp",
+  "h_dl_min",
+  "h_dow",
+  "h_month",
+  "h_dist1200",
+  "h_race_natwin",
+  "h_race_nA1",
+  "h_b1_class",
+  "h_vrt_n365",
+  "h_vrt_win365",
+  "h_vrt_top3_365",
+  "h_vrn_win365",
+  "h_vrn_top3_365"
+ ],
+ "stage_cols": [
+  "stage",
+  "win_lane",
+  "sec_lane",
+  "rel1",
+  "rel2",
+  "n_in"
+ ],
+ "cat_idx": [
+  0,
+  2,
+  5,
+  30,
+  154,
+  155
+ ],
+ "live_cols": [
+  "ex_time",
+  "ex_rank",
+  "ex_diff",
+  "wind",
+  "wave",
+  "h_ex_rel",
+  "h_ex_vs_usual",
+  "h_ex_vs_motor",
+  "h_ex_vs_exp"
+ ],
+ "features_version": "2026-10-06.1",
+ "elo_cfg": {
+  "K_slow": 4.0,
+  "K_fast": 16.0,
+  "KL_ratio": 0.05,
+  "Kw": 0.1,
+  "KLw_ratio": 0.1
+ },
+ "params": {
+  "learning_rate": 0.05,
+  "num_leaves": 31,
+  "min_data_in_leaf": 200,
+  "feature_fraction": 0.6,
+  "lambda_l2": 10.0,
+  "bagging_fraction": 0.8,
+  "bagging_freq": 1,
+  "seed": 42
  },
  "sengen": {
-  "top5_min": 0.4,
-  "valid_rate": 0.4963
+  "top5_min": 0.47,
+  "valid_rate": null
  },
  "test_metrics": {
-  "races": 29054,
-  "win_hit_rate": 0.5696,
-  "fuku_hit_rate": 0.7488,
-  "top1_hit_rate": 0.1001,
-  "top6_hit_rate": 0.3908,
-  "top10_hit_rate": 0.5139,
-  "top18_hit_rate": 0.6672,
-  "top6_roi": 0.7816,
-  "top5_hit_rate": 0.3497,
-  "top5_roi": 0.7887,
+  "races": 30903,
+  "win_hit_rate": 0.5772,
+  "fuku_hit_rate": 0.7617,
+  "top1_hit_rate": 0.1064,
+  "top6_hit_rate": 0.4099,
+  "top10_hit_rate": 0.5364,
+  "top18_hit_rate": 0.6899,
+  "top6_roi": 0.8119,
+  "top5_hit_rate": 0.3678,
+  "top5_roi": 0.8183,
   "sengen": {
-   "races": 4504,
-   "races_per_day": 23.2,
-   "top5_min": 0.4,
-   "top5_hit_rate": 0.5264
+   "races": 5134,
+   "races_per_day": 25.9,
+   "top5_min": 0.47,
+   "top5_hit_rate": 0.5553
   }
  },
  "baseline_metrics": {
-  "races": 29054,
-  "win_hit_rate": 0.5461,
-  "fuku_hit_rate": 0.7199,
-  "top1_hit_rate": 0.0728,
-  "top6_hit_rate": 0.2896,
-  "top10_hit_rate": 0.4002,
-  "top18_hit_rate": 0.5489,
+  "races": 30903,
+  "win_hit_rate": 0.5462,
+  "fuku_hit_rate": 0.721,
+  "top1_hit_rate": 0.07,
+  "top6_hit_rate": 0.2885,
+  "top10_hit_rate": 0.4,
+  "top18_hit_rate": 0.5495,
   "top6_roi": 0.7239,
-  "top5_hit_rate": 0.2565,
-  "top5_roi": 0.7338,
+  "top5_hit_rate": 0.2557,
+  "top5_roi": 0.7304,
   "sengen": {
    "races": 0,
    "races_per_day": 0.0,
-   "top5_min": 0.4,
+   "top5_min": 0.47,
    "top5_hit_rate": null
   }
  },
  "feature_importance": {
-  "lane": 1489566.9,
-  "rel_nat_win": 343258.1,
-  "r_lane_win365": 259401.8,
-  "v_lane_win365": 229668.7,
-  "f_lane_in2": 65853.1,
-  "r_win365": 64446.7,
-  "venue": 58258.5,
-  "rel_nat_rank": 51340.7,
-  "r_top2_365": 45544.2,
-  "v_lane_top2_365": 35767.2,
-  "rel_motor": 25045.3,
-  "race_no": 22007.1,
-  "r_avgpos10": 21952.6,
-  "ex_rank": 21406.4,
-  "ex_diff": 21080.4,
-  "rt_class": 18988.1,
-  "r_venue_win365": 18766.6,
-  "nat_win": 18233.3,
-  "v_lane_top3_365": 16207.8,
-  "r_avg_st180": 14801.2,
-  "f_win": 12565.1,
-  "r_makuri365": 12184.2,
-  "age": 12050.4,
-  "f_lane_strank": 10979.1,
-  "f_noryoku": 10465.0,
-  "motor_in2": 9762.0,
-  "nat_in2": 9178.1,
-  "loc_in2": 8416.4,
-  "r_top3_365": 8110.3,
-  "ex_time": 8064.7,
-  "boat_in2": 7945.9,
-  "r_n90": 7414.6,
-  "loc_win": 7306.4,
-  "r_n365": 7051.8,
-  "r_win90": 6920.0,
-  "r_venue_n365": 6725.2,
-  "v_makuri365": 6020.5,
-  "r_lane_n365": 5651.0,
-  "wind": 4699.4,
-  "weight": 4690.8,
-  "wave": 3494.9,
-  "r_f365": 1254.7,
-  "v_water": 565.7,
-  "v_tide": 219.3,
-  "class_i": 171.4
+  "h_elola_exp": 1714338.1,
+  "h_plw_p": 611131.0,
+  "h_pl_pos_all": 160676.0,
+  "rel_nat_win": 131221.4,
+  "h_elola_rel": 52771.0,
+  "h_pl_win_all": 52522.8,
+  "h_m_res120_rel": 43199.1,
+  "venue": 43157.2,
+  "h_elola_rank": 41456.9,
+  "h_s_exrel_rel": 37963.7,
+  "h_pl_top2_all": 37257.5,
+  "h_pl_top3_all": 34924.9,
+  "h_s_pos_rel": 34824.0,
+  "h_ex_vs_usual": 30810.6,
+  "h_pos_ew30": 26985.3,
+  "lane": 24996.9,
+  "f_lane_in2": 23677.5,
+  "h_m_exrel120_rel": 22997.6,
+  "h_pl_pos365": 21173.0,
+  "h_m_res60": 20016.7,
+  "rel_nat_rank": 19886.1,
+  "h_m_exrel60": 17805.4,
+  "f_win": 13768.4,
+  "loc_win": 12762.3,
+  "f_noryoku": 12079.8,
+  "h_s_res_rel": 10943.4,
+  "h_plw_rel": 9518.3,
+  "age": 8927.7,
+  "h_vrn_win365": 8923.4,
+  "nat_win": 8441.1,
+  "h_b1_win_all": 8235.6,
+  "r_lane_win365": 7817.3,
+  "h_s_exrel": 7515.5,
+  "h_s_st": 7218.8,
+  "v_lane_top2_365": 6911.4,
+  "h_vrt_win365": 6863.7,
+  "h_pl_top3_365": 6552.7,
+  "h_ex_rel": 5950.4,
+  "h_exh365": 5887.9,
+  "h_elo_n": 5780.0,
+  "h_ex_vs_exp": 5492.0,
+  "ex_time": 5294.8,
+  "v_lane_win365": 5223.4,
+  "r_n90": 5180.5,
+  "h_pl_kmakuri_all": 5135.9,
+  "r_venue_n365": 5087.8,
+  "h_pl_st_all": 4951.7,
+  "r_makuri365": 4590.8,
+  "v_lane_top3_365": 4590.2,
+  "h_k_makuri365": 4410.3,
+  "h_exh_all": 4406.9,
+  "h_b_res120": 4380.7,
+  "h_b1_win365": 4323.2,
+  "f_lane_strank": 4273.8,
+  "h_race_natwin": 4158.9,
+  "weight": 4157.8,
+  "h_vrt_top3_365": 4093.9,
+  "h_pl_top2_365": 4009.7,
+  "h_elo_fd": 3994.1,
+  "h_exh_n365": 3909.0,
+  "r_win90": 3836.5,
+  "h_pos20": 3792.6,
+  "loc_in2": 3749.1,
+  "h_st_rel365": 3598.1,
+  "h_st_sd365": 3597.1,
+  "ex_rank": 3479.4,
+  "h_pl_n_all": 3361.6,
+  "h_top3_ew90": 3208.8,
+  "h_pl_lose_nige_all": 3175.5,
+  "h_b_exrel120": 3154.5,
+  "h_res30": 3135.2,
+  "r_n365": 2925.2,
+  "h_m_age": 2914.8,
+  "h_pl_lose_sashi_all": 2876.6,
+  "h_elola_b1": 2775.5,
+  "r_lane_n365": 2761.4,
+  "h_vrn_top3_365": 2743.4,
+  "h_plw": 2709.1,
+  "h_pl_lose_mz_all": 2580.1,
+  "r_top3_365": 2513.6,
+  "h_vrt_n365": 2475.8,
+  "h_win_ew90": 2424.2,
+  "h_b_n120": 2407.3,
+  "h_m_nep": 2395.1,
+  "h_s_res": 2393.3,
+  "h_m_exrel120": 2393.0,
+  "h_st_rank365": 2388.8,
+  "ex_diff": 2353.0,
+  "rel_motor": 2329.4,
+  "h_b1_class": 2311.9,
+  "h_m_resep": 2290.0,
+  "h_m_res120": 2284.0,
+  "h_pl_lose_makuri_all": 2249.6,
+  "h_pl_st365": 2249.2,
+  "h_b1_n_all": 2234.3,
+  "nat_in2": 2195.4,
+  "h_win_ew30": 2166.3,
+  "h_b1_lose_sashi_all": 2087.3,
+  "h_m_n120": 2069.0,
+  "h_res10": 2034.6,
+  "h_m_pos60": 2031.7,
+  "h_m_exrelep": 2009.3,
+  "h_st_all": 1932.2,
+  "h_m_n60": 1931.7,
+  "h_pl_ksashi_all": 1887.2,
+  "h_b1_st_all": 1881.9,
+  "h_k_mz365": 1850.9,
+  "h_elola_fd": 1843.4,
+  "h_m_top2_120": 1831.4,
+  "h_dl_min": 1807.4,
+  "h_b2_lose_nige_all": 1765.4,
+  "h_elola_maxoth": 1732.5,
+  "r_avg_st180": 1720.9,
+  "boat_in2": 1717.7,
+  "h_k_nuki365": 1694.2,
+  "r_venue_win365": 1646.0,
+  "h_m_top2_60": 1635.7,
+  "h_elola": 1630.5,
+  "h_b1_lose_makuri_all": 1608.6,
+  "h_ex_vs_motor": 1578.9,
+  "r_top2_365": 1561.5,
+  "motor_in2": 1531.2,
+  "h_m_pos120": 1519.8,
+  "h_b1_lose_mz_all": 1519.6,
+  "h_pos5": 1487.1,
+  "h_pl_knuki_all": 1481.8,
+  "wind": 1480.0,
+  "h_s_pos": 1411.0,
+  "h_k_sashi365": 1403.1,
+  "wave": 1397.0,
+  "h_n30": 1371.1,
+  "r_avgpos10": 1351.5,
+  "h_days_since_venue": 1279.3,
+  "h_elo": 1252.1,
+  "v_makuri365": 1235.8,
+  "h_pl_kmz_all": 1230.5,
+  "r_win365": 1200.6,
+  "h_s_top3": 1156.9,
+  "class_i": 1110.2,
+  "h_month": 995.2,
+  "race_no": 917.3,
+  "h_s_n": 862.8,
+  "r_f365": 746.7,
+  "h_s_day": 683.2,
+  "h_s_win": 604.2,
+  "h_dist1200": 393.3,
+  "h_days_since": 393.1,
+  "h_race_nA1": 392.3,
+  "h_last_pos": 362.8,
+  "h_dow": 339.7,
+  "rt_class": 192.4,
+  "v_water": 164.1,
+  "v_tide": 70.5
+ },
+ "stage_importance": {
+  "rel1": 276723.4,
+  "n_in": 193912.8,
+  "stage": 145804.3,
+  "win_lane": 72410.3,
+  "rel2": 63828.4,
+  "sec_lane": 18824.1
+ },
+ "calib_seed": {
+  "t5e": [
+   [
+    147,
+    17
+   ],
+   [
+    485,
+    83
+   ],
+   [
+    721,
+    168
+   ],
+   [
+    813,
+    205
+   ],
+   [
+    822,
+    264
+   ],
+   [
+    704,
+    268
+   ],
+   [
+    578,
+    260
+   ],
+   [
+    401,
+    186
+   ],
+   [
+    244,
+    125
+   ],
+   [
+    123,
+    74
+   ],
+   [
+    71,
+    39
+   ]
+  ],
+  "t3e": [
+   [
+    180,
+    16
+   ],
+   [
+    831,
+    103
+   ],
+   [
+    1056,
+    183
+   ],
+   [
+    1084,
+    225
+   ],
+   [
+    822,
+    222
+   ],
+   [
+    587,
+    196
+   ],
+   [
+    305,
+    119
+   ],
+   [
+    163,
+    60
+   ],
+   [
+    54,
+    22
+   ],
+   [
+    27,
+    12
+   ]
+  ],
+  "t4e": [
+   [
+    122,
+    12
+   ],
+   [
+    712,
+    106
+   ],
+   [
+    1052,
+    228
+   ],
+   [
+    1100,
+    275
+   ],
+   [
+    903,
+    293
+   ],
+   [
+    636,
+    254
+   ],
+   [
+    359,
+    163
+   ],
+   [
+    225,
+    105
+   ]
+  ],
+  "t5l": [
+   [
+    119,
+    20
+   ],
+   [
+    472,
+    98
+   ],
+   [
+    872,
+    203
+   ],
+   [
+    1290,
+    350
+   ],
+   [
+    1682,
+    556
+   ],
+   [
+    1830,
+    697
+   ],
+   [
+    1625,
+    716
+   ],
+   [
+    1139,
+    557
+   ],
+   [
+    688,
+    381
+   ],
+   [
+    320,
+    186
+   ],
+   [
+    159,
+    110
+   ]
+  ],
+  "t3l": [
+   [
+    154,
+    18
+   ],
+   [
+    876,
+    115
+   ],
+   [
+    1579,
+    277
+   ],
+   [
+    2248,
+    512
+   ],
+   [
+    2223,
+    637
+   ],
+   [
+    1569,
+    525
+   ],
+   [
+    907,
+    346
+   ],
+   [
+    420,
+    203
+   ],
+   [
+    149,
+    78
+   ],
+   [
+    71,
+    40
+   ]
+  ],
+  "t4l": [
+   [
+    97,
+    11
+   ],
+   [
+    715,
+    129
+   ],
+   [
+    1456,
+    322
+   ],
+   [
+    2178,
+    596
+   ],
+   [
+    2395,
+    799
+   ],
+   [
+    1788,
+    709
+   ],
+   [
+    996,
+    477
+   ],
+   [
+    571,
+    330
+   ]
+  ]
+ },
+ "self_check": {
+  "date": "20261102",
+  "races": 156,
+  "ok": true,
+  "nan_mismatch": 0,
+  "cells_over_tol": 0,
+  "races_bit_exact": 156,
+  "max_abs_diff_features": 0.0,
+  "max_abs_diff_P": 0.0,
+  "rtol": 1e-06,
+  "p_tol": 1e-06,
+  "seconds": 17.0
  }
 }

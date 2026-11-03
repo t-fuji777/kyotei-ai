@@ -1,9 +1,9 @@
 {
-  "_note": "健全実測レンジ(2026-06〜09, 93日): wp_med 0.515-0.6045 / p1_med 0.0708-0.0863 / top3_med 0.1926-0.22375 / conf_C比率 0.4226-0.6667。2026-06-12の退化実測: 0.2695 / 0.027 / 0.073 / 1.00。下限は健全下限から約5%の安全マージンを取った値。",
-  "wp_med_min": 0.50,
-  "p1_med_min": 0.065,
-  "top3_med_min": 0.185,
-  "conf_c_ratio_max": 0.80,
+  "_note": "健全実測レンジ 世代2(2026-10-08〜11-03, 27日): wp_med 0.515-0.634 / p1_med 0.0837-0.1035 / top3_med 0.218-0.2585 / conf_C比率 0.25-0.474。下限は健全下限から約5%の安全マージン、上限(conf_C)は健全上限の約1.27倍。参考 世代1(2026-06〜09, 93日): wp_med 0.515-0.6045 / p1_med 0.0708-0.0863 / top3_med 0.1926-0.22375 / conf_C比率 0.4226-0.6667、2026-06-12の退化実測: 0.2695 / 0.027 / 0.073 / 1.00。2026-11-03 に世代2の実測で見直し(予備も世代2に更新したので世代1は動かない)。",
+  "wp_med_min": 0.49,
+  "p1_med_min": 0.079,
+  "top3_med_min": 0.207,
+  "conf_c_ratio_max": 0.6,
   "degrade_crit_hits": 2,
   "late_warn_hhmm": "10:30",
   "late_crit_hhmm": "16:00",
@@ -11,7 +11,7 @@
   "races_per_venue_expect": 12,
   "wp_sum_tol": 0.002,
   "picks_len_expect": 10,
-  "struct_bad_ratio_max": 0.10,
+  "struct_bad_ratio_max": 0.1,
   "model_stale_crit_days": 2,
   "model_frozen_warn_days": 45
 }
